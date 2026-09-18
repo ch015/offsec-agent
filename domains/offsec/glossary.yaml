@@ -1,0 +1,292 @@
+# CH015 Glossary — Korean to English Term Mapping
+# Reference: NIST SP 800-53, OWASP, PTES, MITRE ATT&CK, PCI DSS, ISO 27001
+#
+# Usage: All English skill files MUST use terms defined here.
+#        Do NOT deviate from these mappings.
+
+services:
+  취약점_진단:
+    en: "Vulnerability Assessment"
+    abbr: "VA"
+    ref: "OWASP Testing Guide, NIST SP 800-53 RA-5"
+
+  모의해킹:
+    en: "Penetration Testing"
+    abbr: "Pentest"
+    ref: "PTES, CREST"
+
+  침투_테스트:
+    en: "Red Team Operation"
+    ref: "MITRE ATT&CK"
+    note: "Infrastructure-level adversary simulation, distinct from app-level Pentest"
+
+  사후_분석:
+    en: "Independent Verification"
+    alt: "Adversarial Verification"
+    ref: "NIST SP 800-53A"
+    note: "NOT 'Post-mortem' — post-mortem is incident response terminology"
+
+  이행점검:
+    en: "Remediation Verification"
+    ref: "NIST SP 800-53 CA-7"
+    note: "NOT 'Compliance Check' — compliance check means regulatory conformity audit"
+
+  전수_진단:
+    en: "Comprehensive Assessment"
+    ref: "PTES Full Scope Engagement"
+    note: "NOT 'Full Scan' — scan implies automated tooling only"
+
+  수정_가이드:
+    en: "Remediation Guidance"
+    ref: "NIST SP 800-53"
+
+  보고서_생성:
+    en: "Report Generation"
+
+  진단_현황:
+    en: "Engagement Status"
+
+roles:
+  CISO:
+    en: "CISO Lead"
+    note: "Chief Information Security Officer — overall command"
+
+  팀_리더:
+    en: "Division Lead"
+
+  감사자:
+    en: "Auditor"
+    note: "VA Auditor — systematic, methodology-driven"
+
+  공격자:
+    en: "Penetration Tester"
+    note: "Offensive perspective — creative attack chains"
+
+  비평가:
+    en: "Independent Verifier"
+    note: "Adversarial perspective — challenges all conclusions"
+
+  독립_검증자:
+    en: "Independent Verifier"
+
+phases:
+  정찰:
+    en: "Reconnaissance"
+    ref: "PTES Phase 1"
+
+  바인딩:
+    en: "Context Binding"
+
+  아키텍처_리뷰:
+    en: "Architecture Review"
+
+  심층_분석:
+    en: "Deep Analysis"
+
+  표준_준수_점검:
+    en: "Compliance Check"
+    note: "Within VA context — checking against OWASP/NIST standards"
+
+  자체_검증:
+    en: "Self-Verification"
+
+  점수_산출:
+    en: "Scoring"
+
+  보고서:
+    en: "Reporting"
+
+  규제_영향_참조:
+    en: "Regulatory Impact Reference"
+
+analysis:
+  8대_보안_아키텍처_차원:
+    en: "8 Security Architecture Dimensions"
+
+  6단계_영향도_분석:
+    en: "6-Step Impact Analysis"
+
+  공격_표면:
+    en: "Attack Surface"
+    ref: "OWASP"
+
+  신뢰_경계:
+    en: "Trust Boundary"
+    ref: "STRIDE, OWASP"
+
+  보상_제어:
+    en: "Compensating Control"
+    ref: "PCI DSS v4.0"
+    note: "NOT 'Compensation Control'"
+
+  도달_가능성:
+    en: "Reachability"
+    note: "Whether vulnerable code is on an executable path"
+
+  근본_원인:
+    en: "Root Cause"
+    ref: "Common usage"
+
+  활성_도메인:
+    en: "Active Domain"
+
+  피드백_루프:
+    en: "Feedback Loop"
+    alt: "Iterative Review Cycle"
+
+  수렴:
+    en: "Convergence"
+
+evidence:
+  증거_기반:
+    en: "Evidence-based"
+
+  확인됨:
+    en: "Observed"
+    note: "Directly confirmed in code"
+
+  미확인:
+    en: "Unverified"
+    ref: "OWASP Testing Guide"
+    note: "NOT 'Unverifiable' — unverified means 'not yet verified', not 'impossible to verify'"
+
+  확인_불가:
+    en: "Unverified"
+    note: "Same as 미확인 — the evidence has not been confirmed, not that it cannot be"
+
+judgments:
+  보수적_판단:
+    en: "Conservative Judgment"
+    definition: "When uncertain, default to higher severity (minimize false negatives)"
+
+  보수적_에스컬레이션:
+    en: "Conservative Escalation"
+    definition: "When evidence is comparable, default to higher severity"
+    note: "'comparable' not 'equal' — covers cases where superiority is ambiguous"
+
+  결론_불전제:
+    en: "No Presumption of Conclusions"
+    definition: "Accept other agents' conclusions as input, but do not presume them as fact"
+
+  안전_보고_금지:
+    en: "Never Report as Safe"
+    definition: "When uncertain, report as 'Unverified' rather than 'Safe'"
+    strength: "MUST NOT (RFC 2119)"
+
+  역할_경계_준수:
+    en: "Role Boundary Compliance"
+    definition: "Perform analysis within your role scope; delegate final decisions to the appropriate role"
+    note: "NOT 'Do not make judgments' — analysis is allowed, final decisions are delegated"
+
+  위음성_방지:
+    en: "Minimize False Negatives"
+    note: "NOT 'Avoid false negatives' — zero false negatives is unrealistic"
+
+severity:
+  긴급:
+    en: "CRITICAL"
+  높음:
+    en: "HIGH"
+  중간:
+    en: "MEDIUM"
+  낮음:
+    en: "LOW"
+  정보:
+    en: "INFO"
+
+root_cause_types:
+  설계:
+    en: "ARCHITECTURE"
+    definition: "Systemic design flaw — cannot be fixed by code changes alone"
+  설정:
+    en: "CONFIGURATION"
+    definition: "Feature supported but misconfigured — fix by adding/changing configuration"
+  코드:
+    en: "CODE"
+    definition: "Logic error or missing validation — fix by code modification"
+  프로세스:
+    en: "PROCESS"
+    definition: "Missing development process/guidelines — causes recurring issues"
+
+project_levels:
+  기본:
+    en: "Basic"
+    scope: "OWASP Top 10"
+  표준:
+    en: "Standard"
+    scope: "OWASP Top 10 + API Top 10 + Secure Coding Guide"
+  규제:
+    en: "Regulated"
+    scope: "All above + NIST 800-53"
+
+workflow:
+  에이전트_할당:
+    en: "Agent Assignment"
+  품질_게이트:
+    en: "Quality Gate"
+  반려:
+    en: "Rejection"
+  이의:
+    en: "Objection"
+  미합의:
+    en: "Disputed"
+  핸드오프:
+    en: "Handoff"
+
+# ─────────────────────────────────────────────────────────────────────
+# Verification Integrity Track — 측정·검증 무결성 강화
+# T3MP3ST 정독 후 3축(효율성·정합성·정확도) 통과 항목만 ch015 스타일로 재정립.
+# 모두 측정/검증 층 — 방법론 우선(패턴 아님) 분석 판정에는 개입하지 않는다.
+# ─────────────────────────────────────────────────────────────────────
+verification_integrity:
+  독립_평가_기준선:
+    en: "Independent Evaluation Baseline"
+    abbr: "IEB"
+    ref: "NIST SP 800-53A (Independent Verification), CA-7 (Remediation Verification)"
+    note: |
+      외부 post-cutoff GHSA/CVE 코퍼스(parent_commit/fix_commit/vuln_lines)를 정답으로
+      recall/precision을 측정. self-referential 정답지(자기 산출물 라벨)를 대체한다.
+      하위: 정답_기준(Ground Truth Manifest), 정합_매칭(Exact Evidence Match),
+      패치_델타_정밀도(Patch-Delta Precision — parent=취약/fix=패치 대조, 이행점검 재사용).
+    home: "harness/eval/datasets/independent/, harness/eval/exact-match.js"
+
+  방법론_무결성_가드:
+    en: "Methodology Integrity Guard"
+    abbr: "MI-1"
+    ref: "ch015 원칙 — 방법론 우선(Methodology, Not Patterns)"
+    note: |
+      knowledge-base/patterns·playbooks에 타깃 특정 '정답'(CVE ID/flag/버전/엔드포인트)이
+      유입되면 build fail(exit 2). 방법론이 과거 엔게이지먼트에 과적합되는 것을 차단.
+      IEB와 세트로 운용(오라클 fitting 압력 상쇄). 새 불변식 계열 MI-(I/PI 계열과 병렬).
+    home: "harness/eval/methodology-integrity.js"
+
+  반증_앵커_검증:
+    en: "Counter-Evidence Anchor Verification"
+    abbr: "CEAV"
+    ref: "NIST SP 800-53A; extends ch015 Evidence Verification Protocol"
+    note: |
+      DISPROVEN/FALSE_POSITIVE 판정은 소스에 실재하는 반증 앵커(dominating guard)를
+      인용해야 유효. guardExistsInSource류 기계 검증(주석/문자열 마스킹), 실재 안 하면
+      강등 무효. 기존 'FALSE_POSITIVE → counter-evidence 필수'(산문)를 코드로 승격.
+      비싼 N-refuter LLM 패널이 아니라 결정론 백스톱만 채택.
+    home: "lib/ch015/evidence.js, verifier R1/R4"
+
+  증거_등급_사다리:
+    en: "Evidence Tier Ladder"
+    abbr: "ETL"
+    ref: "OWASP Testing Guide (evidence levels); ch015 State Delta (native)"
+    note: |
+      poc_status 4단: 주장(claimed) → 코드확인(source-verified=Observed) →
+      로컬재현(locally-reproduced) → 라이브확정(live-confirmed).
+      CONFIRMED 승격은 캡처된 State Delta 산출물에 신호가 literally 포함될 때만 허용,
+      검증 상태는 gate 소유(self-stamp 불가). 기존 확인됨(Observed)/State Delta 확장.
+    home: "pentest Phase 4/4.5/6, poc-artifact gate"
+
+  기능_절제_실험:
+    en: "Feature Ablation Test"
+    abbr: "FAT"
+    ref: "ML evaluation methodology; Chen et al. 2021 (pass@k), Wilson score interval"
+    note: |
+      harness/eval/ab-test를 모델 라우팅 → 기능 토글(feature on/off) 비교로 확장하고
+      통과율 신뢰구간(pass@k / Wilson CI)을 도입. 각 고도화의 marginal 기여를 수치로 증명.
+    home: "harness/eval/ab-test.js, harness/eval/passk.js"

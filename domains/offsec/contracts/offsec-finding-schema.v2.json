@@ -1,0 +1,153 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "contractVersion",
+    "phase",
+    "role",
+    "round",
+    "title",
+    "verdict",
+    "severity",
+    "evidenceClass",
+    "reachability",
+    "preconditions",
+    "severityRationale",
+    "evidence",
+    "confidence",
+    "impact",
+    "remediation",
+    "standards",
+    "unresolved"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_-]*-[0-9]{3,}$"
+    },
+    "contractVersion": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "round": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "supported",
+        "unsupported",
+        "abstain",
+        "escalate"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "INFO"
+      ]
+    },
+    "evidenceClass": {
+      "type": "string",
+      "enum": [
+        "data-flow",
+        "configuration",
+        "access-control",
+        "runtime",
+        "documentation"
+      ]
+    },
+    "reachability": {
+      "type": "string",
+      "enum": [
+        "confirmed",
+        "plausible",
+        "unconfirmed",
+        "not-applicable"
+      ]
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "severityRationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "impact": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "standards": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "lineStart",
+          "lineEnd",
+          "quote"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lineStart": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lineEnd": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

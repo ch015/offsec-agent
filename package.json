@@ -1,0 +1,78 @@
+{
+  "name": "secops-offsec-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:vendor": "pnpm test:vendor:offsec",
+    "test:vendor:offsec": "cd domains/offsec && node --test lib/ch015/test/*.test.js lib/ch015/ast/test/*.test.js hooks/test/*.test.js && for t in refuter-cite-check poc-gate source-reader coverage-gate lessons; do node lib/ch015/$t.js --self-test || exit 1; done",
+    "test:all": "pnpm check:contracts && pnpm typecheck && pnpm test && pnpm test:vendor",
+    "check:contracts": "tsx scripts/generate-contract-resources.ts --check",
+    "typecheck": "tsc --noEmit",
+    "assess": "tsx src/runtime/missions/assess.ts",
+    "assess:v2": "tsx src/runtime/missions/assess-v2.ts",
+    "assess:resume": "tsx src/runtime/missions/assess-resume.ts",
+    "run:admin": "tsx scripts/run-admin.ts",
+    "generate:contract-resources": "tsx scripts/generate-contract-resources.ts",
+    "db:local:start": "bash scripts/postgres/local-start.sh",
+    "db:local:migrate": "bash scripts/postgres/local-migrate.sh",
+    "db:local:stop": "bash scripts/postgres/local-stop.sh",
+    "eval:offsec": "tsx scripts/eval-offsec.ts",
+    "eval:offsec:run": "tsx scripts/run-offsec-benchmark.ts",
+    "eval:offsec:adjudicate": "tsx scripts/adjudicate-offsec-benchmark.ts",
+    "eval:offsec:prepare-pilot": "tsx scripts/prepare-offsec-pilot.ts",
+    "probe:plugin": "tsx scripts/probe-plugin-contract.ts",
+    "probe:offsec": "tsx scripts/probe-offsec-load.ts",
+    "probe:entry-agent": "tsx scripts/probe-entry-agent.ts",
+    "build:library": "node scripts/build-library.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.229",
+    "@tree-sitter-grammars/tree-sitter-kotlin": "^1.1.0",
+    "js-yaml": "^4.3.1",
+    "pg": "^8.22.0",
+    "playwright-core": "1.62.1",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.23.6",
+    "tree-sitter-c-sharp": "^0.21.3",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-dart": "^1.0.0",
+    "tree-sitter-elixir": "^0.3.5",
+    "tree-sitter-go": "^0.23.4",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-objc": "^3.0.2",
+    "tree-sitter-php": "^0.23.12",
+    "tree-sitter-python": "^0.23.6",
+    "tree-sitter-ruby": "^0.23.1",
+    "tree-sitter-rust": "^0.23.3",
+    "tree-sitter-solidity": "^1.0.12",
+    "tree-sitter-swift": "^0.7.1",
+    "tree-sitter-typescript": "^0.23.2",
+    "tsx": "^4.22.4",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.19.18",
+    "@types/pg": "^8.20.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./source": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "types": "./dist/src/index.d.ts",
+  "main": "./dist/src/index.js"
+}

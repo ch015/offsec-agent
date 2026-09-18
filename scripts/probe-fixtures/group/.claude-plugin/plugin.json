@@ -1,0 +1,6 @@
+{
+  "name": "probe-group",
+  "version": "0.0.0",
+  "description": "프로브용 그룹 플러그인 — 에이전트만 제공한다. 훅은 없다.",
+  "license": "UNLICENSED"
+}

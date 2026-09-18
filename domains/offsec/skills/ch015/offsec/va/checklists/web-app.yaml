@@ -1,0 +1,242 @@
+# Web Application Security Methodology Questions (v2.0 — Question-based)
+#
+# P1-7 (2026-04-17): v1 패턴 매칭 → v2 질문 기반으로 전환.
+# API 체크리스트(api.yaml v2.0)와 동일한 스키마:
+#   id / title / dimension / severity_hint / review_perspective /
+#   anti_patterns / variants / evidence_required / legacy_check(주석 보존용)
+
+metadata:
+  name: "Web Application Security (Methodology v2)"
+  version: "2.0"
+  applicable_to: ["Next.js", "React", "Vue", "Angular", "Express", "Django", "Rails", "FastAPI", "Svelte/SvelteKit", "Remix"]
+  standard: "OWASP Top 10 (2021) + Web Security Testing Guide"
+
+categories:
+
+  authentication:
+    name: "인증 (Authentication)"
+    items:
+      - id: WEB-AUTH-001
+        title: "보호 엔드포인트의 인증 집행 단일성"
+        dimension: A1
+        severity_hint: CRITICAL
+        review_perspective: |
+          모든 상태 변경 경로(POST/PUT/PATCH/DELETE)와 민감 조회 경로가 단일한
+          인증 집행 지점(global middleware/decorator)을 반드시 통과하는가,
+          아니면 엔드포인트별로 개별 구현이라 하나라도 누락될 수 있는가?
+        anti_patterns:
+          - "라우트 핸들러마다 if(!req.user) return 401 을 개별 작성"
+          - "opt-out 방식 미들웨어 — `excludePaths: [...]` 에 하나라도 잘못 등록되면 공개"
+          - "Next.js middleware가 matcher로 보호 경로만 지정 (누락 시 무방비)"
+        evidence_required:
+          - "인증 미들웨어/데코레이터 정의 위치"
+          - "면제(exempt) 목록 또는 opt-in/opt-out 방식"
+          - "신규 API 추가 시 자동 적용되는지"
+        legacy_check: "인증 미들웨어 미적용 엔드포인트 식별"
+
+      - id: WEB-AUTH-002
+        title: "JWT 검증 완전성"
+        dimension: A1
+        severity_hint: CRITICAL
+        review_perspective: |
+          JWT 검증 경로가 알고리즘 고정, 서명 검증, exp/nbf, iss/aud, kid/jku
+          조작 방어를 모두 수행하는가? 각 요건의 코드 증거를 확인하라.
+          상세: knowledge-base/tier1-dimensions/a1-auth.md JWT_Verification_Depth 참조.
+        anti_patterns:
+          - "jwt.decode(token) 만 호출 (verify 아님)"
+          - "alg를 token 헤더에서 읽어 그대로 verify 옵션에 전달"
+          - "kid로 파일 경로 조회, jku로 외부 URL fetch"
+        evidence_required:
+          - "검증 함수 파일:라인"
+          - "허용 알고리즘 allowlist"
+        legacy_check: "jwt.decode vs jwt.verify 사용 패턴 비교"
+
+      - id: WEB-AUTH-003
+        title: "세션 쿠키 보안 속성 + Session Fixation 방어"
+        dimension: A1
+        severity_hint: HIGH
+        review_perspective: |
+          쿠키 설정이 HttpOnly + Secure + SameSite(Lax/Strict) + Path 제한을 모두
+          갖추는가? 로그인 성공 직후 세션 ID가 재발급되는가(Session Fixation 방어)?
+          로그아웃 시 서버측 세션이 즉시 파기되는가?
+        anti_patterns:
+          - "SameSite=None + Secure 부재 (Chrome에서 거부되지만 타 브라우저에 드리프트)"
+          - "localStorage에 JWT 저장 → XSS 시 즉시 탈취"
+          - "logout이 localStorage만 지우고 서버 세션 store 손대지 않음"
+
+      - id: WEB-AUTH-004
+        title: "OAuth/OIDC Flow Integrity"
+        dimension: A1
+        severity_hint: HIGH
+        review_perspective: |
+          Authorization Code Flow 사용 시 state/nonce/PKCE/redirect_uri 엄격 매칭
+          /issuer/audience 검증이 모두 시행되는가? (knowledge-base/tier1-dimensions/a1-auth.md
+          OAuth_OIDC_Flow 상세 참조)
+
+      - id: WEB-AUTH-005
+        title: "비밀번호 정책 + 저장"
+        dimension: A1
+        severity_hint: MEDIUM
+        review_perspective: |
+          비밀번호 엔트로피 요구사항(길이 + 클래스) + 메모리-하드 KDF
+          (argon2id, bcrypt cost≥12, scrypt) 사용? 평문/SHA1/MD5/pepper 없는
+          단순 bcrypt는 오프라인 공격에 취약.
+
+  authorization:
+    name: "인가 (Authorization)"
+    items:
+      - id: WEB-AUTHZ-001
+        title: "리소스 소유권 검증 + IDOR 방어"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          리소스를 반환/수정/삭제하는 핸들러가 요청자의 권한을 어떤 레이어에서
+          어떻게 증명하는가? tenant_id/org_id/workspaceId 같은 변형된 필드도
+          포함해 검증하는가? (api.yaml API-BOLA-001 과 동일 방법론)
+
+      - id: WEB-AUTHZ-002
+        title: "관리자 페이지/API 일관 보호"
+        dimension: A2
+        severity_hint: CRITICAL
+        review_perspective: |
+          /admin, /dashboard/admin 등 경로가 단일 role-check 미들웨어로 보호되는가?
+          새 admin 엔드포인트 추가 시 자동 적용되는 구조인가?
+
+      - id: WEB-AUTHZ-003
+        title: "Mass Assignment / Over-posting 방어"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          업데이트 엔드포인트가 DTO/allowlist로 필드를 필터링하는가, body 전체를
+          ORM update에 전달하는가? role, isAdmin, balance 같은 필드가 덮어써질
+          가능성은?
+        anti_patterns:
+          - "prisma.user.update({ data: req.body })"
+          - "Object.assign(user, req.body)"
+
+  input_output:
+    name: "입출력 (Input/Output)"
+    items:
+      - id: WEB-IO-001
+        title: "XSS 방어 — 출력 컨텍스트 인식 escape"
+        dimension: A4
+        severity_hint: HIGH
+        review_perspective: |
+          DOM/HTML/JS/URL/CSS 컨텍스트별로 올바른 인코딩이 적용되는가?
+          React/Vue의 기본 escape를 우회하는 API(dangerouslySetInnerHTML,
+          v-html, `{@html}`, `bypassSecurityTrust*`)가 사용되는 위치에서
+          sanitize가 적용되는가?
+        anti_patterns:
+          - "res.send(`<h1>${userInput}</h1>`) — 서버 템플릿 직조립"
+          - "dangerouslySetInnerHTML={{__html: userInput}} 무검증"
+          - "marked/markdown-it 출력을 DOMPurify 없이 innerHTML"
+        evidence_required:
+          - "출력 지점 파일:라인"
+          - "sanitize 함수 존재 여부"
+
+      - id: WEB-IO-002
+        title: "CSRF 방어"
+        dimension: A4
+        severity_hint: HIGH
+        review_perspective: |
+          상태 변경 요청에 SameSite=Lax/Strict 쿠키 + (필요 시) CSRF 토큰이
+          적용되는가? Lax 한계(top-level POST 허용) 인지 + double-submit 또는
+          custom header (fetch credentials) 병행 여부.
+
+      - id: WEB-IO-003
+        title: "Open Redirect / URL Forwarding"
+        dimension: A4
+        severity_hint: MEDIUM
+        review_perspective: |
+          `?redirect=`, `?next=`, `?returnUrl=` 같은 파라미터를 server가 Location
+          헤더/클라이언트 JS에 그대로 주입하는가? external host 화이트리스트 또는
+          상대 경로만 허용하는가?
+
+      - id: WEB-IO-004
+        title: "SSRF / XXE / Deserialize / Smuggling"
+        dimension: A3/A4/A6
+        severity_hint: HIGH
+        review_perspective: |
+          아래 depth 모듈의 방법론을 적용하여 각 sink를 점검:
+          - depth/ssrf.md, depth/injection.md (Deserialization 섹션),
+          - knowledge-base/tier1-dimensions/a4-io.md XML_Parsing_Safety (XXE),
+          - knowledge-base/tier1-dimensions/a3-dataflow.md HTTP_Request_Smuggling_Boundary
+
+      - id: WEB-IO-005
+        title: "서버 측 템플릿 인젝션 (SSTI)"
+        dimension: A4
+        severity_hint: HIGH
+        review_perspective: |
+          Jinja/Twig/Handlebars-서버/Velocity/Freemarker/Thymeleaf 등 서버 렌더링
+          템플릿에서 사용자 입력이 템플릿 문자열 자체로 유입되는 경로가 있는가?
+          상세: depth/injection.md (Template Injection 섹션)
+
+      - id: WEB-IO-006
+        title: "Prototype Pollution (Node/JS)"
+        dimension: A4
+        severity_hint: HIGH
+        review_perspective: |
+          req.body/req.query를 통째로 merge/assign에 전달하는 코드가 있는가?
+          lodash 버전, qs 옵션, DB ORM의 deep merge 동작 확인.
+          상세: depth/injection.md (객체 구조 오염 섹션)
+
+  secrets:
+    name: "시크릿·설정 (Secret / Config)"
+    items:
+      - id: WEB-CONF-001
+        title: "CSP / 보안 헤더 구성"
+        dimension: A5
+        severity_hint: MEDIUM
+        review_perspective: |
+          Content-Security-Policy가 unsafe-inline/unsafe-eval 없이 nonce 또는
+          hash 기반으로 구성되는가? Strict-Transport-Security, X-Content-Type-
+          Options, Referrer-Policy, Permissions-Policy 일괄 설정?
+
+      - id: WEB-CONF-002
+        title: "CORS 엄격성"
+        dimension: A5
+        severity_hint: HIGH
+        review_perspective: |
+          Access-Control-Allow-Origin이 `*`, `null`, origin-reflect 아닌
+          명시적 화이트리스트인가? credentials:true + reflected origin 조합은
+          세션 탈취로 이어짐.
+
+      - id: WEB-CONF-003
+        title: "환경 분기 + 디버그 비활성"
+        dimension: A5
+        severity_hint: HIGH
+        review_perspective: |
+          DEBUG/NODE_ENV 분기가 fail-safe인가 (기본 production)? 디버그
+          엔드포인트(/__debug, /api/test)가 프로덕션 빌드에서 제거되는가?
+
+  availability_and_logging:
+    name: "리소스/관찰성 (Resource / Observability)"
+    items:
+      - id: WEB-OBS-001
+        title: "Rate Limit 적용 범위"
+        dimension: A8
+        severity_hint: HIGH
+        review_perspective: |
+          모든 엔드포인트에 기본 rate limit이 있는가? 비용이 큰 작업(LLM, 이미지
+          처리, 외부 API)에 추가 제한? 키는 IP 단독이 아닌 user/session 포함?
+
+      - id: WEB-OBS-002
+        title: "Forensic Readiness 감사 로그"
+        dimension: A7
+        severity_hint: MEDIUM
+        review_perspective: |
+          인증 이벤트, 권한 변경, 재무 거래, 관리자 작업을 append-only 스토리지에
+          기록하는가? 로그 조작 방지(서명/체인 해시)는?
+          상세: knowledge-base/tier1-dimensions/a7-error.md Forensic_Readiness_And_Audit_Log
+
+  mobile_webview:
+    name: "WebView / Hybrid"
+    items:
+      - id: WEB-MV-001
+        title: "WebView JavaScript 브리지"
+        dimension: A6
+        severity_hint: HIGH
+        review_perspective: |
+          addJavascriptInterface / window.webkit.messageHandlers / postMessage
+          경로에서 untrusted content가 bridge API를 호출할 수 있는가?
+          URL allowlist, origin 검증, bridge API 권한 최소화가 적용되는가?

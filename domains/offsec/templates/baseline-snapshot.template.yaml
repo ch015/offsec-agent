@@ -1,0 +1,41 @@
+# 00_baseline_snapshot.yaml — VA Audit Baseline
+# Full VA 완료 후 자동 생성. Compliance Check의 기준선으로 사용.
+
+baseline:
+  version: 1
+  audit_timestamp: "{{timestamp}}"          # ISO 8601
+  commit_hash: "{{commit_hash}}"            # git rev-parse HEAD
+  commit_short: "{{commit_short}}"          # first 8 chars
+
+  scope:
+    dimensions_analyzed: ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8"]
+    files_examined:
+      count: "{{file_count}}"
+      list_hash: "{{sha256_of_sorted_file_list}}"
+      list_path: "00_baseline_file_list.txt"  # 분석 대상 파일의 정렬된 상대 경로 목록 (동반 파일)
+    source_lines: "{{total_source_lines}}"
+    active_domains: ["{{domain1}}", "{{domain2}}"]
+
+  standards:
+    owasp_top10: "2021"
+    owasp_api_top10: "2023"
+    cwe_version: "4.14"
+    nist_800_53: "{{r5_or_null}}"
+
+  overlays:
+    tier2_loaded: ["{{overlay1}}", "{{overlay2}}"]
+
+  results:
+    finding_count:
+      critical: "{{N}}"
+      high: "{{N}}"
+      medium: "{{N}}"
+      low: "{{N}}"
+      info: "{{N}}"
+      structural_weakness: "{{N}}"
+    security_score: "{{score}}"
+    grade: "{{grade}}"
+    pass: "{{boolean}}"
+
+  project_level: "{{basic_or_standard_or_regulated}}"
+  analysis_mode: "{{llm_or_ast}}"

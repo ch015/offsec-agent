@@ -1,0 +1,24 @@
+rules:
+  - id: nunchi.code.dynamic-evaluation
+    message: Dynamic code evaluation requires reachability and input-control review.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: eval($VALUE)
+      - pattern: new Function(...)
+
+  - id: nunchi.code.shell-command-construction
+    message: Shell execution requires argument-origin and escaping review.
+    severity: WARNING
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: child_process.exec($COMMAND, ...)
+      - pattern: $CP.exec($COMMAND, ...)
+
+  - id: nunchi.code.python-unsafe-deserialization
+    message: Unsafe deserialization candidate requires attacker-control validation.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: pickle.loads($VALUE)
+      - pattern: yaml.load($VALUE, ...)

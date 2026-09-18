@@ -1,0 +1,181 @@
+# PCI DSS 4.0.1 — Payment Card Industry Data Security Standard
+# 카드 결제 보안 표준. future-dated 요건 2025-03-31 전면 필수화.
+# 출처: https://www.pcisecuritystandards.org/
+
+standard:
+  id: "pci-dss-v4"
+  name: "PCI DSS 4.0.1"
+  version: "4.0.1"
+  effective: "2025-03-31 (모든 future-dated 요건 필수화)"
+
+requirements:
+
+  # ─── Req 3: 저장된 계정 데이터 보호 ───
+  - id: "PCI DSS 4.0.1 Req 3.3.1"
+    title: "SAD(민감인증데이터) 인가 후 저장 금지"
+    components: [PaymentService, DataLayer]
+    implementation:
+      - "CVV/CVC: 인가 완료 후 즉시 삭제 — DB, 로그, 캐시 전체"
+      - "Track 데이터(Magnetic stripe): 어떤 경우에도 저장 금지"
+      - "PIN/PIN block: 어떤 경우에도 저장 금지"
+      - "인가 전 임시 저장 시: 암호화 + 최소 보존 (최대 72시간)"
+    test_criteria:
+      happy: "인가 완료 → SAD 필드가 DB/로그에서 삭제됨"
+      failure: "인가 후 CVV가 어떤 저장소에서도 조회 불가"
+      boundary: "인가 전 임시 저장 → 72시간 후 자동 삭제"
+
+  - id: "PCI DSS 4.0.1 Req 3.5.1"
+    title: "PAN(카드번호) 저장 시 암호화"
+    components: [DataLayer, PaymentService]
+    implementation:
+      - "AES-256-GCM envelope encryption: CMK → DEK 2-tier 구조"
+      - "DEK 로테이션: 최소 1년 주기 (cryptoperiod)"
+      - "CMK: HSM 또는 클라우드 KMS에 격리 저장"
+      - "키 파기: Cryptographic Erasure (NIST SP 800-88r1)"
+      - "디스플레이 마스킹: 처음 6자리 + 마지막 4자리만 표시 (BIN + Last4)"
+      - "tokenization 권장: 자체 PAN 저장 최소화"
+    test_criteria:
+      happy: "Restricted 데이터 DB 조회 시 암호화 상태 확인"
+      failure: "복호화 키 없이 접근 시 암호문만 반환"
+      boundary: "키 로테이션 후 기존 데이터 복호화 가능"
+
+  # ─── Req 4: 개방 네트워크에서 전송 암호화 ───
+  - id: "PCI DSS 4.0.1 Req 4.2.1"
+    title: "개방 네트워크 전송 시 강력한 암호화"
+    components: [APIServer, Infra, SDKClient]
+    implementation:
+      - "TLS 1.2+ 필수 (TLS 1.3 권장)"
+      - "약한 cipher suite 비활성화: RC4, DES, 3DES, NULL, EXPORT"
+      - "HSTS: max-age=31536000; includeSubDomains; preload"
+      - "인증서: 유효한 CA 서명, 2048-bit RSA 또는 256-bit ECC 이상"
+      - "certificate pinning: 모바일 SDK에서 권장 (백업 핀 포함)"
+    test_criteria:
+      happy: "TLS 1.3 + 강한 cipher → 정상 통신"
+      failure: "TLS 1.0/1.1 → 연결 거부"
+      boundary: "인증서 만료 7일 전 → 알림"
+
+  # ─── Req 5: 악성코드 방지 ───
+  - id: "PCI DSS 4.0.1 Req 5.3.3"
+    title: "파일 업로드 악성코드 방지"
+    components: [APIServer]
+    implementation:
+      - "파일 업로드 시 Content-Type 검증 + 매직 바이트 확인"
+      - "업로드 저장소: 실행 불가 디렉토리, 웹 루트 외부"
+      - "파일명 무작위화: 원본 파일명 사용 금지 (UUID 기반)"
+      - "안티바이러스 스캔: 저장 전 ClamAV 또는 동등 수준 검사"
+      - "최대 파일 크기 제한"
+    test_criteria:
+      happy: "허용된 MIME 타입 + 크기 → 업로드 성공"
+      failure: "실행 파일(.exe, .sh) → 거부"
+      boundary: "이미지 확장자 + 스크립트 매직 바이트 → 거부"
+
+  # ─── Req 6: 안전한 소프트웨어 개발 ───
+  - id: "PCI DSS 4.0.1 Req 6.2.4"
+    title: "소프트웨어 엔지니어링 보안 기법"
+    components: [all]
+    implementation:
+      - "코드 리뷰: 보안 관련 변경에 대해 보안 교육 받은 리뷰어 필수"
+      - "취약점 스캔: SAST + SCA를 CI/CD에 통합"
+      - "시크릿 스캔: pre-commit hook으로 자격증명 커밋 방지"
+      - "보안 테스트: OWASP Top 10 기반 자동화 테스트"
+    test_criteria:
+      happy: "보안 리뷰 완료된 PR → 머지 허용"
+      failure: "시크릿 포함 커밋 → pre-commit hook에서 차단"
+      boundary: "SAST 경고 → 머지 전 해결 또는 예외 승인"
+
+  - id: "PCI DSS 4.0.1 Req 6.4.1"
+    title: "공개 웹 애플리케이션 보호"
+    components: [APIServer, SDKClient]
+    implementation:
+      - "WAF 배치: 모든 공개 웹 트래픽에 WAF 적용"
+      - "WAF 규칙: OWASP CRS 기반, 자동 업데이트"
+      - "또는: 연 1회 이상 수동 취약점 진단 + 발견 사항 수정"
+      - "CSP(Content-Security-Policy): script-src 'self', unsafe-inline 금지"
+    test_criteria:
+      happy: "정상 요청 → WAF 통과"
+      failure: "SQLi/XSS 페이로드 → WAF 차단"
+      boundary: "정상 요청이 WAF 오탐으로 차단되지 않음"
+
+  # ─── Req 7: 접근 제어 ───
+  - id: "PCI DSS 4.0.1 Req 7.2.2"
+    title: "최소 권한 접근 제어"
+    components: [Admin, DataLayer, Infra]
+    implementation:
+      - "RBAC: 역할 기반, 업무에 필요한 최소 권한만 부여"
+      - "카드 데이터 접근: need-to-know 기반, 접근 로그 감사"
+      - "관리자 계정: 공유 금지, 개인별 고유 계정"
+      - "권한 검토: 최소 6개월마다 재검토"
+    test_criteria:
+      happy: "역할에 맞는 권한으로 정상 작업"
+      failure: "권한 없는 카드 데이터 접근 → 403 + 감사 로그"
+      boundary: "퇴사자 계정 → 즉시 비활성화"
+
+  # ─── Req 8: 사용자 식별 및 인증 ───
+  - id: "PCI DSS 4.0.1 Req 8.3.6"
+    title: "비밀번호 복잡성"
+    components: [Auth, Admin]
+    implementation:
+      - "최소 12자 (PCI DSS 4.0.1 기준)"
+      - "숫자 + 영문자 혼합 필수"
+      - "90일마다 변경 또는 동적 분석(zxcvbn) 도입"
+      - "이전 4개 비밀번호 재사용 금지"
+    test_criteria:
+      happy: "12자 이상 복합 비밀번호 → 설정 성공"
+      failure: "8자 비밀번호 → 거부"
+      boundary: "직전 비밀번호와 동일 → 거부"
+
+  - id: "PCI DSS 4.0.1 Req 8.4.2"
+    title: "CDE 접근 시 MFA 필수"
+    components: [Admin, Infra]
+    implementation:
+      - "카드 데이터 환경(CDE) 접근 시 MFA 필수"
+      - "MFA 방식: TOTP(RFC 6238) 또는 FIDO2/WebAuthn"
+      - "SMS OTP: PCI DSS 4.0.1에서 단독 사용 비권장 (phishing 취약)"
+      - "MFA 우회 금지: 관리자도 예외 없음"
+    test_criteria:
+      happy: "비밀번호 + TOTP → CDE 접근 성공"
+      failure: "비밀번호만 → CDE 접근 거부"
+      boundary: "TOTP 시간 동기화 ±30초 → 허용"
+
+  # ─── Req 10: 로깅 및 모니터링 ───
+  - id: "PCI DSS 4.0.1 Req 10.2.1"
+    title: "감사 로그 기록"
+    components: [APIServer, Auth, Admin, DataLayer]
+    implementation:
+      - "기록 대상: 모든 사용자 접근, 관리자 작업, 인증 시도, 접근 제어 변경"
+      - "카드 데이터 접근: 모든 read/write 기록"
+      - "로그 항목: 사용자 ID, 이벤트 유형, 날짜/시간, 성공/실패, 대상 리소스, 출발지"
+      - "시간 동기화: NTP, 모든 시스템 UTC 기준"
+      - "로그 보존: 온라인 3개월, 총 12개월"
+    test_criteria:
+      happy: "관리자 작업 → 감사 로그에 6개 필드 모두 기록"
+      failure: "감사 로그 비활성화 시도 → 거부 + 알림"
+      boundary: "로그 용량 임계 80% → 자동 알림"
+
+  # ─── Req 11: 정기 테스트 ───
+  - id: "PCI DSS 4.0.1 Req 11.3.1"
+    title: "내부 취약점 스캔"
+    components: [Infra]
+    implementation:
+      - "분기 1회 이상 내부 취약점 스캔"
+      - "CRITICAL/HIGH 발견 시 수정 후 재스캔"
+      - "스캔 도구: 인증된 스캔 (ASV 또는 내부 PCI 자격)"
+      - "새로운 시스템 변경 후 재스캔"
+    test_criteria:
+      happy: "분기 스캔 → CRITICAL 0건"
+      failure: "CRITICAL CVE 미수정 → 재스캔 불합격"
+      boundary: "인프라 변경 후 7일 이내 재스캔"
+
+  # ─── Req 12: 정보보안 정책 ───
+  - id: "PCI DSS 4.0.1 Req 12.3.1"
+    title: "대상 위험 분석"
+    components: [all]
+    implementation:
+      - "연 1회 이상 공식 위험 평가 수행"
+      - "자산 인벤토리: 카드 데이터 접촉 시스템 목록 유지"
+      - "위험 처리: 수용/회피/전가/완화 결정 문서화"
+      - "경영진 승인: 잔여 위험에 대한 정식 수용 프로세스"
+    test_criteria:
+      happy: "연간 위험 평가 완료 + 경영진 서명"
+      failure: "위험 평가 미실시 → 컴플라이언스 불합격"
+      boundary: "중대 변경 발생 시 임시 위험 평가 트리거"

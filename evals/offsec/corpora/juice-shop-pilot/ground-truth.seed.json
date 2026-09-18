@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0.0",
+  "revision": "3b178fd07b9f754c9d444d818448cfe58168943f",
+  "caseId": "case-juicebox19",
+  "capability": "large-repository",
+  "labels": [
+    {
+      "labelId": "GT-JS-LOGIN-SQLI",
+      "rootCauseId": "RC-JS-LOGIN-SQLI",
+      "title": "Login query directly interpolates request credentials",
+      "cwes": ["CWE-89"],
+      "modality": "static",
+      "anchors": [{ "path": "routes/login.ts", "lineStart": 34, "lineEnd": 34 }]
+    },
+    {
+      "labelId": "GT-JS-SEARCH-SQLI",
+      "rootCauseId": "RC-JS-SEARCH-SQLI",
+      "title": "Product search directly interpolates query text",
+      "cwes": ["CWE-89"],
+      "modality": "static",
+      "anchors": [{ "path": "routes/search.ts", "lineStart": 21, "lineEnd": 24 }]
+    },
+    {
+      "labelId": "GT-JS-OPEN-REDIRECT",
+      "rootCauseId": "RC-JS-OPEN-REDIRECT",
+      "title": "Redirect allowlist uses substring containment",
+      "cwes": ["CWE-601"],
+      "modality": "static",
+      "anchors": [{ "path": "lib/insecurity.ts", "lineStart": 135, "lineEnd": 140 }]
+    },
+    {
+      "labelId": "GT-JS-WALLET-MNEMONIC",
+      "rootCauseId": "RC-JS-WALLET-MNEMONIC",
+      "title": "Wallet recovery mnemonic is embedded in application source",
+      "cwes": ["CWE-798"],
+      "modality": "static",
+      "anchors": [{ "path": "routes/checkKeys.ts", "lineStart": 7, "lineEnd": 11 }]
+    },
+    {
+      "labelId": "GT-JS-PASSWORD-CHANGE",
+      "rootCauseId": "RC-JS-PASSWORD-CHANGE",
+      "title": "Password change permits omission of the current password",
+      "cwes": ["CWE-620"],
+      "modality": "static",
+      "anchors": [{ "path": "routes/changePassword.ts", "lineStart": 33, "lineEnd": 42 }]
+    },
+    {
+      "labelId": "GT-JS-RECYCLE-BOLA",
+      "rootCauseId": "RC-JS-RECYCLE-BOLA",
+      "title": "Recycle item lookup lacks authorization and ownership binding",
+      "cwes": ["CWE-639"],
+      "modality": "static",
+      "anchors": [
+        { "path": "routes/recycles.ts", "lineStart": 11, "lineEnd": 17 },
+        { "path": "server.ts", "lineStart": 383, "lineEnd": 387 }
+      ]
+    },
+    {
+      "labelId": "GT-JS-USERNAME-EVAL",
+      "rootCauseId": "RC-JS-USERNAME-EVAL",
+      "title": "Stored username content reaches eval",
+      "cwes": ["CWE-95"],
+      "modality": "static",
+      "anchors": [{ "path": "routes/userProfile.ts", "lineStart": 53, "lineEnd": 63 }]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "semgrepVersion": "1.157.0",
+  "source": "project-owned",
+  "license": "UNLICENSED",
+  "rules": [
+    {
+      "path": "code.yml",
+      "sha256": "6ea3acf6f61ac47c9d8aee86717a7e926353d1d369c9f0dcb7504ed35b331112"
+    },
+    {
+      "path": "iac.yml",
+      "sha256": "f385eb3f30e87cf072302f23505da2d1d3bcc2fd83b1a489b2b10762f6f411ae"
+    }
+  ]
+}

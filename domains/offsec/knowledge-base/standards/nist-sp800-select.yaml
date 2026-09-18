@@ -1,0 +1,198 @@
+# NIST SP 800 시리즈 — 주요 보안 표준 발췌
+# 인증, 암호화, 키관리, TLS, 난수생성, 로깅 관련 핵심 요건
+# 출처: https://csrc.nist.gov/publications/sp800
+
+standard:
+  id: "nist-sp800"
+  name: "NIST SP 800 Series (Selected)"
+  publications:
+    - "SP 800-63B (Digital Identity — Authentication)"
+    - "SP 800-57r5 (Key Management)"
+    - "SP 800-52r2 (TLS Guidelines)"
+    - "SP 800-90A/90B (Random Number Generation)"
+    - "SP 800-92 (Log Management)"
+    - "SP 800-53r5 (Security Controls)"
+    - "SP 800-88r1 (Media Sanitization)"
+    - "SP 800-38D (GCM Mode)"
+    - "SP 800-162 (ABAC)"
+
+requirements:
+
+  # ─── SP 800-63B: 인증 ───
+  - id: "NIST SP 800-63B §5.1.1.2"
+    title: "Memorized Secret (비밀번호) 요건"
+    category: authentication
+    components: [Auth, Admin]
+    implementation:
+      - "최소 길이: 사용자 8자(NIST), 권장 12자 이상"
+      - "최대 길이: 최소 64자 허용"
+      - "구성 제한: 복잡성 규칙 강제 금지 (NIST 권고), 대신 breached-password 사전 차단"
+      - "해싱: bcrypt cost 12 또는 Argon2id (t=3, m=64MB, p=4), PBKDF2-SHA256 (600K+ 반복, FIPS 환경)"
+      - "salt: 최소 32-byte, CSPRNG 생성"
+      - "정기 변경 강제 금지 (침해 증거 없을 시)"
+      - "붙여넣기 허용, 비밀번호 표시 옵션 제공"
+    test_criteria:
+      happy: "12자 비밀번호 → 해시 저장 + 인증 성공"
+      failure: "breached-password 목록 포함 → 설정 거부"
+      boundary: "64자 비밀번호 → 정상 처리"
+
+  - id: "NIST SP 800-63B §5.1.3"
+    title: "Out-of-Band Authenticator (MFA)"
+    category: authentication
+    components: [Auth, Admin]
+    implementation:
+      - "TOTP (RFC 6238): SHA-1/SHA-256, 시간 단계 30초, 허용 편차 ±1 단계"
+      - "WebAuthn/FIDO2: 가장 강력한 MFA, 피싱 저항"
+      - "SMS OTP: 단독 사용 비권장 (SIM swap, SS7 공격 취약)"
+      - "복구 코드: 1회용, 12자 이상, 암호화 저장, 사용 시 재생성"
+    test_criteria:
+      happy: "유효한 TOTP 코드 → MFA 통과"
+      failure: "만료된 TOTP → 거부"
+      boundary: "±1 단계 TOTP → 허용 (시간 편차)"
+
+  - id: "NIST SP 800-63B §7.1"
+    title: "세션 관리"
+    category: authentication
+    components: [Auth, APIServer]
+    implementation:
+      - "세션 ID: 최소 128-bit 엔트로피, CSPRNG 생성"
+      - "쿠키: httpOnly, secure, SameSite=Strict (또는 Lax)"
+      - "유휴 만료: 30분"
+      - "절대 만료: 12-24시간"
+      - "재인증: 민감 작업(비밀번호 변경, 결제) 전 재인증"
+      - "로그아웃: 서버사이드 세션 즉시 무효화"
+    test_criteria:
+      happy: "활성 세션 → 정상 접근"
+      failure: "30분 유휴 후 → 재인증 요구"
+      boundary: "로그아웃 후 세션 쿠키 재사용 → 401"
+
+  # ─── SP 800-57r5: 키 관리 ───
+  - id: "NIST SP 800-57r5 §5.3"
+    title: "암호화 키 관리"
+    category: key_management
+    components: [DataLayer, PaymentService, WalletManager]
+    implementation:
+      - "키 생성: CSPRNG (SP 800-90A 준수), 최소 128-bit 보안 강도"
+      - "키 저장: HSM(FIPS 140-3 Level 2+) 또는 클라우드 KMS"
+      - "키 분리: 용도별 분리 (암호화 키 ≠ 서명 키 ≠ KEK)"
+      - "키 로테이션: 대칭키 1년, 비대칭키 2년 (RSA 2048+, ECC P-256+)"
+      - "키 폐기: Cryptographic Erasure (SP 800-88r1), 폐기 로그 기록"
+      - "Envelope Encryption: CMK → DEK 구조, DEK만 데이터 근처 저장"
+    test_criteria:
+      happy: "CMK로 DEK 암호화 → DEK로 데이터 암호화 → 정상 복호화"
+      failure: "CMK 접근 불가 → 데이터 복호화 불가 (설계 의도)"
+      boundary: "키 로테이션 후 이전 키로 암호화된 데이터 복호화 가능"
+
+  # ─── SP 800-52r2: TLS ───
+  - id: "NIST SP 800-52r2 §3.1"
+    title: "TLS 구성"
+    category: tls
+    components: [APIServer, Infra, SDKClient]
+    implementation:
+      - "최소 TLS 1.2 (서버 및 클라이언트)"
+      - "TLS 1.3 권장 (0-RTT는 replay 위험 시 비활성화)"
+      - "TLS 1.0/1.1: 완전 비활성화"
+      - "cipher suite (TLS 1.2):"
+      - "  허용: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+      - "  금지: RC4, DES, 3DES, NULL, EXPORT, CBC 모드 (BEAST/Lucky13)"
+      - "HSTS: max-age=31536000; includeSubDomains"
+      - "OCSP Stapling 활성화"
+    test_criteria:
+      happy: "TLS 1.3 + AES-256-GCM → 연결 성공"
+      failure: "TLS 1.0 → 연결 거부"
+      boundary: "만료 임박 인증서 → 알림 (30일 전)"
+
+  # ─── SP 800-90A/90B: 난수 생성 ───
+  - id: "NIST SP 800-90A §10"
+    title: "암호학적 난수 생성기 (CSPRNG)"
+    category: random
+    components: [Auth, WalletManager, DataLayer]
+    implementation:
+      - "DRBG: CTR_DRBG(AES-256) 또는 Hash_DRBG(SHA-256)"
+      - "시드: OS 엔트로피 소스 (Linux: /dev/urandom, getrandom())"
+      - "재시드: 2^48 요청 또는 시스템 이벤트 후"
+      - "토큰/세션 ID: 최소 128-bit (UUID v4는 122-bit, 허용)"
+      - "암호화 키: 최소 256-bit CSPRNG"
+      - "금지: Math.random(), random.random(), time-based seed, 자체 구현 PRNG"
+    test_criteria:
+      happy: "crypto.randomBytes(32) 호출 → 256-bit 난수"
+      failure: "Math.random() 기반 토큰 → 보안 결함"
+      boundary: "연속 생성 시 통계적 편향 없음 (NIST SP 800-22 테스트)"
+
+  # ─── SP 800-92: 로그 관리 ───
+  - id: "NIST SP 800-92 §4"
+    title: "보안 로그 관리"
+    category: logging
+    components: [APIServer, Auth, Infra]
+    implementation:
+      - "구조화 로그: JSON 포맷 {timestamp, severity, actor, action, resource, result, source_ip}"
+      - "시간: ISO 8601 UTC, NTP 동기화 (오차 ≤ 1초)"
+      - "민감 데이터 마스킹: PII, 카드번호, 비밀번호, 토큰을 로그에 평문 기록 금지"
+      - "무결성: append-only, 변조 감지 (HMAC 또는 체인 해시)"
+      - "보존: 온라인 90일, 아카이브 1년 (규제에 따라 연장)"
+      - "접근 제어: 로그 시스템에 RBAC, 감사자만 읽기 가능"
+    test_criteria:
+      happy: "보안 이벤트 → JSON 로그에 7개 필드 기록"
+      failure: "로그에 비밀번호 평문 → 마스킹 검증 실패"
+      boundary: "로그 스토리지 장애 → 서비스 영향 없음 (degraded logging)"
+
+  # ─── SP 800-53r5: 보안 통제 (주요 항목) ───
+  - id: "NIST SP 800-53r5 AC-6"
+    title: "최소 권한 원칙"
+    category: access_control
+    components: [Admin, DataLayer, Infra]
+    implementation:
+      - "역할 정의: 업무 기능 기반, 필요 최소 권한만 부여"
+      - "권한 분리: 운영자 ≠ 감사자 ≠ 개발자"
+      - "임시 권한 상승: JIT(Just-in-Time) 접근, 시간 제한"
+      - "정기 검토: 분기별 접근 권한 재인증"
+    test_criteria:
+      happy: "역할에 맞는 리소스 접근 → 성공"
+      failure: "권한 없는 리소스 접근 → 403 + 감사 로그"
+      boundary: "임시 권한 만료 → 자동 회수"
+
+  - id: "NIST SP 800-53r5 SC-13"
+    title: "암호화 보호"
+    category: encryption
+    components: [DataLayer, APIServer, PaymentService]
+    implementation:
+      - "FIPS 140-3 검증 모듈 사용 (또는 FIPS 검증 알고리즘)"
+      - "대칭: AES-256-GCM (SP 800-38D), ChaCha20-Poly1305"
+      - "비대칭: RSA-2048+, ECDSA P-256+, Ed25519"
+      - "해시: SHA-256/384/512 (FIPS 180-4)"
+      - "HMAC: HMAC-SHA256 (FIPS 198-1)"
+      - "금지: MD5, SHA-1 (서명/HMAC), DES, 3DES, RC4, ECB 모드"
+    test_criteria:
+      happy: "AES-256-GCM 암호화 → 정상 복호화"
+      failure: "MD5 해시 함수 사용 → 보안 검증 실패"
+      boundary: "GCM nonce 재사용 방지 검증"
+
+  # ─── SP 800-162: ABAC ───
+  - id: "NIST SP 800-162 §3"
+    title: "속성 기반 접근 제어 (ABAC)"
+    category: access_control
+    components: [APIServer, Admin]
+    implementation:
+      - "정책 구조: {subject_attributes, resource_attributes, action, environment_conditions}"
+      - "평가 지점: PDP(Policy Decision Point)를 API Gateway 또는 미들웨어에 구현"
+      - "속성 소스: JWT claims, DB 조회, 컨텍스트(시간, IP, 디바이스)"
+      - "RBAC 혼용 가능: 역할을 subject attribute로 포함"
+    test_criteria:
+      happy: "속성 조건 충족 → 접근 허용"
+      failure: "업무 시간 외 접근 → 거부 (environment condition)"
+      boundary: "속성 누락 시 기본 거부 (fail-close)"
+
+  # ─── SP 800-88r1: 데이터 삭제 ───
+  - id: "NIST SP 800-88r1 §4"
+    title: "데이터 파기 (Cryptographic Erasure)"
+    category: data_protection
+    components: [DataLayer, PaymentService]
+    implementation:
+      - "Cryptographic Erasure: 데이터 암호화 키 파기로 데이터 영구 삭제"
+      - "Clear: 표준 읽기/쓰기로 데이터 덮어쓰기 (SSD: TRIM/Secure Erase)"
+      - "Purge: 하드웨어 수준 복구 불가 (Degauss, Crypto Erase)"
+      - "파기 증명: 타임스탬프, 방법, 대상, 수행자 기록"
+    test_criteria:
+      happy: "키 파기 → 암호화 데이터 복호화 불가"
+      failure: "소프트 삭제(논리 삭제)만 → 데이터 복구 가능 (불충분)"
+      boundary: "백업에서 파기 대상 데이터 → 백업도 파기 또는 키 만료"

@@ -1,0 +1,69 @@
+# CH015 VA Delta Template
+#
+# Feedback Round에서 VA가 전문 재작성 대신 변경분을 경량으로 기록하는 파일.
+# Round 2 Verifier는 이 delta + 원본 인덱스를 먼저 읽고 변경 항목에 집중 검증한다.
+#
+# 생성 시점: VA feedback 모드 완료 시 (전문 보고서와 동시 생성)
+# 생성 주체: VA Auditor (feedback mode)
+# 소비자: Round 2 Verifier, OffSec Lead
+# 전문 보고서(03_va_result-2nd.md)도 함께 생성한다. delta는 보완재이며 감사 추적용 전문은 유지한다.
+
+engagement_id: "{{engagement_id}}"
+round: "{{round}}"
+original_report: "{{original_report_filename}}"
+original_index: "{{original_index_filename}}"
+delta_report: "{{delta_report_filename}}"
+generated_at: "{{timestamp}}"
+
+objections_addressed: "{{total_objections}}"
+objections_accepted: "{{accepted_count}}"
+objections_rejected: "{{rejected_count}}"
+
+change_counts:
+  modified: {{modified_count}}
+  added: {{added_count}}
+  removed: {{removed_count}}
+  unchanged: {{unchanged_count}}
+
+changes:
+  modified:{{^modified}} []{{/modified}}
+{{#modified}}
+    - finding_id: "{{finding_id}}"
+      fields_changed:{{^fields_changed}} []{{/fields_changed}}
+{{#fields_changed}}
+        - field: "{{field}}"
+          before: "{{before}}"
+          after: "{{after}}"
+          reason: "{{reason}}"
+{{/fields_changed}}
+      report_line_start: {{report_line_start}}
+      report_line_end: {{report_line_end}}
+{{/modified}}
+
+  added:{{^added}} []{{/added}}
+{{#added}}
+    - finding_id: "{{finding_id}}"
+      title: "{{title}}"
+      severity: "{{severity}}"
+      dimension: "{{dimension}}"
+      location: "{{location}}"
+      reason: "{{reason}}"
+      report_line_start: {{report_line_start}}
+      report_line_end: {{report_line_end}}
+{{/added}}
+
+  removed:{{^removed}} []{{/removed}}
+{{#removed}}
+    - finding_id: "{{finding_id}}"
+      reason: "{{reason}}"
+{{/removed}}
+
+  unchanged:{{^unchanged}} []{{/unchanged}}
+{{#unchanged}}
+    - "{{.}}"
+{{/unchanged}}
+
+score_delta:
+  before: "{{score_before}}/100 ({{grade_before}})"
+  after: "{{score_after}}/100 ({{grade_after}})"
+  reason: "{{score_delta_reason}}"

@@ -1,0 +1,6 @@
+{
+  "name": "nunchi-offsec",
+  "version": "0.1.0",
+  "description": "취약점 진단 그룹 — VA / pentest / 독립 검증 워커 페르소나, 8차원 방법론 스킬, 증거·커버리지 게이트.",
+  "license": "UNLICENSED"
+}

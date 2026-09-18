@@ -1,0 +1,146 @@
+# OWASP API Security Top 10 — 2023
+# API 보안 위험 상위 10개
+# 출처: https://owasp.org/API-Security/
+
+standard:
+  id: "owasp-api-top10"
+  name: "OWASP API Security Top 10 2023"
+  version: "2023"
+  url: "https://owasp.org/API-Security/"
+
+requirements:
+
+  - id: "API1:2023"
+    title: "Broken Object Level Authorization (객체 수준 인가 실패)"
+    components: [APIServer, DataLayer]
+    implementation:
+      - "모든 API 엔드포인트에서 객체 소유권 검증: requester가 해당 리소스에 접근 권한이 있는지 확인"
+      - "UUID v4 또는 hashid 사용 — 순차 정수 ID 노출 금지"
+      - "데이터 접근 레이어에서 tenant/owner 필터 자동 적용 (row-level security)"
+      - "GraphQL: nested resolver에서도 인가 검증"
+    test_criteria:
+      happy: "자신의 리소스에 정상 접근"
+      failure: "타 사용자 리소스 UUID로 GET/PUT/DELETE → 403 또는 404"
+      boundary: "관리자가 타 사용자 리소스 접근 시 권한에 따라 허용/거부"
+
+  - id: "API2:2023"
+    title: "Broken Authentication (인증 실패)"
+    components: [Auth, APIServer]
+    implementation:
+      - "API 키: 최소 256-bit 엔트로피, 환경변수로 전달, URL 파라미터 금지"
+      - "OAuth 2.0: PKCE 필수 (public client), state 파라미터 필수"
+      - "JWT: RS256/ES256 서명 (HS256은 서버 간 통신만), exp/iss/aud 검증 필수"
+      - "토큰 로테이션: refresh token 1회 사용, 재사용 시 전체 세션 무효화"
+      - "Bearer 토큰: Authorization 헤더 전용, URL 파라미터/쿠키 금지 (CSRF 방지)"
+    test_criteria:
+      happy: "유효한 Bearer 토큰 → API 접근 성공"
+      failure: "만료된 토큰 → 401"
+      boundary: "refresh token 재사용 → 전체 세션 무효화 + 보안 로그"
+
+  - id: "API3:2023"
+    title: "Broken Object Property Level Authorization (객체 속성 수준 인가 실패)"
+    components: [APIServer]
+    implementation:
+      - "응답 필드 필터링: 역할별 허용 필드 화이트리스트 (e.g., user 응답에서 admin 필드 제외)"
+      - "Mass assignment 방지: 허용된 필드만 업데이트 (DTO/schema validation)"
+      - "민감 필드 (password_hash, internal_id, role) 응답에서 항상 제외"
+      - "GraphQL: introspection 프로덕션 비활성화, field-level authorization"
+    test_criteria:
+      happy: "일반 사용자 → 허용된 필드만 응답에 포함"
+      failure: "PUT/PATCH로 role 필드 변경 시도 → 무시 또는 403"
+      boundary: "GraphQL query에 민감 필드 요청 → 필드 null/제외"
+
+  - id: "API4:2023"
+    title: "Unrestricted Resource Consumption (무제한 리소스 소비)"
+    components: [APIServer, Infra]
+    implementation:
+      - "Rate limiting: 엔드포인트별 요청 제한 (e.g., 인증 10req/min, 일반 100req/min)"
+      - "페이로드 크기 제한: JSON body 1MB, 파일 업로드 10MB (용도별 조정)"
+      - "페이지네이션 강제: 리스트 API max 100건/페이지, cursor 기반 권장"
+      - "쿼리 복잡도 제한 (GraphQL): depth ≤ 10, complexity score 제한"
+      - "실행 시간 제한: API 요청 30초 타임아웃"
+      - "429 응답: Retry-After 헤더 포함"
+    test_criteria:
+      happy: "정상 요청 빈도 → 200 응답"
+      failure: "Rate limit 초과 → 429 + Retry-After"
+      boundary: "페이지네이션 limit=99999 → max 100으로 클램프"
+
+  - id: "API5:2023"
+    title: "Broken Function Level Authorization (기능 수준 인가 실패)"
+    components: [APIServer, Admin]
+    implementation:
+      - "관리자 API 경로 분리: /admin/* 또는 별도 서브도메인"
+      - "역할 기반 미들웨어: 모든 관리자 엔드포인트에 역할 검증 데코레이터/미들웨어"
+      - "HTTP 메서드별 인가: GET 허용 ≠ PUT/DELETE 허용"
+      - "수평적 권한 상승 방지: 동일 역할 내에서도 리소스 소유권 검증"
+    test_criteria:
+      happy: "관리자 토큰 → 관리자 API 접근 성공"
+      failure: "일반 사용자 토큰 → 관리자 API 접근 403"
+      boundary: "API 메서드 변경(GET→DELETE) 시 추가 권한 검증"
+
+  - id: "API6:2023"
+    title: "Unrestricted Access to Sensitive Business Flows (민감 비즈니스 흐름 무제한 접근)"
+    components: [APIServer, PaymentService]
+    implementation:
+      - "봇/자동화 방지: CAPTCHA, device fingerprinting, 행동 분석"
+      - "비즈니스 로직 abuse 탐지: 비정상 패턴 모니터링 (e.g., 대량 쿠폰 사용)"
+      - "속도 제한: 민감 작업(결제, 환불, 가입)에 사용자별 일일 한도"
+      - "단계별 검증: 다단계 프로세스에서 이전 단계 완료 확인"
+    test_criteria:
+      happy: "정상 비즈니스 흐름 완료"
+      failure: "일일 한도 초과 시 차단"
+      boundary: "여러 계정으로 분산 abuse 시 IP 기반 탐지"
+
+  - id: "API7:2023"
+    title: "Server Side Request Forgery (SSRF)"
+    components: [APIServer]
+    implementation:
+      - "사용자 제공 URL: allowlist 기반 도메인 + 프로토콜(http/https만) 검증"
+      - "내부 네트워크 차단: RFC 1918, link-local(169.254.x.x), localhost"
+      - "클라우드 메타데이터 차단: 169.254.169.254, fd00:ec2::254"
+      - "아웃바운드 프록시: 별도 네트워크 세그먼트에서 외부 요청 수행"
+    test_criteria:
+      happy: "allowlist 도메인 → 정상 요청"
+      failure: "http://169.254.169.254 → 차단"
+      boundary: "DNS rebinding으로 내부 IP resolve → 차단"
+
+  - id: "API8:2023"
+    title: "Security Misconfiguration (보안 설정 오류)"
+    components: [APIServer, Infra]
+    implementation:
+      - "CORS: 허용 Origin 화이트리스트, 와일드카드(*) 금지"
+      - "에러 응답: 일관된 포맷, 내부 정보(스택 트레이스, DB 쿼리) 미노출"
+      - "HTTP 메서드: 사용하지 않는 메서드(TRACE, OPTIONS 등) 비활성화 또는 제한"
+      - "API 버전 관리: 더 이상 사용하지 않는 버전 sunset"
+      - "디버그 모드: 프로덕션 비활성화"
+    test_criteria:
+      happy: "CORS 허용 Origin → 정상 접근"
+      failure: "비허용 Origin → CORS 에러"
+      boundary: "TRACE 메서드 → 405 Method Not Allowed"
+
+  - id: "API9:2023"
+    title: "Improper Inventory Management (부적절한 인벤토리 관리)"
+    components: [APIServer, Infra]
+    implementation:
+      - "API 인벤토리: 모든 API 엔드포인트 문서화 (OpenAPI/Swagger)"
+      - "환경 격리: dev/staging API에 프로덕션 데이터 금지"
+      - "레거시 API 제거: 미사용 엔드포인트 정기 감사 및 제거"
+      - "API Gateway: 중앙 집중식 트래픽 관리, 미등록 엔드포인트 차단"
+    test_criteria:
+      happy: "문서화된 엔드포인트 → 정상 접근"
+      failure: "미등록/레거시 엔드포인트 → 404"
+      boundary: "staging 환경에서 프로덕션 DB 연결 → 차단"
+
+  - id: "API10:2023"
+    title: "Unsafe Consumption of APIs (안전하지 않은 API 소비)"
+    components: [APIServer, WebhookService]
+    implementation:
+      - "외부 API 응답 검증: 스키마 검증 + 타입 체크 (zod, joi 등)"
+      - "외부 API 타임아웃: 연결 5초 + 읽기 10초"
+      - "외부 API 장애 대응: circuit breaker 패턴 (Fail-Open 금지)"
+      - "리다이렉트: 자동 추적 비활성화 또는 횟수 제한 (최대 3회)"
+      - "외부 API 인증 정보: 환경변수/시크릿 매니저, 코드에 하드코딩 금지"
+    test_criteria:
+      happy: "외부 API 정상 응답 → 스키마 검증 통과"
+      failure: "외부 API가 예상 외 필드/타입 → 거부/기본값"
+      boundary: "외부 API 타임아웃 → circuit breaker 트리거"

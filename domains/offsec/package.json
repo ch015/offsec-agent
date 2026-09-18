@@ -1,0 +1,6 @@
+{
+  "name": "nunchi-offsec-vendor",
+  "private": true,
+  "//": "이 파일의 유일한 목적은 모듈 타입 국소화다. 리포 루트는 ESM(\"type\":\"module\")이고 ../ch015-pentester 에서 무수정 이식한 hooks/**, lib/** 은 CommonJS다. Node 는 가장 가까운 package.json 의 type 을 따르므로 이 한 줄이 12.6k 줄을 수정 없이 동작시킨다. 근거: docs/002-plugin-contract-findings.md F4",
+  "type": "commonjs"
+}

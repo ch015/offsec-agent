@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nunchi.offsec.live-test-profile.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environment",
+    "authorization",
+    "targetBaseUrl",
+    "actors",
+    "policy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "environment": {
+      "const": "test"
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonProduction", "approvedBy", "approvedAt"],
+      "properties": {
+        "nonProduction": {
+          "const": true
+        },
+        "approvedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "targetBaseUrl": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048
+    },
+    "authProviderOrigins": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 2048
+      },
+      "uniqueItems": true,
+      "maxItems": 16
+    },
+    "walletTransportOrigins": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 2048
+      },
+      "uniqueItems": true,
+      "maxItems": 16
+    },
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actorId", "role", "authKind"],
+        "properties": {
+          "actorId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "authKind": {
+            "type": "string",
+            "enum": ["none", "host-secret", "oauth-oidc", "device-code", "passkey", "wallet"]
+          },
+          "secretRef": {
+            "type": "string",
+            "pattern": "^(?:env|vault):[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+          },
+          "allowedChainIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 32
+          },
+          "allowedWalletMethods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 64
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowedMethods",
+        "maximumRiskClass",
+        "maxRequests",
+        "maxResponseBytes",
+        "timeoutMs",
+        "maxStateChanges",
+        "maxDurationMs"
+      ],
+      "properties": {
+        "allowedMethods": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        },
+        "maximumRiskClass": {
+          "type": "string",
+          "enum": ["read-only", "reversible-state-change"]
+        },
+        "allowedRequestHeaders": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9-]{0,63}$"
+          }
+        },
+        "maxRequests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "maxResponseBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5242880
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000
+        },
+        "maxStateChanges": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maxDurationMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000
+        },
+        "cleanupRequired": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

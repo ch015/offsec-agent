@@ -1,0 +1,107 @@
+# CH015 Convergence Classification Template
+#
+# Purpose:
+#   Single source of truth produced by OffSec Lead at convergence. Every raw
+#   candidate receives a final status before report generation. Report publishing
+#   is blocked while any candidate remains UNCLASSIFIED.
+
+engagement_id: "{{engagement_id}}"
+target: "{{target}}"
+generated_at: "{{timestamp}}"
+
+inputs:
+  raw_ledger: "{{raw_ledger_filename}}"
+  findings_index: "{{findings_index_filename}}"
+  verify_report: "{{verify_report_filename}}"
+  pentest_plan: "{{pentest_plan_filename}}"
+  pentest_report: "{{pentest_report_filename}}"
+
+summary:
+  raw_candidates: "{{raw_candidates}}"
+  confirmed_findings: "{{confirmed_findings}}"
+  downgraded: "{{downgraded}}"
+  folded_into: "{{folded_into}}"
+  backlog: "{{backlog}}"
+  excluded: "{{excluded}}"
+  pending_pentest: "{{pending_pentest}}"
+  pending_external: "{{pending_external}}"
+  false_positive: "{{false_positive}}"
+  out_of_scope: "{{out_of_scope}}"
+  disputed: "{{disputed}}"
+  unclassified: "{{unclassified}}"
+  publish_allowed: "{{publish_allowed}}"
+  score_formula_valid: "{{score_formula_valid}}"
+  # 숫자 필드 (따옴표 없이 기록) — Strict Formula 재산출값. report-gate가 confirmed/downgraded
+  # 카운트로 역산하여 이 값과 대조한다. 계약 필드명 `security_score` 고정 — 변경 금지.
+  security_score: {{security_score}}
+
+equivalence_review:
+  status: "{{equivalence_review_status}}" # COMPLETE | INCOMPLETE | CISO_REVIEW_REQUIRED
+  reviewed_candidate_count: "{{reviewed_candidate_count}}"
+  method:
+    - "Pairwise review of final findings by control failure, remediation unit, exploit precondition, trust boundary, and affected asset."
+    - "MERGE means one vulnerability with multiple affected instances; SPLIT means same pattern/CWE but separate vulnerabilities."
+  groups:{{^equivalence_groups}} []{{/equivalence_groups}}
+{{#equivalence_groups}}
+    - group_id: "{{group_id}}"
+      decision: "{{decision}}" # MERGE | SPLIT | KEEP
+      representative: "{{representative}}"
+      members:{{^members}} []{{/members}}
+{{#members}}
+        - "{{.}}"
+{{/members}}
+      basis:
+        same_control_failure: "{{same_control_failure}}"
+        same_remediation_unit: "{{same_remediation_unit}}"
+        same_exploit_precondition: "{{same_exploit_precondition}}"
+        same_trust_boundary: "{{same_trust_boundary}}"
+        same_affected_asset: "{{same_affected_asset}}"
+      affected_instances:{{^affected_instances}} []{{/affected_instances}}
+{{#affected_instances}}
+        - type: "{{type}}"
+          target: "{{target}}"
+          evidence: "{{evidence}}"
+          exploitability: "{{exploitability}}"
+{{/affected_instances}}
+      split_reason: "{{split_reason}}"   # SPLIT 필수 — 별개 취약점 판정 근거
+      keep_reason: "{{keep_reason}}"     # KEEP 필수 — 별개 취약점 판정 근거 (rationale로 대체 가능)
+      rationale: "{{rationale}}"
+{{/equivalence_groups}}
+  unresolved:{{^equivalence_unresolved}} []{{/equivalence_unresolved}}
+{{#equivalence_unresolved}}
+    - "{{.}}"
+{{/equivalence_unresolved}}
+
+final_classification:{{^final_classification}} []{{/final_classification}}
+{{#final_classification}}
+  - candidate_id: "{{candidate_id}}"
+    title: "{{title}}"
+    final_status: "{{final_status}}"
+    final_finding_id: "{{final_finding_id}}"
+    final_severity: "{{final_severity}}"
+    score_included: {{score_included}}
+    folded_into: "{{folded_into}}"
+    exclusion_reason: "{{exclusion_reason}}"
+    reason: "{{reason}}"
+    downgrade_reason: "{{downgrade_reason}}"   # DOWNGRADED일 때 필수 — 심각도 하향 근거
+    dispute_reason: "{{dispute_reason}}"       # DISPUTED일 때 필수 — 양측(VA/Verifier) 주장 요약
+    ciso_decision:                             # DISPUTED 해소 시 CISO가 write-back (07_ciso_decision.yaml과 동기화)
+      method: "{{ciso_decision_method}}"       # pentest_route_f | reanalysis | conservative_default | time_bounded_accept
+      final_severity: "{{ciso_decision_final_severity}}"
+      rationale: "{{ciso_decision_rationale}}"
+    required_access: "{{required_access}}"     # PENDING_EXTERNAL일 때 필수 — 확정에 필요한 접근
+    external_system: "{{external_system}}"     # PENDING_EXTERNAL일 때 필수 — repo 밖 대상 시스템 식별
+    evidence_basis:{{^evidence_basis}} []{{/evidence_basis}}
+{{#evidence_basis}}
+      - "{{.}}"
+{{/evidence_basis}}
+    affected_instances:{{^affected_instances}} []{{/affected_instances}}
+{{#affected_instances}}
+      - type: "{{type}}"
+        target: "{{target}}"
+        evidence: "{{evidence}}"
+        exploitability: "{{exploitability}}"
+{{/affected_instances}}
+    pentest_status: "{{pentest_status}}"
+    next_step: "{{next_step}}"
+{{/final_classification}}

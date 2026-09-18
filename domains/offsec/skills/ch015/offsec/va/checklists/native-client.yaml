@@ -1,0 +1,207 @@
+# Native Client / Game SDK Security Checklist
+# 네이티브 클라이언트 / 게임 SDK 보안 점검 체크리스트
+
+metadata:
+  name: "Native Client Security"
+  version: "1.0"
+  applicable_to: ["Unreal Engine", "Unity", "C++ SDK", "iOS Native", "Android Native", "Cross-platform SDK"]
+  activation: "Recon에서 NativeClient 도메인이 활성화된 경우"
+
+categories:
+  secure_storage:
+    name: "로컬 보안 저장소 (Secure Storage)"
+    items:
+      - id: NAT-STORE-001
+        title: "플랫폼 보안 저장소 사용"
+        description: "iOS Keychain, Android Keystore, Windows DPAPI 등 플랫폼 보안 API 사용 여부"
+        severity: CRITICAL
+        dimension: A5
+        check: "토큰/키/비밀번호 저장 시 플랫폼 보안 저장소 API 사용 확인"
+
+      - id: NAT-STORE-002
+        title: "평문 저장 폴백 방지"
+        description: "보안 저장소 실패 시 평문 파일로 폴백하지 않는지"
+        severity: HIGH
+        dimension: A5
+        check: "Development/Debug 전용 평문 저장 어댑터가 Shipping 빌드에 포함되는지"
+
+      - id: NAT-STORE-003
+        title: "저장소 접근 보호 수준"
+        description: "키체인 항목의 접근 제어 수준이 적절한지"
+        severity: MEDIUM
+        dimension: A5
+        check: "iOS kSecAttrAccessible 값, Android setUserAuthenticationRequired 등"
+
+      - id: NAT-STORE-004
+        title: "레거시 마이그레이션 안전성"
+        description: "이전 저장 방식에서 마이그레이션 시 구 데이터 삭제 여부"
+        severity: MEDIUM
+        dimension: A5
+        check: "마이그레이션 코드에서 이전 평문/약한 암호화 데이터 제거 확인"
+
+  native_auth:
+    name: "네이티브 인증 (Native Authentication)"
+    items:
+      - id: NAT-AUTH-001
+        title: "OAuth PKCE 적용"
+        description: "네이티브 OAuth 흐름에 PKCE가 적용되는지"
+        severity: HIGH
+        dimension: A1
+        check: "code_challenge, code_verifier 생성/검증 로직"
+
+      - id: NAT-AUTH-002
+        title: "커스텀 URL 스킴 하이재킹 방어"
+        description: "리디렉트 URI가 다른 앱에 의해 가로채질 수 없는 구조인지"
+        severity: HIGH
+        dimension: A1
+        check: "Universal Links (iOS) / App Links (Android) 또는 루프백 포트 사용"
+
+      - id: NAT-AUTH-003
+        title: "OAuth Nonce 검증"
+        description: "ID 토큰의 nonce 클레임이 생성 시 값과 비교 검증되는지"
+        severity: MEDIUM
+        dimension: A1
+        check: "nonce 해시 비교(SHA256) 로직 존재 여부"
+
+      - id: NAT-AUTH-004
+        title: "시스템 브라우저 사용"
+        description: "인증에 ASWebAuthenticationSession / Custom Tabs를 사용하는지"
+        severity: MEDIUM
+        dimension: A1
+        check: "WebView 직접 사용 대신 시스템 브라우저 API 사용 여부"
+
+      - id: NAT-AUTH-005
+        title: "토큰 갱신 경합 방지"
+        description: "동시 리프레시 요청이 토큰 충돌/세션 무효화를 유발하지 않는지"
+        severity: MEDIUM
+        dimension: A1
+        check: "리프레시 토큰 갱신의 직렬화/뮤텍스 처리"
+
+  transport_security:
+    name: "통신 보안 (Transport Security)"
+    items:
+      - id: NAT-TLS-001
+        title: "TLS 인증서 검증 활성화"
+        description: "프로덕션 빌드에서 TLS 인증서 검증이 비활성화되지 않는지"
+        severity: CRITICAL
+        dimension: A3
+        check: "SetVerifyPeer(false), CURLOPT_SSL_VERIFYPEER 등 비활성화 코드"
+
+      - id: NAT-TLS-002
+        title: "인증서 핀닝"
+        description: "백엔드 통신에 인증서 핀닝이 적용되는지"
+        severity: MEDIUM
+        dimension: A3
+        check: "인증서 핀 세트 또는 공개키 핀닝 구현 여부"
+        note: "UE 기본 HTTP 모듈에서는 핀닝 지원이 제한적. 미구현 시 보상 통제(네트워크 보안 정책) 확인."
+
+      - id: NAT-TLS-003
+        title: "민감 헤더 보호"
+        description: "Authorization 등 민감 헤더가 안전하게 관리되는지"
+        severity: HIGH
+        dimension: A3
+        check: "리디렉트 시 헤더 유출, 로그 출력 시 마스킹 여부"
+
+  logging_exposure:
+    name: "로깅 민감정보 노출 (Logging & Data Exposure)"
+    items:
+      - id: NAT-LOG-001
+        title: "HTTP 응답 본문 로깅 제한"
+        description: "API 응답 본문 전체를 로그에 출력하지 않는지"
+        severity: HIGH
+        dimension: A7
+        check: "성공/실패 응답의 로그 출력 범위 (토큰, PII 포함 가능성)"
+
+      - id: NAT-LOG-002
+        title: "URL 쿼리 파라미터 마스킹"
+        description: "로그 출력 시 URL 쿼리 파라미터가 마스킹되는지"
+        severity: MEDIUM
+        dimension: A7
+        check: "MaskUrl, 쿼리 스트립 등 유틸 사용 여부"
+
+      - id: NAT-LOG-003
+        title: "Shipping 빌드 로그 수준"
+        description: "프로덕션 빌드에서 디버그 로그가 비활성화되는지"
+        severity: MEDIUM
+        dimension: A7
+        check: "UE_LOG Verbosity, #if !UE_BUILD_SHIPPING 가드"
+
+  memory_safety:
+    name: "메모리 안전 (Memory Safety)"
+    items:
+      - id: NAT-MEM-001
+        title: "민감 데이터 메모리 정리"
+        description: "토큰, 키, 비밀번호가 사용 후 메모리에서 제로화되는지"
+        severity: HIGH
+        dimension: A5
+        check: "FMemory::Memzero, SecureZeroMemory 등 사용 여부"
+
+      - id: NAT-MEM-002
+        title: "문자열 기반 민감 데이터"
+        description: "FString/std::string 등 불변/복사 가능 문자열에 키 자료가 저장되는지"
+        severity: MEDIUM
+        dimension: A5
+        check: "키/토큰이 FString으로 전달되는 경로 식별"
+        note: "FString은 힙 할당·복사로 인해 제로화가 불완전할 수 있다. TArray<uint8> 기반 작업이 바람직."
+
+      - id: NAT-MEM-003
+        title: "버퍼 크기 검증"
+        description: "외부 입력 기반 버퍼 할당 시 크기 검증이 있는지"
+        severity: HIGH
+        dimension: A4
+        check: "JSON 파싱, 네트워크 수신 데이터의 크기 제한"
+
+  build_distribution:
+    name: "빌드/배포 보안 (Build & Distribution)"
+    items:
+      - id: NAT-BUILD-001
+        title: "디버그 코드 분리"
+        description: "에디터/디버그 전용 기능이 Shipping 빌드에서 제외되는지"
+        severity: HIGH
+        dimension: A7
+        check: "#if WITH_EDITOR, #if !UE_BUILD_SHIPPING 조건부 컴파일"
+
+      - id: NAT-BUILD-002
+        title: "환경 설정 하드코딩"
+        description: "Dev/Stg 환경 URL이 프로덕션 바이너리에 포함되는지"
+        severity: MEDIUM
+        dimension: A5
+        check: "환경별 URL 매핑이 바이너리에 전부 포함되는 구조인지"
+
+      - id: NAT-BUILD-003
+        title: "디버그 심볼 스트립"
+        description: "Shipping 빌드에서 디버그 심볼이 제거되는지"
+        severity: LOW
+        dimension: A7
+        check: "빌드 스크립트의 strip 설정"
+
+      - id: NAT-BUILD-004
+        title: "빌드 스크립트 시크릿"
+        description: "쉘 스크립트, CI 설정에 하드코딩된 시크릿이 없는지"
+        severity: HIGH
+        dimension: A5
+        check: "*.sh, .github/workflows/*.yml 내 시크릿 패턴"
+
+  platform_bridge:
+    name: "플랫폼 브리지 (Platform Bridge)"
+    items:
+      - id: NAT-BRIDGE-001
+        title: "JNI 입력 검증 (Android)"
+        description: "JNI 호출 시 파라미터 타입/범위 검증이 있는지"
+        severity: MEDIUM
+        dimension: A4
+        check: "Java ↔ Native 경계의 입력 검증"
+
+      - id: NAT-BRIDGE-002
+        title: "브리지 민감 데이터 수명 최소화"
+        description: "플랫폼 브리지를 통과하는 토큰/키의 메모리 수명이 최소화되는지"
+        severity: MEDIUM
+        dimension: A5
+        check: "브리지 함수에서 민감 데이터의 즉시 소비/해제 패턴"
+
+      - id: NAT-BRIDGE-003
+        title: "과도한 플랫폼 권한"
+        description: "UPL/Manifest/Entitlements에 불필요한 권한이 선언되어 있지 않은지"
+        severity: MEDIUM
+        dimension: A2
+        check: "android.permission.*, iOS capability 목록 최소화 확인"

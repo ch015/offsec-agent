@@ -1,0 +1,135 @@
+# Domain-specific Issue Map — CH015
+# Extracted from engagement golden datasets
+# Updated: 2026-04-23
+#
+# VA Phase 2 (Deep Analysis)에서 Recon 결과의 도메인과 매칭하여
+# 해당 도메인에서 빈번한 이슈 패턴을 추가 점검 항목으로 주입한다.
+# known_findings.yaml과 연계하여 typical_check를 참조한다.
+#
+# NOTE: 도메인 매칭 시 tier2-overlays/registry.yaml의 signal과 일치하는 도메인만
+# 활성화한다. 인접 도메인 과대 적용(FP-005)을 방지하기 위해 키워드 범위를 최소화.
+
+domains:
+
+  Web3_Common:
+    keywords: [Web3, blockchain, smart contract, solidity, ethers, web3.js, viem]
+    tier2_overlay: web3.md
+    typical_issues:
+      - pattern_ref: KF-008
+        description: "RPC 노드 단일 장애점 / 조작 위험"
+        check: |
+          블록체인 RPC 클라이언트 설정에서 노드 URL 수와 failover 로직 확인.
+          단일 노드 의존 시 데이터 교차 검증 메커니즘 존재 여부 확인.
+      - description: "프록시 업그레이드 접근 제어 미비"
+        check: |
+          UUPS/Transparent/Beacon/Diamond 프록시 패턴에서 업그레이드 권한 확인.
+          타임락 적용 여부, 멀티시그 요구 여부 검증.
+      - description: "온체인 트랜잭션 인증 분리 부족"
+        example_finding: "F-100 (dex_20260323)"
+        check: |
+          API 인증과 온체인 트랜잭션 서명 권한이 분리되어 있는지 확인.
+          API 키 탈취만으로 온체인 상태 변경이 가능한지 평가.
+
+  Web3_DEX:
+    keywords: [DEX, DeFi, AMM, swap, liquidity, pool, yield, staking]
+    tier2_overlay: web3.md
+    typical_issues:
+      - description: "가격 Oracle 조작 / Fallback 취약"
+        example_finding: "F-117 (dex_20260323)"
+        check: |
+          가격 소스의 수와 교차 검증 로직 확인.
+          Fallback 체인에서 단일 소스만 남는 경우의 조작 가능성 평가.
+      - description: "Nonce 레이스 컨디션"
+        example_finding: "F-100 (dex_20260323 — nonce_race PoC)"
+        check: |
+          트랜잭션 nonce 관리에서 동시 요청 시 레이스 컨디션 발생 여부 확인.
+          mutex/lock 메커니즘의 존재와 범위 검증.
+      - description: "리엔트런시 / MEV 프론트러닝"
+        check: |
+          외부 호출 전 상태 변경 완료 여부(CEI 패턴) 확인.
+          ReentrancyGuard 적용 여부, commit-reveal 등 MEV 방어 확인.
+
+  Embedded_Wallet:
+    keywords: [Wallet, KMS, HSM, key management, custodial, MPC, threshold]
+    typical_issues:
+      - pattern_ref: KF-007
+        description: "테스트/Mock KMS 모드의 프로덕션 혼입"
+        check: |
+          KMS/HSM 설정에서 mock/test/dev 모드 존재 여부 확인.
+          빌드 태그/환경 분리로 프로덕션에서 제거되는지 검증.
+      - description: "키 파생 경로 고정 — 다중 사용자 키 격리 부재"
+        example_finding: "F-101 (embedded_20260325)"
+        check: |
+          키 파생 경로(HD path)에서 사용자별 격리가 구현되어 있는지 확인.
+          동일 마스터 키에서 모든 사용자 키가 파생되는 구조인지 검증.
+      - description: "키 소재 불확실성 — 메모리/디스크/HSM 경계 불명확"
+        example_finding: "F-103 (embedded_20260325)"
+        check: |
+          키 생성/저장/사용 시 키가 HSM 경계 내에 있는지 확인.
+          키 export/import 경로에서 평문 노출 가능성 평가.
+
+  Payment:
+    keywords: [payment, checkout, PG, gateway, settlement, refund, invoice, worldpay, saved_tokens, saved_token, payer_uid]
+    tier2_overlay: payment.md
+    typical_issues:
+      - pattern_ref: KF-009
+        description: "결제 금액 서버 사이드 미검증"
+        check: |
+          클라이언트 전송 금액이 아닌 서버 DB/세션의 금액으로 최종 계산되는지 확인.
+          할인/쿠폰 적용 후 최종 금액이 서버에서 재계산되는지 검증.
+      - pattern_ref: KF-010
+        description: "결제 상태 머신 비정상 전이"
+        check: |
+          허용된 상태 전이만 가능한지 확인 (created→processing→succeeded 등).
+          비정상 전이(refunded→succeeded)가 서버에서 거부되는지 검증.
+      - description: "Webhook HMAC 서명 미검증"
+        check: |
+          Webhook 수신 시 HMAC-SHA256 서명 검증이 수행되는지 확인.
+          타임스탬프 기반 replay 방지가 구현되어 있는지 검증.
+      - pattern_ref: KF-011
+        description: "저장 카드 토큰 스코프/노출 미검증"
+        check: |
+          quotes/saved_tokens 응답이 payer_uid + project/customer + PG 계정 범위에 바인딩되는지 확인.
+          마지막 결제수단 우선 정렬과 fallback이 country/currency/gateway 필터를 우회하지 않는지 검증.
+          Worldpay token 원문이 API 응답, 로그, 프론트엔드 상태에 노출되지 않는지 확인.
+
+  Commerce:
+    keywords: [commerce, cart, order, product, catalog, inventory, coupon, discount]
+    tier2_overlay: commerce.md
+    typical_issues:
+      - description: "가격/할인 클라이언트 조작"
+        check: |
+          주문 시 서버에서 가격을 재계산하는지 확인.
+          할인 중첩(쿠폰+프로모션+포인트) 최대 할인율 제한 확인.
+      - description: "재고 레이스 컨디션"
+        check: |
+          재고 차감이 원자적(DB 레벨 락/CAS)으로 수행되는지 확인.
+          동시 주문 시 재고 초과 판매 가능 여부 검증.
+
+  AI_Agent:
+    keywords: [LLM, GPT, Claude, agent, embedding, vector, RAG, prompt]
+    tier2_overlay: ai-agent.md
+    typical_issues:
+      - description: "프롬프트 인젝션"
+        check: |
+          사용자 입력이 시스템 프롬프트와 명확히 분리되는지 확인.
+          간접 인젝션(문서/URL 내 악성 지시)에 대한 방어 확인.
+      - description: "LLM 출력의 안전하지 않은 사용"
+        check: |
+          LLM 출력이 코드 실행(eval, exec), DB 쿼리, HTML 렌더링에 직접 전달되는지 확인.
+
+  API_Backend:
+    keywords: [REST, GraphQL, gRPC, microservice, API gateway]
+    typical_issues:
+      - pattern_ref: KF-001
+        description: "API 인증 전면 부재"
+        check: "라우터 등록부에서 인증 미들웨어 적용 범위 확인."
+      - pattern_ref: KF-002
+        description: "Rate Limiting 전면 부재"
+        check: "미들웨어 체인에서 rate limiter 존재 여부 확인."
+      - pattern_ref: KF-003
+        description: "에러 응답 내부 정보 노출"
+        check: "에러 핸들러에서 내부 에러 직접 반환 여부 확인."
+      - pattern_ref: KF-004
+        description: "보안 헤더 미설정"
+        check: "helmet/secureHeaders 등 보안 헤더 미들웨어 확인."

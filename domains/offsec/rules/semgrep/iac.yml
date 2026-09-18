@@ -1,0 +1,24 @@
+rules:
+  - id: nunchi.iac.kubernetes-privileged-container
+    message: Privileged container configuration requires workload and compensating-control review.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["*.yaml", "*.yml"]
+    pattern-regex: '(?m)^\s*privileged\s*:\s*true\s*$'
+
+  - id: nunchi.iac.kubernetes-host-network
+    message: Host network access requires namespace and network-policy review.
+    severity: WARNING
+    languages: [generic]
+    paths:
+      include: ["*.yaml", "*.yml"]
+    pattern-regex: '(?m)^\s*hostNetwork\s*:\s*true\s*$'
+
+  - id: nunchi.iac.terraform-public-cidr
+    message: Public CIDR exposure requires resource and port-level validation.
+    severity: WARNING
+    languages: [generic]
+    paths:
+      include: ["*.tf"]
+    pattern-regex: '0\.0\.0\.0/0|::/0'

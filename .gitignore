@@ -1,0 +1,32 @@
+node_modules/
+dist/
+out/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage/
+.vitest/
+evals/offsec/state/
+evals/offsec/results/
+
+# 도메인 플러그인 안에 쌓이는 런타임 산출물.
+# 벤더 훅이 플러그인 루트 기준 경로로 쓴다 (on-stop.js, post-phase.js).
+domains/*/knowledge-base/engagements/
+domains/*/harness/eval/reports/
+domains/*/.recon-cache/
+
+# agent tooling state (mirrors ../nahonza-agents policy: only CLAUDE.md is tracked)
+.asx/graph.db
+.asx/handoff*.md
+.asx/last_nudge.sha
+.asx/artifacts/
+.asx/capabilities.json
+.asx/skills/
+.agents/
+.claude/skills/
+AGENTS.md
+*.md.lock
+.cursor/
+.kiro/

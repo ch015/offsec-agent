@@ -1,0 +1,6 @@
+{
+  "name": "probe-shared",
+  "version": "0.0.0",
+  "description": "프로브용 공유 플러그인 — 훅만 제공한다. 에이전트는 없다.",
+  "license": "UNLICENSED"
+}

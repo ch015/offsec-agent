@@ -1,0 +1,21 @@
+{
+  "minimumEligibleCases": 10,
+  "minimumPairedRepetitionsPerCase": 5,
+  "bootstrapSamples": 10000,
+  "bootstrapSeed": 20260805,
+  "familyAlpha": 0.05,
+  "declaredClaims": [
+    "semgrep",
+    "large-repository"
+  ],
+  "margins": {
+    "semgrep": {
+      "evidenceValidity": 0.01,
+      "falsePositiveRate": 0.01
+    },
+    "large-repository": {
+      "evidenceValidity": 0.01,
+      "falsePositiveRate": 0.01
+    }
+  }
+}

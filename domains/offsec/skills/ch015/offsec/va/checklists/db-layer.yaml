@@ -1,0 +1,177 @@
+# Database Layer Security Checklist
+# DB 계층 보안 체크리스트 (BaaS + ORM + Raw SQL)
+
+metadata:
+  name: "Database Layer Security"
+  version: "1.0"
+  applicable_to: ["Supabase", "Firebase", "Hasura", "Prisma", "Drizzle", "Raw SQL"]
+
+categories:
+  rls_security_rules:
+    name: "행 수준 보안 규칙 (RLS / Security Rules)"
+    items:
+      - id: DB-RLS-001
+        title: "모든 public 테이블에 RLS 활성화"
+        description: "public 스키마 테이블에 ENABLE ROW LEVEL SECURITY가 설정되었는지"
+        severity: CRITICAL
+        platform: PostgreSQL
+        check: "ALTER TABLE ... ENABLE ROW LEVEL SECURITY 존재 여부"
+
+      - id: DB-RLS-002
+        title: "각 작업별 정책 존재"
+        description: "SELECT/INSERT/UPDATE/DELETE 각 작업에 대한 CREATE POLICY가 있는지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "테이블별 정책 커버리지"
+
+      - id: DB-RLS-003
+        title: "과도하게 열린 정책 없음"
+        description: "USING (true) 또는 WITH CHECK (true) 등 무조건 허용 정책이 없는지"
+        severity: CRITICAL
+        platform: PostgreSQL
+        check: "정책 조건식에 (true) 패턴"
+
+      - id: DB-RLS-004
+        title: "민감 테이블 보호"
+        description: "결제, 잔액, 권한, 감사로그 테이블에 적절한 정책이 있는지"
+        severity: CRITICAL
+        platform: all
+        check: "민감 데이터 테이블의 정책 강도"
+
+      - id: DB-RLS-005
+        title: "Firebase Rules 적절성"
+        description: "allow read, write: if true 같은 전체 공개 규칙이 없는지"
+        severity: CRITICAL
+        platform: Firebase
+        check: "firestore.rules 파일 분석"
+
+  privileged_functions:
+    name: "특권 함수/프로시저"
+    items:
+      - id: DB-PRIV-001
+        title: "SECURITY DEFINER 함수 목록화"
+        description: "SECURITY DEFINER로 선언된 함수가 식별되고 관리되는지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "SECURITY DEFINER 함수 전수 조사"
+
+      - id: DB-PRIV-002
+        title: "EXECUTE 권한 제한"
+        description: "SECURITY DEFINER 함수에 대한 EXECUTE 권한이 필요한 역할로만 제한되는지"
+        severity: CRITICAL
+        platform: PostgreSQL
+        check: "REVOKE EXECUTE ... FROM public/anon/authenticated"
+
+      - id: DB-PRIV-003
+        title: "함수 내 컨텍스트 검증"
+        description: "SECURITY DEFINER 함수 내에서 auth.uid() 호출 시 NULL 반환 위험이 없는지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "DEFINER 컨텍스트에서 호출자 정보 손실 패턴"
+
+      - id: DB-PRIV-004
+        title: "Admin SDK 격리"
+        description: "Firebase Admin SDK가 서버 측에서만 사용되는지"
+        severity: CRITICAL
+        platform: Firebase
+        check: "클라이언트 코드에서 admin SDK import"
+
+  migration_audit:
+    name: "마이그레이션 파일 감사"
+    items:
+      - id: DB-MIG-001
+        title: "GRANT 후 REVOKE 쌍"
+        description: "GRANT 문 이후 대응하는 REVOKE가 존재하는지"
+        severity: HIGH
+        check: "GRANT 문의 대응 REVOKE 존재 여부"
+
+      - id: DB-MIG-002
+        title: "RLS 정책 완성도"
+        description: "RLS ENABLE 후 적절한 CREATE POLICY가 존재하는지"
+        severity: CRITICAL
+        check: "ENABLE RLS 후 정책 미생성"
+
+      - id: DB-MIG-003
+        title: "보안 수정 회귀 방지"
+        description: "보안 수정 마이그레이션 이후 동일 패턴이 재발하지 않는지"
+        severity: HIGH
+        check: "보안 마이그레이션 이후 regression 탐지"
+
+      - id: DB-MIG-004
+        title: "트리거 보안 컨텍스트"
+        description: "트리거 함수의 SECURITY DEFINER/INVOKER 설정이 적절한지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "트리거 함수의 보안 컨텍스트 분석"
+
+  direct_access:
+    name: "직접 DB 접근 패턴"
+    items:
+      - id: DB-ACCESS-001
+        title: "BaaS 공개 키 접근 범위"
+        description: "anon/public key로 접근 가능한 테이블/뷰 범위가 최소화되었는지"
+        severity: HIGH
+        platform: ["Supabase", "Firebase"]
+        check: "anon key로 SELECT 가능한 테이블 열거"
+
+      - id: DB-ACCESS-002
+        title: "API 우회 시 인가 유지"
+        description: "API 라우트 인가 로직이 직접 DB 접근 시에도 RLS로 보호되는지"
+        severity: CRITICAL
+        platform: ["Supabase", "Hasura"]
+        check: "API-only 인가 vs RLS 인가 비교"
+
+      - id: DB-ACCESS-003
+        title: "서비스 계정 키 클라이언트 미노출"
+        description: "service_role/admin key가 클라이언트 환경 변수에 포함되지 않는지"
+        severity: CRITICAL
+        platform: all
+        check: "NEXT_PUBLIC_, VITE_ 접두사 서비스 키"
+
+  permission_matrix:
+    name: "권한 매트릭스"
+    items:
+      - id: DB-PERM-001
+        title: "테이블별 DML 권한"
+        description: "민감 테이블에 대한 INSERT/UPDATE/DELETE 권한이 적절한지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "GRANT/REVOKE 기반 테이블별 권한 현황"
+
+      - id: DB-PERM-002
+        title: "컬럼 수준 권한"
+        description: "table-level UPDATE가 열린 민감 테이블에 column-level 제한이 있는지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "UPDATE 권한의 컬럼 제한"
+
+      - id: DB-PERM-003
+        title: "anon 역할 최소 권한"
+        description: "anon 역할이 접근 가능한 범위가 최소한인지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "anon 역할의 테이블/함수 접근 범위"
+
+  trigger_hooks:
+    name: "DB 트리거 / Auth Hook"
+    items:
+      - id: DB-TRIG-001
+        title: "트리거 auth 컨텍스트"
+        description: "SECURITY DEFINER 트리거에서 auth.uid() 호출 시 컨텍스트 손실 위험"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "DEFINER 트리거 내 auth.uid() 패턴"
+
+      - id: DB-TRIG-002
+        title: "Auth Hook 입력 검증"
+        description: "Auth Hook 함수의 입력 데이터 검증 여부"
+        severity: HIGH
+        platform: ["Supabase", "Firebase"]
+        check: "custom_access_token_hook 등 입력 검증"
+
+      - id: DB-TRIG-003
+        title: "트리거 비활성화 권한"
+        description: "DISABLE TRIGGER 권한이 일반 역할에 열리지 않았는지"
+        severity: HIGH
+        platform: PostgreSQL
+        check: "ALTER TABLE ... DISABLE TRIGGER 권한"

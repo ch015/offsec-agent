@@ -1,0 +1,405 @@
+# API Security Methodology Questions (v2.0 — Question-based)
+#
+# v1 → v2 변경 (2026-04-17, P1-3):
+#   - 기존 `check: "<pattern string>"` 형태의 패턴 매칭을 폐기하고,
+#     `review_perspective: "<open question>"` + `anti_patterns` + `evidence_required`
+#     구조로 전환한다. AI는 질문에 답하는 과정에서 프로젝트별 변형된 구현을
+#     자율적으로 탐색한다.
+#   - 질문형은 "resource.owner_id" 같은 특정 필드명/문자열에 고정되지 않으므로
+#     tenant_id, org_id, accessed_by, sharedWith 등 프로젝트마다 다른 변형을
+#     포착할 수 있다.
+#   - `check` 필드는 하위 호환을 위해 "legacy_check" 주석으로만 보존한다.
+
+metadata:
+  name: "API Security (Methodology v2)"
+  version: "2.0"
+  applicable_to: ["REST API", "GraphQL", "gRPC", "WebSocket", "tRPC", "Server Actions"]
+  standard: "OWASP API Security Top 10 (2023)"
+
+# ─────────────────────────────────────────────────────────────
+# 공통 응답 스키마
+#
+# 각 item은 다음 필드로 구성된다:
+#   id               : 고유 식별자
+#   title            : 항목 제목
+#   dimension        : 매핑되는 8대 차원 (A1-A8)
+#   severity_hint    : 발견 시 초기 심각도 추정
+#   review_perspective : AI가 답해야 하는 개방형 질문 (패턴 X)
+#   anti_patterns    : 대표적인 취약 구현 예시 (교육용)
+#   evidence_required: Finding 작성 시 반드시 포함해야 할 증거
+#   variants         : 프로젝트마다 다를 수 있는 구현 변형 힌트
+# ─────────────────────────────────────────────────────────────
+
+categories:
+
+  api1_bola:
+    name: "API1: Broken Object Level Authorization"
+    items:
+      - id: API-BOLA-001
+        title: "리소스 조회/수정/삭제 시 요청자의 접근 권한 증명 방식"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          리소스를 반환/수정/삭제하는 핸들러에서, 현재 요청자가 해당 리소스에
+          대한 권한을 보유함을 어떤 메커니즘으로 증명하는가? 그 증명은
+          어느 레이어(controller/service/repository/DB RLS)에 존재하며,
+          우회할 수 있는 경로(다른 엔드포인트, 동일 리소스의 다른 표현)가 있는가?
+        anti_patterns:
+          - "id만으로 조회/수정 후 응답 (owner 관련 필드 체크 없음)"
+          - "클라이언트 측 필터링에만 의존 (프론트엔드에서 내 것만 표시)"
+          - "RLS가 있다고 믿지만 service_role/admin client 경로로 우회 가능"
+          - "GraphQL resolver에 인가 미들웨어만 있고 field-level 체크 없음"
+        variants:
+          - "tenant_id / org_id / workspace_id / project_id 같은 멀티테넌트 키"
+          - "accessed_by / sharedWith / collaborators 같은 공유 모델"
+          - "role 조건 + 리소스 type 교차 인가 (admin은 자기 조직만)"
+        evidence_required:
+          - "핸들러 파일:라인"
+          - "권한 체크가 수행되는 위치(또는 부재)"
+          - "우회 경로가 있으면 그 엔드포인트 파일:라인"
+        legacy_check: "resource.owner_id === user.id 또는 RLS 정책으로 필터링"
+
+      - id: API-BOLA-002
+        title: "리소스 식별자의 추측 가능성과 enumeration 위험"
+        dimension: A2
+        severity_hint: MEDIUM
+        review_perspective: |
+          리소스 식별자가 순차 정수처럼 추측 가능한 형태일 때, 인가 체크가
+          누락된 엔드포인트가 하나라도 있으면 enumeration으로 전수 탈취가
+          가능하다. 식별자 형태와 인가 체크 분포를 매트릭스로 교차 확인하라.
+        anti_patterns:
+          - "순차 정수 ID + 인가 미들웨어 누락 엔드포인트 1개 이상 존재"
+          - "UUID v1처럼 타임스탬프/MAC이 추출 가능한 식별자"
+          - "short ID (예: 4자리) + rate limit 부재 → brute force"
+        evidence_required:
+          - "ID 생성 코드 파일:라인 (sequence / uuid / hash)"
+          - "인가 누락 엔드포인트 목록"
+
+      - id: API-BOLA-003
+        title: "중첩 리소스에서 상위-하위 소유권 일치 검증"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          `/users/:userId/orders/:orderId` 같은 중첩 경로에서 orderId가 userId
+          소유인지 검증되지 않으면, 공격자가 임의의 userId에 자신의 orderId를
+          붙여 접근이 허용될 수 있다. 중첩 경로 각각의 handler가 상위-하위
+          관계를 검증하는지, 아니면 하위 id만으로 조회하는지 확인하라.
+        anti_patterns:
+          - "핸들러가 orderId로만 SELECT (user_id WHERE 조건 없음)"
+          - "상위 resource 존재 검증만 하고 하위 resource의 소속 검증 생략"
+        evidence_required:
+          - "중첩 핸들러 경로 + 쿼리 조건"
+
+  api2_broken_auth:
+    name: "API2: Broken Authentication"
+    items:
+      - id: API-AUTH-001
+        title: "인증 엔드포인트의 속도 제한 및 자동화 억제"
+        dimension: A1
+        severity_hint: HIGH
+        review_perspective: |
+          로그인/회원가입/비밀번호 재설정/MFA 검증 엔드포인트에서 공격자가
+          자동화된 자격증명 추측(credential stuffing, password spray)을 수행할 때
+          시간·비용이 충분히 커지는가? Rate limit 수치가 암호 공간 대비
+          충분한가 (4자리 PIN × 10 rps = 17분 ≪ 수용 시간)?
+        anti_patterns:
+          - "rate limit이 IP 기반만이라 proxy rotate로 회피 가능"
+          - "rate limit이 있으나 분당 100회 등 무의미한 수준"
+          - "rate limit 후에도 account lockout이 없어 지연만 강제"
+        evidence_required:
+          - "rate limit 적용 위치 (미들웨어 파일:라인)"
+          - "수치 상한과 키 차원 (IP / user / email / device)"
+
+      - id: API-AUTH-002
+        title: "JWT/세션 토큰의 검증 완전성"
+        dimension: A1
+        severity_hint: CRITICAL
+        review_perspective: |
+          토큰 검증 함수가 다음 모두를 수행하는가: 서명 알고리즘 고정(alg=none
+          / HS-RS 혼동 차단), 서명 검증, exp/nbf 만료, iss/aud 검증, kid/jku
+          외부 조작 차단. 실패 경로가 짧은지(fail-closed) 조용히 통과되지 않는지.
+        anti_patterns:
+          - "jwt.decode() (검증 안 함)를 verify 대신 사용"
+          - "알고리즘을 헤더에서 읽어 그대로 사용 (alg confusion)"
+          - "kid 헤더를 파일 경로로 사용하여 path traversal"
+          - "jku로 외부 URL의 JWKS를 무검증 fetch"
+          - "exp 검증을 Date.now() < exp * 1000 대신 ==/<= 등 오판"
+        evidence_required:
+          - "토큰 검증 함수 파일:라인"
+          - "선언적 알고리즘 고정 여부"
+          - "fail-closed 분기 확인"
+
+      - id: API-AUTH-003
+        title: "Refresh/rotation 정책과 revocation"
+        dimension: A1
+        severity_hint: HIGH
+        review_perspective: |
+          refresh token이 서버에 저장되어 revocation 가능한가? rotation 시
+          이전 토큰이 재사용되면 잠금되는가? 로그아웃이 백엔드 세션을 실제로
+          파기하는가(토큰 블랙리스트 또는 server-side session invalidation)?
+        anti_patterns:
+          - "logout이 클라이언트 localStorage만 지우고 서버는 손대지 않음"
+          - "refresh token에 만료가 없어 사실상 영구 세션"
+          - "rotation 없이 같은 refresh token을 재사용 가능"
+
+      - id: API-AUTH-004
+        title: "비밀번호 정책과 저장"
+        dimension: A1
+        severity_hint: MEDIUM
+        review_perspective: |
+          비밀번호의 엔트로피 하한(길이 + 클래스 혼합) + 저장은 메모리-하드
+          KDF(argon2id, bcrypt cost≥12, scrypt)를 사용하는가? 평문/SHA1/MD5
+          또는 pepper 없는 단순 bcrypt에서 반복 오프라인 공격 허용되지 않는가?
+
+  api3_bopla:
+    name: "API3: Broken Object Property Level Authorization"
+    items:
+      - id: API-PROP-001
+        title: "Mass Assignment / Over-posting 방어"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          요청 본문이 DTO/ORM 모델에 어떻게 매핑되는가? allowlist(명시적 select
+          필드) 기반인가, 전체 body 스프레드(`{...req.body}`) 기반인가?
+          후자라면 role, is_admin, balance, userId 같은 민감 필드를 공격자가
+          덮어쓸 수 있다.
+        anti_patterns:
+          - "Object.assign(user, req.body)"
+          - "prisma.user.update({ data: req.body })"
+          - "sequelize.model.update(req.body, { where })"
+        evidence_required:
+          - "업데이트 호출 파일:라인"
+          - "필드 필터링 위치(또는 부재)"
+
+      - id: API-PROP-002
+        title: "응답 필드 leakage (Over-fetching / Over-exposure)"
+        dimension: A3
+        severity_hint: MEDIUM
+        review_perspective: |
+          API 응답이 프론트엔드가 필요로 하는 필드만 반환하는가, 아니면 DB 행
+          전체(SELECT *)를 직렬화하는가? 민감 필드(password_hash, mfa_secret,
+          internal_notes, stripe_customer_id)가 유출되지 않는가?
+        anti_patterns:
+          - "res.json(user) — select 없이 row 전체"
+          - "GraphQL field에서 명시적 resolver 없이 DB row 전체 노출"
+
+      - id: API-PROP-003
+        title: "역할별 쓰기 가능 필드 분리"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          동일 엔드포인트에서 역할에 따라 수정 가능한 필드가 다른 경우,
+          역할별 allowlist가 코드에 명시되어 있는가? admin만 바꿀 수 있는
+          필드를 user가 req.body에 넣어 통과시킬 수 없는가?
+
+  api4_resource_consumption:
+    name: "API4: Unrestricted Resource Consumption"
+    items:
+      - id: API-RES-001
+        title: "전역 rate limit 및 남용 방지"
+        dimension: A8
+        severity_hint: HIGH
+        review_perspective: |
+          모든 엔드포인트에 기본 rate limit이 적용되는가, 아니면 opt-in인가?
+          비용이 큰 엔드포인트(LLM 호출, 이미지 처리, 외부 결제 API)가
+          추가 제한을 받는가? 키는 적절한가(IP 단독은 회피 용이)?
+
+      - id: API-RES-002
+        title: "페이지네이션 강제 및 한도"
+        dimension: A8
+        severity_hint: MEDIUM
+        review_perspective: |
+          목록 API가 limit/offset 또는 cursor 페이지네이션을 강제하는가?
+          클라이언트가 `?limit=1000000`을 보내면 그대로 받아들이는가?
+
+      - id: API-RES-003
+        title: "요청 본문·쿼리 크기 제한 (Billion Laughs 포함)"
+        dimension: A4
+        severity_hint: MEDIUM
+        review_perspective: |
+          body parser limit이 명시되어 있는가? JSON 깊이 제한 / XML 엔티티
+          확장 제한(XXE-adjacent)이 있는가? 멀티파트 업로드의 파일 수/크기
+          제한이 있는가?
+
+      - id: API-RES-004
+        title: "GraphQL 쿼리 복잡도/깊이 제한"
+        dimension: A8
+        severity_hint: HIGH
+        review_perspective: |
+          GraphQL을 사용하는 경우, 쿼리 복잡도 계산/깊이 제한/배치 크기
+          제한이 적용되는가? introspection이 프로덕션에서 비활성화되는가?
+
+  api5_function_auth:
+    name: "API5: Broken Function Level Authorization"
+    items:
+      - id: API-FUNC-001
+        title: "관리자 기능의 일관된 역할 검증"
+        dimension: A2
+        severity_hint: CRITICAL
+        review_perspective: |
+          admin 경로/함수가 모두 일관된 방식(미들웨어/데코레이터/단일 checkRole)
+          으로 보호되는가, 아니면 엔드포인트마다 제각각이라 빠진 곳이 하나라도
+          있을 가능성이 있는가?
+        anti_patterns:
+          - "admin 라우터 중 하나만 인가 미들웨어 미등록"
+          - "새로 추가된 엔드포인트가 role 체크 없이 배포"
+
+      - id: API-FUNC-002
+        title: "HTTP 메서드/동작별 차등 인가"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          동일 리소스에 대해 read는 허용하되 write(POST/PUT/DELETE)에는 추가
+          권한이 필요하다면, 메서드별 분기가 코드에 명시되어 있는가?
+
+  api6_business_flow:
+    name: "API6: Unrestricted Access to Sensitive Business Flows"
+    items:
+      - id: API-BIZ-001
+        title: "핵심 비즈니스 플로우의 자동화/반복 방어"
+        dimension: A8
+        severity_hint: HIGH
+        review_perspective: |
+          결제/주문/포인트 적립/쿠폰 발급/계정 생성 같은 핵심 플로우에서
+          자동화/반복 공격을 억제하는 추가 제어(CAPTCHA, 디바이스 지문,
+          행위 분석, 2FA)가 있는가? 없으면 쿠폰 스태킹, 무료 트라이얼 대량
+          생성, airdrop farming 같은 경제적 공격에 노출된다.
+
+      - id: API-BIZ-002
+        title: "워크플로우 순서(State Machine) 강제"
+        dimension: A2
+        severity_hint: HIGH
+        review_perspective: |
+          다단계 플로우(cart → checkout → pay → ship)에서 중간 단계를
+          건너뛰거나 역전시키는 요청이 서버에서 거부되는가? 각 전이의
+          precondition을 서버가 확인하는가, 아니면 UI만 강제하는가?
+
+      - id: API-BIZ-003
+        title: "원자성 보장 (Single-Packet / Concurrent Modification)"
+        dimension: A8
+        severity_hint: HIGH
+        review_perspective: |
+          잔액/재고/쿠폰 소진처럼 동시성이 중요한 연산이 SELECT→UPDATE 패턴
+          대신 원자적 UPDATE WHERE 또는 row lock/CAS를 사용하는가? Tenable-style
+          single-packet attack으로 동시 2건이 모두 성공하지 않는가?
+
+      - id: API-BIZ-004
+        title: "Idempotency key 재사용 규칙"
+        dimension: A2
+        severity_hint: MEDIUM
+        review_perspective: |
+          결제/송금 엔드포인트가 idempotency key를 사용한다면, 동일 key 재요청
+          시 **기존 결과를 리턴**하는가(정상) 아니면 본문이 달라지면 **다시
+          처리**되는가(취약)? 만료 정책은 있는가?
+
+  api7_ssrf:
+    name: "API7: Server Side Request Forgery"
+    items:
+      - id: API-SSRF-001
+        title: "사용자 제공 URL 기반 서버 요청의 범위 통제"
+        dimension: A6
+        severity_hint: HIGH
+        review_perspective: |
+          webhook 등록, URL preview, 이미지 fetch, 외부 API proxy 등 사용자가
+          URL을 제공하는 경로에서 서버가 다음을 모두 차단하는가: 사설 IP
+          (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16), IPv6 loopback/ULA,
+          metadata endpoint (169.254.169.254, fd00:ec2::254), file://, gopher://,
+          dict://, redirect 체인 끝의 사설 IP?
+        anti_patterns:
+          - "fetch(userUrl) (검증 없음)"
+          - "new URL(userUrl) 만으로 검증 (DNS 재확인 미수행)"
+          - "SSRF 필터 있으나 302 리다이렉트를 follow하면 내부로 이동"
+        evidence_required:
+          - "URL 기반 fetch 호출 파일:라인"
+          - "사설 IP / redirect 정책"
+
+      - id: API-SSRF-002
+        title: "클라우드 메타데이터 엔드포인트 보호"
+        dimension: A6
+        severity_hint: CRITICAL
+        review_perspective: |
+          배포 환경이 AWS/GCP/Azure라면, 외부 URL fetch가 169.254.169.254
+          (IMDSv1) 또는 metadata.google.internal을 차단하는가? IMDSv2가 강제
+          되고 있는가(AWS의 경우)?
+
+  api8_misconfiguration:
+    name: "API8: Security Misconfiguration"
+    items:
+      - id: API-CONF-001
+        title: "디버그/개발 전용 기능이 프로덕션에서 비활성화"
+        dimension: A5
+        severity_hint: HIGH
+        review_perspective: |
+          DEBUG=true, NODE_ENV=development, `/debug/*`, stacktrace leaking,
+          verbose error body 같은 개발 전용 기능이 프로덕션에서 무력화되는가?
+          환경 분기가 fail-safe인가(기본값 production)?
+
+      - id: API-CONF-002
+        title: "CORS 정책의 엄밀성"
+        dimension: A5
+        severity_hint: HIGH
+        review_perspective: |
+          CORS가 `*`, `null`, `http://localhost` 등을 허용하지 않는가?
+          credentials: true + origin reflection(`res.setHeader('Access-Control-Allow-Origin', req.origin)`)
+          조합은 세션 탈취로 이어진다.
+
+      - id: API-CONF-003
+        title: "보안 헤더와 Content Security Policy"
+        dimension: A5
+        severity_hint: MEDIUM
+        review_perspective: |
+          CSP, X-Content-Type-Options, Strict-Transport-Security, Referrer-Policy,
+          Permissions-Policy가 설정되어 있는가? CSP가 `unsafe-inline`/`unsafe-eval`
+          없이 nonce/hash 기반인가?
+
+  api9_inventory:
+    name: "API9: Improper Inventory Management"
+    items:
+      - id: API-INV-001
+        title: "API 버전 폐기 정책"
+        dimension: A5
+        severity_hint: MEDIUM
+        review_perspective: |
+          구버전 API가 공식적으로 폐기되었음에도 여전히 라우터에 등록되어
+          있지 않은가? 구버전에만 존재하는 취약점(인가 누락, 구 인증 스킴)이
+          현재도 접근 가능한가?
+
+      - id: API-INV-002
+        title: "문서화되지 않은 엔드포인트/디버그 라우트"
+        dimension: A5
+        severity_hint: LOW
+        review_perspective: |
+          라우터에 등록되어 있으나 OpenAPI/GraphQL schema에 노출되지 않는
+          엔드포인트가 있는가? 있다면 그것이 보안 엔드포인트(internal admin,
+          cron trigger)인지 확인하라.
+
+  api10_unsafe_consumption:
+    name: "API10: Unsafe Consumption of APIs"
+    items:
+      - id: API-EXT-001
+        title: "외부 응답을 맹신하지 않기"
+        dimension: A6
+        severity_hint: HIGH
+        review_perspective: |
+          외부 API의 응답을 schema 검증 없이 그대로 사용하는가? 응답의 특정
+          필드가 DB 쓰기/결제 금액/권한 결정에 사용될 때, 외부가 악의적이거나
+          손상되어도 시스템이 붕괴하지 않는가? (예: 오라클 가격 조작 방어)
+
+      - id: API-EXT-002
+        title: "외부 API 호출의 타임아웃/재시도/fallback"
+        dimension: A8
+        severity_hint: MEDIUM
+        review_perspective: |
+          외부 API가 느려지거나 실패할 때, 타임아웃이 설정되어 있고 재시도
+          전략이 지수적 백오프 + 최대 횟수로 제한되는가? cascading failure
+          (외부가 느려서 내부 연결 풀 고갈)가 방지되는가?
+
+      - id: API-EXT-003
+        title: "Webhook signature 검증의 견고성"
+        dimension: A6
+        severity_hint: HIGH
+        review_perspective: |
+          인바운드 webhook(Stripe, GitHub, Slack 등)이 서명을 검증하는가?
+          검증이 timing-safe 비교(crypto.timingSafeEqual)인가? 키 로테이션
+          기간 동안 복수 키를 수용하는가? replay 방지(timestamp tolerance)가
+          있는가?

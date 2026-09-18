@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "phase",
+    "role",
+    "status",
+    "artifacts",
+    "summary",
+    "metrics",
+    "unresolved"
+  ],
+  "properties": {
+    "contractVersion": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "blocked"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "string"
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "findingCount"
+      ],
+      "properties": {
+        "findingCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workUnit": {
+      "description": "work-unit identity 메타데이터. 호스트가 unit 결과를 올바른 plan/source에 라우팅하기 위한 식별자이며, 외부 변조 방어 목적이 아니다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workUnitKey",
+        "workPlanSha256",
+        "assignedSourceSha256"
+      ],
+      "properties": {
+        "workUnitKey": {
+          "type": "string",
+          "pattern": "^unit-[a-f0-9]{16}$"
+        },
+        "workPlanSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "assignedSourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

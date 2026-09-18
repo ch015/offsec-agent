@@ -1,0 +1,130 @@
+# Standards Registry — 도메인별 적용 표준 매핑
+# Phase 2에서 도메인 × 컴포넌트 조합으로 적용 표준을 결정할 때 참조한다.
+
+standards:
+  owasp-top10:
+    file: "owasp-top10.yaml"
+    version: "2021"
+    applies_to: [all]
+    description: "OWASP Top 10 2021 — 웹 애플리케이션 보안 위험 상위 10개"
+
+  owasp-api-top10:
+    file: "owasp-api-top10.yaml"
+    version: "2023"
+    applies_to: [api, backend, sdk]
+    description: "OWASP API Security Top 10 2023 — API 보안 위험 상위 10개"
+
+  pci-dss-v4:
+    file: "pci-dss-v4.yaml"
+    version: "4.0.1"
+    applies_to: [payment, fintech, commerce]
+    description: "PCI DSS 4.0.1 — 카드 결제 보안 표준 (future-dated 2025-03-31 전면 시행)"
+
+  nist-sp800:
+    file: "nist-sp800-select.yaml"
+    version: "latest"
+    applies_to: [all]
+    description: "NIST SP 800 시리즈 발췌 — 인증, 암호화, 키관리, TLS, 로깅"
+
+  owasp-asvs-v4:
+    file: "owasp-asvs-v4.yaml"
+    version: "4.0.3"
+    applies_to: [all]
+    description: "OWASP ASVS v4.0.3 — 애플리케이션 보안 검증 표준 (아키텍처, 인증, 세션, 접근제어, 암호화, API 등 13개 챕터)"
+
+  owasp-masvs-v2:
+    file: "owasp-masvs-v2.yaml"
+    version: "2.1.0"
+    applies_to: [mobile, sdk, native_app]
+    description: "OWASP MASVS v2.1.0 — 모바일 애플리케이션 보안 검증 표준 (STORAGE, CRYPTO, AUTH, NETWORK, PLATFORM, CODE, RESILIENCE)"
+
+  privacy:
+    file: "privacy-regulations.yaml"
+    version: "2024"
+    applies_to: [pii, eu_users, uae, kr_service, global]
+    description: "프라이버시 규제 — GDPR, UAE DPL, 기타 주요 데이터보호법"
+
+# ─── 도메인별 표준 매핑 ───
+# Phase 2에서 감지된 도메인을 키로 조회하여 로드할 표준 파일을 결정한다.
+
+domain_to_standards:
+  payment:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, pci-dss-v4, nist-sp800, privacy]
+    priority_standards: [pci-dss-v4]
+    note: "PCI DSS 4.0.1 future-dated 요건 전면 필수 (2025-03-31~)"
+
+  web3:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, nist-sp800, privacy]
+    priority_standards: [nist-sp800]
+    note: "키관리(800-57), 난수생성(800-90A) 중점"
+
+  commerce:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, pci-dss-v4, privacy]
+    priority_standards: [pci-dss-v4, privacy]
+    note: "결제 포함 시 PCI DSS 적용"
+
+  saas:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, nist-sp800, privacy]
+    priority_standards: [owasp-api-top10, owasp-asvs-v4]
+    note: "API 보안 + ASVS L2 검증 + 멀티테넌시 격리 중점"
+
+  ai-agent:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, nist-sp800, privacy]
+    priority_standards: [owasp-api-top10, privacy]
+    note: "프롬프트 인젝션, 데이터 유출 방지 중점"
+
+  mobile:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, owasp-masvs-v2, nist-sp800, privacy]
+    priority_standards: [owasp-masvs-v2, owasp-asvs-v4]
+    note: "모바일/SDK 보안 — MASVS + ASVS 기반 전체 검증"
+
+  sdk:
+    standards: [owasp-top10, owasp-asvs-v4, owasp-api-top10, owasp-masvs-v2, nist-sp800]
+    priority_standards: [owasp-masvs-v2]
+    note: "SDK 전 플랫폼 — 모바일 포함 시 MASVS, 웹 포함 시 ASVS"
+
+  general:
+    standards: [owasp-top10, owasp-asvs-v4, nist-sp800]
+    priority_standards: [owasp-asvs-v4]
+    note: "기본 표준 세트 — ASVS로 상세 검증"
+
+# ─── 관할별 추가 표준 ───
+# domain_to_standards에 추가로 적용한다.
+
+jurisdiction_overlay:
+  uae:
+    additional: [privacy]
+    regulations: ["Federal Decree-Law 45/2021 (DPL)", "Federal Decree-Law 46/2021 (AML/CFT)", "Dubai Law No. 4/2022 (VARA)"]
+  eu:
+    additional: [privacy]
+    regulations: ["GDPR (Regulation 2016/679)", "PSD2 (Directive 2015/2366)", "eIDAS"]
+  kr:
+    additional: [privacy]
+    regulations: ["개인정보보호법", "정보통신망법", "전자금융거래법", "전자서명법"]
+  us:
+    additional: [privacy]
+    regulations: ["CCPA/CPRA", "SOX (금융)", "HIPAA (의료)"]
+  global:
+    additional: [privacy]
+    regulations: ["FATF Recommendations (R.11/R.15/R.16)", "OFAC SDN (31 CFR Part 501)"]
+
+# ─── 컴포넌트별 표준 힌트 ───
+# 특정 컴포넌트 유형에 항상 적용되는 표준 항목 힌트
+
+component_hints:
+  SEC-AUTH:
+    always: ["nist-sp800:authentication", "owasp-top10:A07"]
+  SEC-DATA:
+    always: ["nist-sp800:encryption", "privacy:data_protection"]
+  SEC-PAY:
+    always: ["pci-dss-v4:card_data", "pci-dss-v4:crypto"]
+  SEC-API:
+    always: ["owasp-api-top10:all", "nist-sp800:tls"]
+  SEC-WALLET:
+    always: ["nist-sp800:key_management", "nist-sp800:random"]
+  SEC-ADMIN:
+    always: ["owasp-top10:A01", "nist-sp800:authentication"]
+  SEC-INFRA:
+    always: ["nist-sp800:logging", "nist-sp800:tls"]
+  SEC-MOBILE:
+    always: ["owasp-masvs-v2:all", "nist-sp800:encryption", "nist-sp800:key_management"]

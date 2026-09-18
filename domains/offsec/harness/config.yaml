@@ -1,0 +1,81 @@
+# CH015 Harness Engineering — Global Configuration
+# Updated: 2026-04-10
+
+eval:
+  datasets_dir: eval/datasets/labeled/
+  reports_dir: eval/reports/
+  evidence_tolerance: 10
+  baseline:
+    hallucination_rate: 0.0
+    hallucination_source: "embedded_20260325 (72/72 verified)"
+    severity_accuracy: 0.909
+    severity_accuracy_source: "aggregated 2 engagements (dex + embedded)"
+    precision: 1.0
+    precision_source: "aggregated 2 engagements (0 FP / 57 findings)"
+
+exec:
+  checkpoint_subdir: checkpoints
+  enable_checkpoints: true
+  default_mode: va
+  service_phases:
+    va: [recon, binding, architecture, deep-analysis, compliance, self-verify, scoring, evidence-verify, report, regulatory]
+    verify: [ingest, evidence-audit, dependency, sensitivity, missing-probe, report]
+    pentest: [recon, binding, architecture-attack, deep-analysis, attack, creative, poc, self-verify, report, regulatory, live]
+    parallel: [decompose, independent-va, cross-reference, synthesis, report]
+    compliance: [load-previous, patch-verify, change-volume-assessment, new-scan, score-recalc, report]
+    redteam: [recon, binding, surface, attack-path, exploit, deep-analysis, self-verify, va-escalation, report, regulatory]
+
+ab_test:
+  enabled: false
+  quality_threshold: 0.05
+  cost_savings_target: 0.70
+  variants:
+    control:
+      name: "opus-only"
+      routing:
+        tier0_scanner: opus
+        tier1_va: opus
+        tier1_verify: opus
+        tier2_deep: opus
+        tier2_pentest: opus
+    treatment:
+      name: "cost-optimized"
+      routing:
+        tier0_scanner: haiku
+        tier1_va: sonnet
+        tier1_verify: sonnet
+        tier2_deep: opus
+        tier2_pentest: opus
+
+feedback:
+  convergence_mode: weighted_threshold
+  convergence_threshold: 5
+  max_iterations: 2
+  objection_weights:
+    false_positive: 3
+    not_proxy_pattern: 3
+    response_mitigated: 3
+    severity_dispute: 2
+    severity_overstatement: 2
+    severity_understatement: 2
+    asset_value_mismatch: 2
+    asset_inflation: 2
+    impact_gate_overclassified: 2
+    impact_gate_underclassified: 2
+    excessive_structural_weakness: 2
+    quantitative_correction: 2
+    evidence_insufficient: 2
+    evidence_gap: 2
+    reference_missing: 2
+    dependency_issue: 2
+    missing_finding: 1
+
+context:
+  model_window: 200000
+  system_overhead: 15000
+  instruction_budget_ratio: 0.25
+  profiling_enabled: true
+
+behavior:
+  adapter_timeout_ms: 600000
+  minimum_long_context_tokens: 8000

@@ -1,0 +1,185 @@
+# False Positive / Severity Overstatement Patterns — CH015
+# Extracted from engagement verification objections and convergence records
+# Updated: 2026-04-10
+#
+# VA Self-Verify (Phase 3.5)에서 아래 패턴에 해당하는 Finding을 식별하면
+# 심각도를 재검토한다. 패턴 매칭으로 자동 하향하지 않는다 — 코드 증거 기반 재평가.
+#
+# Provenance: occurrences가 인용하는 dex_20260323, embedded_20260325 engagement는
+# 이 리포에 없는 외부 보존/아카이브된 engagement다 (knowledge-base/engagements/는
+# gitignored — 산출물은 별도 보존). 인용 자체는 유효한 검증 이력 출처다.
+
+severity_overstatement_patterns:
+
+  - pattern_id: FP-001
+    name: "설계상 공개 값의 노출 과대 평가"
+    description: |
+      API 키, 프로젝트 ID 등이 클라이언트 사이드에 노출되지만,
+      해당 값이 서비스 설계상 공개되어야 하는 값인 경우.
+      VA가 "시크릿 노출"로 과대 평가하는 패턴.
+    trigger: |
+      클라이언트 번들에 포함된 환경 변수 중 서비스 제공자의 문서에서
+      "공개 값(publishable key, project ID)"으로 명시된 값.
+    self_verify_action: |
+      1. 해당 값이 서비스 제공자 문서에서 공개 값으로 정의되는지 확인
+      2. 해당 값만으로 권한 있는 동작이 가능한지 확인 (API 호출 테스트 등)
+      3. 도메인 제한 등 추가 보호가 적용되는지 확인
+      공개 값이면: 환경 분리 위반 여부만 평가 (LOW)
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-006
+        va_severity: MEDIUM
+        final_severity: LOW
+        context: "WalletConnect 프로젝트 ID — 설계상 공개값"
+
+  - pattern_id: FP-002
+    name: "화이트리스트/내부 상수에 의한 SQL 인젝션 과대 평가"
+    description: |
+      SQL 문자열 연결 패턴이 존재하지만 삽입되는 값이
+      내부 상수 또는 화이트리스트로 제한되어 외부 입력 도달 불가.
+      VA가 구조적 패턴만으로 HIGH를 부여하는 과대 평가.
+    trigger: |
+      SQL 문자열 연결이 감지되었으나, 삽입되는 변수의 출처가
+      코드 내 상수/열거형/화이트리스트로 제한되는 경우.
+    self_verify_action: |
+      1. 삽입 변수의 데이터 흐름을 추적하여 외부 입력 도달 가능성 확인
+      2. 화이트리스트/검증 로직의 완전성 확인 (우회 가능성)
+      3. 외부 입력 도달 불가하면: 구조적 결함(코드 품질)으로 MEDIUM
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-004
+        va_severity: HIGH
+        final_severity: MEDIUM
+        context: "테이블명 내부 상수, ORDER BY 화이트리스트 유효"
+
+  - pattern_id: FP-003
+    name: "Effective 보상 제어 인정 후 심각도 미하향"
+    description: |
+      VA Self-Verify에서 보상 제어를 Effective_Complete 또는
+      Effective_Narrow로 판정했음에도 심각도를 하향하지 않는 과대 평가.
+      compensating-control.md Step 4(정본)에서 Effective_Complete는
+      1단계, Effective_Narrow는 0.5단계 하향이 허용됨에도 미적용.
+    trigger: |
+      Self-Verify에서 compensating_control = Effective_Complete 또는
+      Effective_Narrow로 판정했으나 심각도가 원래 수준으로 유지된 Finding.
+    self_verify_action: |
+      1. Effective_* 판정의 5개 질문 통과 여부 재확인
+         (Observed 증거 2개 미만이면 Effective_Narrow로 강등)
+      2. Effective_Complete 확인 시 심각도 1단계 하향 검토,
+         Effective_Narrow 확인 시 0.5단계 하향 + narrow/config-dependent 태그
+      3. 하향하지 않는 경우 명시적 사유 기록 (예: config-dependent → prod=worst-case 가정)
+    occurrences:
+      - engagement: embedded_20260325
+        finding: F-009
+        va_severity: MEDIUM
+        final_severity: LOW
+        context: "GETDEL 1회 소비 + UUID 예측 불가 → Effective, 그러나 MEDIUM 유지"
+
+  - pattern_id: FP-004
+    name: "에러 메시지 노출 범위 과대 평가"
+    description: |
+      에러 응답에 내부 정보가 노출된다고 판정했으나,
+      에러 마스킹/일반화 로직이 존재하여 실제 노출 정보가 제한적인 경우.
+    trigger: |
+      에러 핸들러에서 내부 에러를 반환하는 코드가 감지되었으나,
+      sentinel 제거, 에러 코드 일반화 등 마스킹 로직이 존재하는 경우.
+    self_verify_action: |
+      1. 에러 마스킹 로직의 적용 범위와 완전성 확인
+      2. 마스킹 후 실제로 노출되는 정보의 수준 평가
+      3. 스택 트레이스/파일 경로/DB 스키마 노출이 없으면: MEDIUM 이하
+    occurrences:
+      - engagement: embedded_20260325
+        finding: F-004
+        va_severity: HIGH
+        final_severity: MEDIUM
+        context: "sentinel 제거 후 비즈니스 에러만 노출"
+
+  - pattern_id: FP-005
+    name: "Web3 서브도메인 인접 적용 과대 평가"
+    description: |
+      Web3 프로젝트에서 DEX/DeFi 특화 이슈를 Wallet/NFT 등
+      관련 없는 서브도메인에까지 적용하여 오탐을 생성하는 패턴.
+      domain_issue_map의 Web3_DEX가 Web3 전체에 매칭되면 발생.
+    trigger: |
+      Web3 도메인이 감지되었으나 실제 서브도메인(Wallet, NFT, DAO 등)이
+      DEX/DeFi가 아닌 경우에 DEX 특화 이슈(Oracle 조작, LP 풀 등)가 보고.
+    self_verify_action: |
+      1. Recon에서 감지된 Web3 서브도메인을 재확인
+      2. 보고된 이슈가 해당 서브도메인에 적용 가능한지 검증
+      3. 서브도메인 불일치 시 해당 Finding 제거 또는 INFO로 하향
+
+  - pattern_id: FP-006
+    name: "도메인 감지 O + 도메인 지식 비활성화 시 확증편향"
+    description: |
+      Recon에서 도메인이 감지되었으나 해당 Tier 2 오버레이가 로드되지 않아
+      일반 차원 체크만으로 도메인 특화 이슈를 추정하여 오탐을 생성하는 패턴.
+    trigger: |
+      도메인 시그널이 감지되었으나 registry.yaml 조건 미충족으로
+      Tier 2 오버레이가 비활성화된 상태에서 도메인 관련 Finding 보고.
+    self_verify_action: |
+      1. registry.yaml에서 해당 도메인 오버레이의 로딩 조건 확인
+      2. 조건 미충족 시 도메인 특화 Finding의 근거 재검토
+      3. Tier 2 오버레이 없이 생성된 도메인 Finding은 근거 불충분 경고
+
+  - pattern_id: FP-007
+    name: "프레임워크 기본 제공 보호의 미인정"
+    description: |
+      프레임워크가 기본으로 제공하는 보안 기능(CSRF 토큰, XSS 이스케이핑,
+      SQL 파라미터 바인딩 등)을 VA가 인정하지 않고 수동 구현 부재로 보고.
+    trigger: |
+      사용 중인 프레임워크가 해당 보안 기능을 기본 제공하며,
+      명시적으로 비활성화하는 설정이 없는 경우.
+    self_verify_action: |
+      1. 프레임워크 문서에서 기본 보안 기능 확인
+      2. 명시적 비활성화 설정(disable_csrf, raw_query 등) 존재 여부 확인
+      3. 기본 활성화 상태이면: 해당 Finding을 INFO로 하향
+
+  - pattern_id: FP-008
+    name: "Batch/Worker 인증 경계 오판"
+    description: |
+      내부 Batch/Worker 서비스가 외부 API와 동일한 인증 수준을 요구한다고
+      판정하지만, 실제로는 내부 네트워크 격리+서비스 메시 인증으로 보호되는 패턴.
+    trigger: |
+      Batch/Worker 서비스가 외부 노출 없이 내부 큐/이벤트 버스에서만
+      호출되며, 네트워크 격리가 확인되는 경우.
+    self_verify_action: |
+      1. 서비스의 네트워크 노출 범위 확인 (포트 바인딩, 라우팅 규칙)
+      2. 큐/이벤트 버스의 인증 메커니즘 확인 (IAM, mTLS 등)
+      3. 내부 전용 + 큐 인증이 있으면: 별도 API 인증 미적용을 MEDIUM 이하
+
+  - pattern_id: FP-009
+    name: "비즈니스 영향 미입증 구조적 약점"
+    description: |
+      기술적으로 취약하나 Step 1.8 Impact Proof Gate에서
+      What/So_What/How 중 하나 이상을 입증하지 못한 Finding.
+      코드에 구조적 약점은 존재하나 현재 서비스 맥락에서
+      구체적 공격 시나리오를 구성할 수 없는 경우.
+    trigger: |
+      Finding의 Step 1.8 Gate_Result가 FAIL이고,
+      Classification이 Structural_Weakness인 경우.
+    self_verify_action: |
+      1. 서비스 컨텍스트 변경 시 (신규 기능, 자산 가치 변동) 재평가
+      2. 이행점검(Remediation Verification) 시 추적 대상으로 유지
+      3. 코드 변경이 해당 영역에 발생하면 3 Proofs 재실행
+
+severity_understatement_patterns:
+
+  - pattern_id: FU-001
+    name: "기본값 false (opt-in) 인증의 과소 평가"
+    description: |
+      인증 플래그의 기본값이 false여서 설정 누락만으로 무인증이 되는 구조를
+      VA가 "설정 실수"로 과소 평가 (HIGH)하지만, 기본값 자체가 취약한 설계이므로
+      CRITICAL이 적절한 패턴.
+    trigger: |
+      인증 활성화 설정의 기본값이 false이고,
+      해당 API가 중요한 상태 변경(금융 거래, 데이터 수정)을 수행하는 경우.
+    self_verify_action: |
+      1. 설정 기본값 확인 — false면 opt-in (설정 누락 = 무인증)
+      2. 보호 대상 API의 영향 범위 평가 (온체인 트랜잭션, 자금 이동 등)
+      3. regulated 레벨에서 opt-in 인증 = CRITICAL로 판정
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-100
+        va_severity: HIGH
+        final_severity: CRITICAL
+        context: "HMAC 기본값 false, on-chain tx 트리거 가능"

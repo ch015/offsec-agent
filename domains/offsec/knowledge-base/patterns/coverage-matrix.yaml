@@ -1,0 +1,409 @@
+# CWE/OWASP ↔ 8차원 Coverage Matrix
+# 목적: Verifier Phase R4에서 CWE/OWASP 커버리지를 역추적 검증하는 데 사용
+# 갱신 기준: CWE Top 25 (2024), OWASP Top 10 (2021), OWASP API Top 10 (2023)
+
+cwe_top25:
+  - id: CWE-787
+    name: "Out-of-bounds Write"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["lang:c", "lang:cpp", "lang:rust-unsafe"]
+
+  - id: CWE-79
+    name: "Cross-site Scripting (XSS)"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["domain:frontend", "domain:web-app"]
+
+  - id: CWE-89
+    name: "SQL Injection"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["domain:backend", "domain:baas-db"]
+
+  - id: CWE-416
+    name: "Use After Free"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["lang:c", "lang:cpp"]
+
+  - id: CWE-78
+    name: "OS Command Injection"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-20
+    name: "Improper Input Validation"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["all"]
+
+  - id: CWE-125
+    name: "Out-of-bounds Read"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["lang:c", "lang:cpp"]
+
+  - id: CWE-22
+    name: "Path Traversal"
+    dimensions: [A4, A3]
+    owasp: A01
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-352
+    name: "Cross-Site Request Forgery (CSRF)"
+    dimensions: [A1, A4]
+    owasp: A01
+    applicable_when: ["domain:frontend", "domain:web-app"]
+
+  - id: CWE-434
+    name: "Unrestricted Upload of File with Dangerous Type"
+    dimensions: [A4]
+    owasp: A04
+    applicable_when: ["domain:backend", "domain:web-app"]
+
+  - id: CWE-862
+    name: "Missing Authorization"
+    dimensions: [A2]
+    owasp: A01
+    applicable_when: ["all"]
+
+  - id: CWE-476
+    name: "NULL Pointer Dereference"
+    dimensions: [A7]
+    owasp: N/A
+    applicable_when: ["lang:c", "lang:cpp", "lang:go"]
+
+  - id: CWE-287
+    name: "Improper Authentication"
+    dimensions: [A1]
+    owasp: A07
+    applicable_when: ["all"]
+
+  - id: CWE-190
+    name: "Integer Overflow or Wraparound"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["lang:c", "lang:cpp", "domain:web3"]
+
+  - id: CWE-502
+    name: "Deserialization of Untrusted Data"
+    dimensions: [A4, A6]
+    owasp: A08
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-77
+    name: "Command Injection"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-119
+    name: "Improper Restriction of Operations within Memory Buffer"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["lang:c", "lang:cpp"]
+
+  - id: CWE-798
+    name: "Use of Hard-coded Credentials"
+    dimensions: [A5]
+    owasp: A07
+    applicable_when: ["all"]
+
+  - id: CWE-918
+    name: "Server-Side Request Forgery (SSRF)"
+    dimensions: [A4, A6]
+    owasp: A10
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-306
+    name: "Missing Authentication for Critical Function"
+    dimensions: [A1, A2]
+    owasp: A07
+    applicable_when: ["all"]
+
+  - id: CWE-362
+    name: "Concurrent Execution Using Shared Resource (Race Condition)"
+    dimensions: [A8, A3]
+    owasp: A04
+    applicable_when: ["domain:backend", "domain:web3"]
+
+  - id: CWE-269
+    name: "Improper Privilege Management"
+    dimensions: [A2]
+    owasp: A01
+    applicable_when: ["all"]
+
+  - id: CWE-94
+    name: "Improper Control of Generation of Code (Code Injection)"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["domain:backend", "domain:ai-ml"]
+
+  - id: CWE-863
+    name: "Incorrect Authorization"
+    dimensions: [A2]
+    owasp: A01
+    applicable_when: ["all"]
+
+  - id: CWE-276
+    name: "Incorrect Default Permissions"
+    dimensions: [A2, A5]
+    owasp: A01
+    applicable_when: ["domain:infra", "domain:backend"]
+
+owasp_top10_2021:
+  - id: A01
+    name: "Broken Access Control"
+    dimensions: [A1, A2]
+    cwe_examples: [CWE-200, CWE-284, CWE-285, CWE-352, CWE-639, CWE-862, CWE-863]
+
+  - id: A02
+    name: "Cryptographic Failures"
+    dimensions: [A5, A3]
+    cwe_examples: [CWE-259, CWE-327, CWE-331, CWE-798]
+
+  - id: A03
+    name: "Injection"
+    dimensions: [A4]
+    cwe_examples: [CWE-20, CWE-74, CWE-77, CWE-78, CWE-79, CWE-89, CWE-94]
+
+  - id: A04
+    name: "Insecure Design"
+    dimensions: [A2, A3, A8]
+    cwe_examples: [CWE-209, CWE-256, CWE-362, CWE-434, CWE-501, CWE-522]
+
+  - id: A05
+    name: "Security Misconfiguration"
+    dimensions: [A5, A7]
+    cwe_examples: [CWE-16, CWE-611, CWE-1004, CWE-1032]
+
+  - id: A06
+    name: "Vulnerable and Outdated Components"
+    dimensions: [A6]
+    cwe_examples: [CWE-937, CWE-1035, CWE-1104]
+
+  - id: A07
+    name: "Identification and Authentication Failures"
+    dimensions: [A1]
+    cwe_examples: [CWE-255, CWE-287, CWE-288, CWE-306, CWE-384, CWE-798]
+
+  - id: A08
+    name: "Software and Data Integrity Failures"
+    dimensions: [A6, A3]
+    cwe_examples: [CWE-345, CWE-502, CWE-829]
+
+  - id: A09
+    name: "Security Logging and Monitoring Failures"
+    dimensions: [A7]
+    cwe_examples: [CWE-117, CWE-223, CWE-532, CWE-778]
+
+  - id: A10
+    name: "Server-Side Request Forgery (SSRF)"
+    dimensions: [A4, A6]
+    cwe_examples: [CWE-918]
+
+owasp_api_top10_2023:
+  - id: API1
+    name: "Broken Object Level Authorization (BOLA)"
+    dimensions: [A2]
+    cwe_examples: [CWE-284, CWE-285, CWE-639]
+
+  - id: API2
+    name: "Broken Authentication"
+    dimensions: [A1]
+    cwe_examples: [CWE-287, CWE-384]
+
+  - id: API3
+    name: "Broken Object Property Level Authorization (BOPLA)"
+    dimensions: [A2, A3]
+    cwe_examples: [CWE-213, CWE-915]
+
+  - id: API4
+    name: "Unrestricted Resource Consumption"
+    dimensions: [A8]
+    cwe_examples: [CWE-770, CWE-799, CWE-400]
+
+  - id: API5
+    name: "Broken Function Level Authorization"
+    dimensions: [A2]
+    cwe_examples: [CWE-285]
+
+  - id: API6
+    name: "Unrestricted Access to Sensitive Business Flows"
+    dimensions: [A2, A8]
+    cwe_examples: [CWE-799, CWE-770]
+
+  - id: API7
+    name: "Server Side Request Forgery"
+    dimensions: [A4, A6]
+    cwe_examples: [CWE-918]
+
+  - id: API8
+    name: "Security Misconfiguration"
+    dimensions: [A5, A7]
+    cwe_examples: [CWE-16, CWE-1004]
+
+  - id: API9
+    name: "Improper Inventory Management"
+    dimensions: [A6, A7]
+    cwe_examples: [CWE-1059]
+
+  - id: API10
+    name: "Unsafe Consumption of APIs"
+    dimensions: [A6, A3]
+    cwe_examples: [CWE-20, CWE-285, CWE-346]
+
+# ─────────────────────────────────────────────────────────────
+# P2-1 추가: 고위험 CWE 확장 (SSRF/XXE/Deserialization/Smuggling + Auth 계열)
+# 참조: knowledge-base/tier1-dimensions/a3-dataflow.md, a4-io.md, a6-deps.md
+# ─────────────────────────────────────────────────────────────
+cwe_extensions_p2_1:
+  - id: CWE-611
+    name: "Improper Restriction of XML External Entity Reference (XXE)"
+    dimensions: [A4]
+    owasp: A05
+    applicable_when: ["domain:backend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a4-io.md#XML_Parsing_Safety"
+
+  - id: CWE-776
+    name: "Improper Restriction of Recursive Entity References (Billion Laughs)"
+    dimensions: [A4, A8]
+    owasp: A05
+    applicable_when: ["domain:backend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a4-io.md#XML_Parsing_Safety"
+
+  - id: CWE-1321
+    name: "Prototype Pollution"
+    dimensions: [A4]
+    owasp: A08
+    applicable_when: ["domain:backend", "domain:frontend", "lang:javascript", "lang:typescript"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a4-io.md#Deserialization_Safety"
+
+  - id: CWE-915
+    name: "Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+    dimensions: [A4, A2]
+    owasp: A08
+    applicable_when: ["domain:backend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a4-io.md#Deserialization_Safety"
+
+  - id: CWE-444
+    name: "Inconsistent Interpretation of HTTP Requests (Request Smuggling)"
+    dimensions: [A3]
+    owasp: A05
+    applicable_when: ["domain:backend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a3-dataflow.md#HTTP_Request_Smuggling_Boundary"
+
+  - id: CWE-524
+    name: "Use of Cache Containing Sensitive Information"
+    dimensions: [A3, A2]
+    owasp: A01
+    applicable_when: ["domain:backend", "domain:frontend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a3-dataflow.md#Cache_Poisoning_Boundary"
+
+  - id: CWE-525
+    name: "Use of Web Browser Cache Containing Sensitive Info"
+    dimensions: [A3]
+    owasp: A05
+    applicable_when: ["domain:frontend"]
+    methodology_anchor: "knowledge-base/tier1-dimensions/a3-dataflow.md#Cache_Poisoning_Boundary"
+
+  - id: CWE-113
+    name: "HTTP Response Splitting / CRLF Injection"
+    dimensions: [A3, A4]
+    owasp: A03
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-601
+    name: "URL Redirection to Untrusted Site (Open Redirect)"
+    dimensions: [A3, A4]
+    owasp: A01
+    applicable_when: ["domain:backend", "domain:frontend"]
+
+  - id: CWE-347
+    name: "Improper Verification of Cryptographic Signature (JWT/Webhook/SAML)"
+    dimensions: [A1, A6]
+    owasp: A02
+    applicable_when: ["all"]
+    methodology_anchor: "va/checklists/api.yaml#API-AUTH-002,API-EXT-003"
+
+  - id: CWE-384
+    name: "Session Fixation"
+    dimensions: [A1]
+    owasp: A07
+    applicable_when: ["domain:backend"]
+
+  - id: CWE-290
+    name: "Authentication Bypass by Spoofing (alg=none, kid confusion)"
+    dimensions: [A1]
+    owasp: A07
+    applicable_when: ["all"]
+    methodology_anchor: "va/checklists/api.yaml#API-AUTH-002"
+
+# ─────────────────────────────────────────────────────────────
+# P1-6 추가: Depth 모듈 5종 매핑
+# 참조: va/depth/injection.md (NoSQL/GraphQL/LDAP/SSTI/Prototype Pollution 통합)
+#       va/depth/access-control.md (GraphQL 중첩 쿼리 우회 등)
+# 통합 이력: 초기 5개 개별 파일이었으나 va/depth/injection.md로 통합됨.
+#            각 항목의 methodology_anchor가 정확한 위치를 가리킴.
+# ─────────────────────────────────────────────────────────────
+cwe_extensions_p1_6:
+  - id: CWE-943
+    name: "NoSQL Injection"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["db:mongodb", "db:couchdb", "db:dynamodb", "db:firebase"]
+    methodology_anchor: "va/depth/injection.md#nosql-연산자-주입"
+
+  - id: CWE-90
+    name: "LDAP Injection"
+    dimensions: [A4, A1]
+    owasp: A03
+    applicable_when: ["auth:ldap", "auth:ad", "lang:*"]
+    methodology_anchor: "va/depth/injection.md#ldap-filterdn-주입"
+
+  - id: CWE-1336
+    name: "Server-Side Template Injection (SSTI)"
+    dimensions: [A4]
+    owasp: A03
+    applicable_when: ["framework:jinja", "framework:twig", "framework:velocity", "framework:freemarker", "framework:thymeleaf", "framework:handlebars-server"]
+    methodology_anchor: "va/depth/injection.md#template-injection-ssti"
+
+  - id: CWE-1321
+    name: "Prototype Pollution"
+    dimensions: [A4]
+    owasp: A08
+    applicable_when: ["lang:javascript", "lang:typescript"]
+    methodology_anchor: "va/depth/injection.md#객체-구조-오염-prototype-pollution-등"
+
+  - id: CWE-799
+    name: "Improper Control of Interaction Frequency (GraphQL batching/aliasing)"
+    dimensions: [A8, A2]
+    owasp: A04
+    applicable_when: ["api:graphql"]
+    methodology_anchor: "va/depth/injection.md#api-쿼리-언어-남용-graphql-등"
+
+# ─────────────────────────────────────────────────────────────
+# 차원 × 도메인 그리드 (Verifier R4: 도메인별 차원 교차 누락 점검)
+# CWE/OWASP 축만으로는 "A4×web3 정수 오버플로", "A1×ai-agent 프롬프트 인증"처럼
+# 도메인 특화 교차를 놓친다. 활성 도메인마다 아래 우선 교차 셀이 리뷰됐는지 확인한다.
+# ─────────────────────────────────────────────────────────────
+dimension_domain_grid:
+  web3:
+    A4: "정수 오버플로/언더플로, 서명 검증(replay/malleability)"
+    A2: "onlyOwner/역할 접근 제어, delegatecall 권한 경계"
+    A3: "reentrancy(상태 갱신 순서), 오라클 가격 조작"
+  ai-agent:
+    A1: "프롬프트 기반 인증 우회, 시스템 프롬프트 유출"
+    A4: "간접 프롬프트 주입(도구 출력·RAG 문서), 출력 파싱 과신뢰"
+    A2: "도구/함수 호출 권한 범위, 에이전트 권한 상승"
+  payment:
+    A3: "금액/통화 TOCTOU, idempotency, 더블 스펜드"
+    A8: "재시도·웹훅 재생 제어, rate 제한"
+  commerce:
+    A3: "비즈니스 로직 남용(쿠폰 스태킹·음수 수량·워크플로 스킵)"
+    A2: "주문/자원 소유권 경계(BOLA)"
+  infra:
+    A5: "시크릿/자격증명 노출, IAM 과권한"
+    A6: "SSRF→메타데이터 엔드포인트, 취약 베이스 이미지/의존성"

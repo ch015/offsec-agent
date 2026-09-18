@@ -1,0 +1,119 @@
+# Tier 2 Domain Overlay Registry
+# 서비스 도메인 감지 시 해당 오버레이 파일을 Phase 1 분석에 주입한다.
+# auto: 도메인 감지 시 무조건 로드
+# conditional: 도메인 감지 + 세부 시그널 매칭 시 추가 로드
+
+overlays:
+
+  # ─── Web3 ───
+  web3:
+    file: "web3.md"
+    type: auto
+    load_when: "domain:Web3 active"
+    description: "Web3 공통 8차원 오버레이 — DeFi, Wallet, DEX, DAO, NFT, Bridge 등 모든 Web3 서브도메인"
+    signals:
+      - "go-ethereum, ethers.js, viem, wagmi 의존성"
+      - "ABI, 스마트 컨트랙트, ERC-20/721/1155"
+      - "SIWE, EIP-191, EIP-712"
+      - "온체인 트랜잭션, RPC 호출"
+
+  web3-wallet:
+    file: "web3-wallet.md"
+    type: conditional
+    load_when: "domain:Web3 active AND wallet_signing detected"
+    description: "Web3 중 지갑/서명/키관리 특화"
+    signals:
+      - "ECDSA / secp256k1 서명 코드"
+      - "BIP-32/39/44 키 파생"
+      - "Shamir Secret Sharing / MPC 구현"
+      - "HSM / TEE / Enclave 기반 키 격리"
+
+  # ─── Payment ───
+  payment:
+    file: "payment.md"
+    type: auto
+    load_when: "domain:Payment active OR payment_gateway detected"
+    description: "결제 플랫폼 8차원 오버레이 — PG 연동, 상태 머신, FDS, 정산, Webhook"
+    signals:
+      - "결제 API (payments, checkout, billing)"
+      - "PG 게이트웨이 연동 (Stripe, Payletter, Binance Pay, Worldpay 등)"
+      - "결제 상태 머신 (created, processing, succeeded, refunded)"
+      - "Webhook HMAC 서명"
+      - "PCI DSS, 토큰화, 카드 정보, saved_tokens"
+
+  # ─── SDK ───
+  sdk:
+    file: "sdk.md"
+    type: auto
+    load_when: "domain:SDK active OR multi_platform_sdk detected"
+    description: "SDK 전 플랫폼 통합 — JS, Android, iOS, Unity, Unreal"
+    signals:
+      - "SDK 패키지 (npm, CocoaPods, Gradle, NuGet, UE Plugin)"
+      - "멀티 플랫폼 빌드 (Android/iOS/Unity/Unreal)"
+      - "SDK 초기화 패턴 (init, configure, setup)"
+      - "플랫폼 브리지 (JNI, Swift/ObjC++, UPL)"
+
+  # ─── AI/Agent ───
+  ai-agent:
+    file: "ai-agent.md"
+    type: auto
+    load_when: "domain:AI_ML active OR LLM_SDK detected"
+    description: "AI/Agent 플랫폼 오버레이 — LLM 통합, 에이전트 오케스트레이션"
+    signals:
+      - "LLM SDK (Anthropic, OpenAI, Google AI)"
+      - "벡터 DB (pgvector, Qdrant, Pinecone)"
+      - "에이전트 프레임워크 (LangChain, MCP)"
+      - "프롬프트 템플릿, 함수 호출, 도구 사용"
+
+  # ─── Commerce ───
+  commerce:
+    file: "commerce.md"
+    type: auto
+    load_when: "domain:Commerce active OR ecommerce_patterns detected"
+    description: "커머스 오버레이 — 상품, 재고, 카트, 주문, 할인"
+    signals:
+      - "상품/카탈로그 관리 (products, SKU, inventory)"
+      - "장바구니/카트 (cart, checkout)"
+      - "주문 관리 (orders, fulfillment)"
+      - "할인/쿠폰 (discount, coupon, promotion)"
+
+  # ─── Cloud ───
+  cloud:
+    file: "cloud.md"
+    type: auto
+    load_when: "domain:Infra active AND cloud_platform detected"
+    description: "클라우드 공통 오버레이 — IAM, 네트워크, 시크릿, 로깅"
+    signals:
+      - "클라우드 SDK (AWS SDK, GCP SDK, Azure SDK)"
+      - "IaC (Terraform, Pulumi, CloudFormation)"
+      - "컨테이너 오케스트레이션 (K8s, ECS, Cloud Run)"
+
+  cloud-aws:
+    file: "cloud-aws.md"
+    type: conditional
+    load_when: "domain:Infra active AND aws_services detected"
+    description: "AWS 특화 — IMDSv2, IAM, S3, KMS"
+    signals:
+      - "AWS SDK v2/v3 의존성"
+      - "EC2/ECS/Lambda/S3/IAM 사용"
+
+  cloud-k8s:
+    file: "cloud-k8s.md"
+    type: conditional
+    load_when: "domain:Infra active AND kubernetes detected"
+    description: "Kubernetes 특화 — RBAC, Admission, 컨테이너 탈출"
+    signals:
+      - "K8s manifest (Deployment, Service, RBAC)"
+      - "Helm chart, kustomize"
+      - "kubectl, client-go 의존성"
+
+  # ─── TEE ───
+  tee-enclave:
+    file: "tee-enclave.md"
+    type: conditional
+    load_when: "enclave_indicators detected"
+    description: "TEE/Enclave 특화 — Nitro, SGX, TrustZone"
+    signals:
+      - "AWS Nitro Enclave / Intel SGX / ARM TrustZone"
+      - "VSOCK 통신"
+      - "NSM/TPM 어테스테이션"

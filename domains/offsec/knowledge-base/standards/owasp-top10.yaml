@@ -1,0 +1,152 @@
+# OWASP Top 10 — 2021
+# 웹 애플리케이션 보안 위험 상위 10개
+# 출처: https://owasp.org/Top10/
+
+standard:
+  id: "owasp-top10"
+  name: "OWASP Top 10 2021"
+  version: "2021"
+  url: "https://owasp.org/Top10/"
+
+requirements:
+
+  - id: "A01:2021"
+    title: "Broken Access Control (취약한 접근 제어)"
+    components: [APIServer, Auth, Admin, DataLayer]
+    implementation:
+      - "서버사이드 접근 제어 enforcement — 클라이언트 검증에 의존 금지"
+      - "기본 거부(deny by default) — 화이트리스트 기반 허용"
+      - "리소스 소유권 검증: 모든 CRUD에서 requester.id == resource.owner_id 확인"
+      - "CORS 최소화: Access-Control-Allow-Origin에 와일드카드(*) 금지"
+      - "JWT/세션에 역할 클레임 포함, 서버에서 매 요청 검증"
+      - "디렉토리 리스팅 비활성화, .git/.env 등 메타파일 접근 차단"
+    test_criteria:
+      happy: "권한 있는 사용자가 자신의 리소스에 정상 접근"
+      failure: "타 사용자 리소스 ID로 접근 시 403/404"
+      boundary: "관리자 API에 일반 사용자 토큰으로 접근 시 403"
+
+  - id: "A02:2021"
+    title: "Cryptographic Failures (암호화 실패)"
+    components: [DataLayer, APIServer, Auth, PaymentService]
+    implementation:
+      - "전송 중 데이터: TLS 1.2+ 필수, TLS 1.3 권장, HSTS 헤더 포함"
+      - "저장 데이터: AES-256-GCM 또는 ChaCha20-Poly1305"
+      - "비밀번호: bcrypt cost 12 또는 Argon2id (t=3, m=64MB, p=4)"
+      - "폐기 예정 알고리즘 금지: MD5, SHA-1, DES, 3DES, RC4, ECB 모드"
+      - "키 관리: 하드코딩 금지, 환경변수 또는 KMS 사용"
+      - "민감 데이터 HTTP 캐시 금지: Cache-Control: no-store"
+    test_criteria:
+      happy: "TLS 1.3으로 정상 통신, 저장 데이터 암호화 확인"
+      failure: "TLS 1.0/1.1 연결 시도 → 거부"
+      boundary: "키 로테이션 후 기존 암호화 데이터 복호화 가능"
+
+  - id: "A03:2021"
+    title: "Injection (인젝션)"
+    components: [APIServer, DataLayer]
+    implementation:
+      - "SQL: 파라미터화 쿼리(Prepared Statement) 전용, 문자열 연결 금지"
+      - "NoSQL: 쿼리 빌더 사용, $where/$regex 사용자 입력 직접 주입 금지"
+      - "OS Command: 사용자 입력으로 셸 명령 구성 금지, 필요 시 allowlist 기반"
+      - "LDAP: 특수문자 이스케이프 (*, (, ), \\, NUL)"
+      - "ORM 사용 시에도 raw query에 사용자 입력 직접 삽입 금지"
+    test_criteria:
+      happy: "정상 입력으로 쿼리 실행 성공"
+      failure: "SQL 인젝션 페이로드('; DROP TABLE--) → 이스케이프/거부"
+      boundary: "유니코드 정규화 후에도 인젝션 불가"
+
+  - id: "A04:2021"
+    title: "Insecure Design (안전하지 않은 설계)"
+    components: [all]
+    implementation:
+      - "위협 모델링: 주요 기능별 abuse case 정의"
+      - "비즈니스 로직: 상태 전이 검증 (결제 상태 머신, 주문 흐름 등)"
+      - "Rate limiting: API 엔드포인트별 요청 제한"
+      - "리소스 소비 제한: 파일 업로드 크기, 페이지네이션, 쿼리 깊이"
+    test_criteria:
+      happy: "정상 비즈니스 흐름 완료"
+      failure: "상태 건너뛰기(created→completed) → 거부"
+      boundary: "Rate limit 도달 시 429 응답 + Retry-After 헤더"
+
+  - id: "A05:2021"
+    title: "Security Misconfiguration (보안 설정 오류)"
+    components: [APIServer, Infra, Admin]
+    implementation:
+      - "불필요한 기능/포트/서비스 비활성화"
+      - "기본 계정/비밀번호 변경 또는 제거"
+      - "에러 메시지에 스택 트레이스/내부 경로 미포함"
+      - "보안 헤더: X-Content-Type-Options, X-Frame-Options, CSP, Permissions-Policy"
+      - "서버/프레임워크 버전 헤더 제거 (Server, X-Powered-By)"
+    test_criteria:
+      happy: "프로덕션 환경에서 보안 헤더 정상 반환"
+      failure: "에러 시 스택 트레이스 미노출"
+      boundary: "존재하지 않는 엔드포인트 → 일관된 404 (정보 유출 없음)"
+
+  - id: "A06:2021"
+    title: "Vulnerable and Outdated Components (취약하고 오래된 컴포넌트)"
+    components: [all]
+    implementation:
+      - "의존성 스캔: npm audit / pip-audit / govulncheck 자동화"
+      - "CRITICAL/HIGH CVE → 72시간 내 패치 또는 완화"
+      - "EOL 런타임/프레임워크 사용 금지"
+      - "SBOM(Software Bill of Materials) 생성 및 유지"
+      - "lockfile(package-lock.json, poetry.lock) 커밋 필수"
+    test_criteria:
+      happy: "CI에서 의존성 스캔 통과"
+      failure: "CRITICAL CVE 포함 의존성 → 빌드 실패"
+      boundary: "간접 의존성(transitive)의 CVE도 탐지"
+
+  - id: "A07:2021"
+    title: "Identification and Authentication Failures (식별 및 인증 실패)"
+    components: [Auth, APIServer, Admin]
+    implementation:
+      - "비밀번호: 최소 12자, zxcvbn score ≥ 3, breached-password 사전 차단"
+      - "MFA: 관리자 필수, 일반 사용자 권장 (TOTP RFC 6238 또는 WebAuthn)"
+      - "세션: 서버사이드 세션 또는 서명된 JWT, httpOnly + secure + SameSite=Strict"
+      - "로그인 실패 제한: 5회 실패 → 5분 잠금 (exponential backoff 권장)"
+      - "세션 만료: 유휴 30분, 절대 24시간, 민감 작업 시 재인증"
+      - "비밀번호 재설정: 일회성 토큰(UUID v4), 15분 만료, 사용 후 즉시 무효화"
+    test_criteria:
+      happy: "유효한 자격증명으로 인증 성공 + 세션 발급"
+      failure: "5회 실패 후 잠금 → 6번째 시도 거부"
+      boundary: "만료된 비밀번호 재설정 토큰 → 거부"
+
+  - id: "A08:2021"
+    title: "Software and Data Integrity Failures (소프트웨어 및 데이터 무결성 실패)"
+    components: [APIServer, WebhookService, Infra]
+    implementation:
+      - "CI/CD: 서명된 커밋, 보호된 브랜치, 코드 리뷰 필수"
+      - "의존성: lockfile 무결성 검증, 서명된 패키지 선호"
+      - "Webhook: HMAC 서명 검증 (SHA-256 이상), replay 방지 (timestamp + nonce)"
+      - "직렬화: 신뢰할 수 없는 데이터의 역직렬화 금지 (Java ObjectInputStream, pickle 등)"
+    test_criteria:
+      happy: "HMAC 서명 유효 → Webhook 처리 성공"
+      failure: "서명 불일치 → 401/403"
+      boundary: "5분 초과 timestamp → replay 거부"
+
+  - id: "A09:2021"
+    title: "Security Logging and Monitoring Failures (보안 로깅 및 모니터링 실패)"
+    components: [APIServer, Auth, Infra]
+    implementation:
+      - "감사 로그: 인증 시도, 접근 제어 실패, 입력 검증 실패, 관리자 작업"
+      - "로그 포맷: 구조화된 JSON (timestamp, actor, action, resource, result, ip)"
+      - "민감 데이터 마스킹: 비밀번호, 카드번호, 토큰을 로그에 평문 기록 금지"
+      - "로그 무결성: append-only 스토리지, 변조 방지"
+      - "알림: CRITICAL 이벤트 발생 시 5분 이내 알림"
+      - "보존: 최소 90일 온라인, 1년 아카이브"
+    test_criteria:
+      happy: "로그인 실패 시 감사 로그에 기록 확인"
+      failure: "로그에 비밀번호 평문 미포함"
+      boundary: "로그 스토리지 가용성 저하 시 서비스 영향 없음"
+
+  - id: "A10:2021"
+    title: "Server-Side Request Forgery (SSRF)"
+    components: [APIServer]
+    implementation:
+      - "사용자 입력 URL 허용 시 allowlist 기반 검증 (도메인 + 프로토콜)"
+      - "내부 네트워크(RFC 1918), 메타데이터 서비스(169.254.169.254), localhost 차단"
+      - "DNS rebinding 방지: 확인된 IP로 직접 연결"
+      - "리다이렉트 추적 비활성화 또는 각 홉에서 allowlist 재검증"
+    test_criteria:
+      happy: "허용된 외부 URL → 정상 요청"
+      failure: "내부 IP(10.0.0.1) → 차단"
+      boundary: "DNS rebinding 시도 → 차단"

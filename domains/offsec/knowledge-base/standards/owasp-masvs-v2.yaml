@@ -1,0 +1,336 @@
+# OWASP Mobile Application Security Verification Standard (MASVS) v2.1.0
+# 모바일 애플리케이션 보안 검증 표준
+# 출처: https://mas.owasp.org/MASVS/
+
+standard:
+  id: "owasp-masvs-v2"
+  name: "OWASP MASVS v2.1.0"
+  version: "2.1.0"
+  url: "https://mas.owasp.org/MASVS/"
+  applies_to: [mobile, sdk, native_app]
+
+requirements:
+
+  # ─── MASVS-STORAGE: 안전한 데이터 저장 ───
+
+  - id: "MASVS-STORAGE-1"
+    title: "민감 데이터의 안전한 저장소 사용"
+    category: storage
+    components: [SDKClient, DataLayer]
+    implementation:
+      - "iOS: Keychain Services(kSecAttrAccessibleWhenUnlockedThisDeviceOnly)에 토큰/인증정보 저장"
+      - "Android: EncryptedSharedPreferences 또는 AndroidKeystore 기반 암호화 저장"
+      - "UserDefaults(iOS) / SharedPreferences(Android) 평문 저장 금지 — 민감 데이터는 반드시 암호화 저장소 사용"
+      - "파일시스템 저장 시 앱 샌드박스 내부 + 파일 보호 속성(NSFileProtectionComplete) 적용"
+      - "SQLite/Realm DB에 민감 데이터 저장 시 SQLCipher 등 DB 레벨 암호화 적용"
+    test_criteria:
+      happy: "토큰이 Keychain/Keystore에 암호화되어 저장 확인"
+      failure: "UserDefaults/SharedPreferences에서 토큰 평문 발견 시 실패"
+      boundary: "디바이스 잠금 해제 전 Keychain 접근 시도 시 접근 불가"
+
+  - id: "MASVS-STORAGE-2"
+    title: "로그/백업/클립보드에 민감 데이터 미포함"
+    category: storage
+    components: [SDKClient, DataLayer]
+    implementation:
+      - "NSLog/Log.d 등에 토큰, 비밀번호, PII 출력 금지 — 프로덕션 빌드에서 민감 로그 레벨 제거"
+      - "Android: android:allowBackup=\"false\" 또는 백업에서 민감 파일 제외(backup_rules.xml)"
+      - "iOS: 백업 제외 속성(NSURLIsExcludedFromBackupKey) 민감 파일에 설정"
+      - "클립보드: UIPasteboard.general에 민감 데이터 복사 시 expiration 설정 또는 복사 자체 금지"
+      - "스크린샷 방지: 민감 화면에서 앱 스위처 스크린샷 마스킹 처리"
+    test_criteria:
+      happy: "로그캣/콘솔 로그에 토큰 미노출 확인"
+      failure: "adb logcat에서 access_token 문자열 검출 시 실패"
+      boundary: "앱 백그라운드 전환 시 민감 화면 스크린샷 마스킹 확인"
+
+  - id: "MASVS-STORAGE-3"
+    title: "공유 저장소 및 IPC를 통한 데이터 유출 방지"
+    category: storage
+    components: [SDKClient, DataLayer]
+    implementation:
+      - "Android: 외부 저장소(External Storage)에 민감 데이터 저장 금지"
+      - "Content Provider: exported=false 기본값, 필요 시 permission 기반 접근 제어"
+      - "iOS: App Groups 공유 컨테이너에 민감 데이터 저장 시 Keychain Access Group 사용"
+      - "키보드 캐시: 민감 입력 필드에 autocorrect/autocomplete 비활성화"
+    test_criteria:
+      happy: "앱 샌드박스 내부에만 민감 파일 존재 확인"
+      failure: "외부 저장소(/sdcard)에서 앱 관련 민감 파일 발견 시 실패"
+      boundary: "타 앱에서 Content Provider 접근 시 권한 없으면 거부"
+
+  # ─── MASVS-CRYPTO: 암호화 ───
+
+  - id: "MASVS-CRYPTO-1"
+    title: "검증된 강력한 암호화 알고리즘 사용"
+    category: crypto
+    components: [SDKClient, DataLayer, Infra]
+    implementation:
+      - "대칭 암호화: AES-256-GCM 사용, ECB 모드 및 DES/3DES/RC4 금지"
+      - "해시: SHA-256 이상 사용 — MD5/SHA-1은 보안 목적(서명, 무결성) 사용 금지"
+      - "비대칭: RSA-2048+ 또는 ECDSA P-256 이상, RSA PKCS#1 v1.5 서명보다 PSS 권장"
+      - "난수 생성: SecRandomCopyBytes(iOS) / SecureRandom(Android) 사용, Math.random() 금지"
+      - "플랫폼 제공 암호화 라이브러리 우선 사용 — 커스텀 암호화 구현 금지"
+    test_criteria:
+      happy: "AES-256-GCM으로 데이터 암복호화 정상 동작"
+      failure: "코드 내 MD5/SHA-1 보안 용도 사용 탐지 시 실패"
+      boundary: "약한 키 길이(AES-128 미만) 사용 시 경고"
+
+  - id: "MASVS-CRYPTO-2"
+    title: "암호화 키의 안전한 생성 및 저장"
+    category: crypto
+    components: [SDKClient, DataLayer]
+    implementation:
+      - "iOS: Keychain에 키 저장(kSecAttrKeyClass), Secure Enclave 활용 권장"
+      - "Android: AndroidKeystore에 키 저장, setUserAuthenticationRequired(true) 설정"
+      - "키 하드코딩 금지 — 소스코드/리소스 파일에 암호화 키/시크릿 포함 금지"
+      - "키 파생 시 PBKDF2(iterations ≥ 600,000) 또는 Argon2id 사용"
+      - "키 로테이션 정책 수립: 최소 연 1회 또는 침해 의심 시 즉시 교체"
+    test_criteria:
+      happy: "AndroidKeystore/Keychain에서 키 정상 생성 및 사용"
+      failure: "strings/grep으로 바이너리에서 하드코딩된 시크릿 발견 시 실패"
+      boundary: "키 로테이션 후 기존 암호화 데이터 마이그레이션 정상 동작"
+
+  - id: "MASVS-CRYPTO-3"
+    title: "하드코딩된 시크릿 및 자격증명 금지"
+    category: crypto
+    components: [SDKClient, Auth]
+    implementation:
+      - "API 키, 클라이언트 시크릿을 소스코드/빌드 산출물에 포함 금지"
+      - "빌드 시 환경변수/CI Secret으로 주입, 런타임에 서버에서 동적 획득"
+      - "난독화만으로는 불충분 — 디컴파일 시 추출 가능한 위치에 시크릿 배치 금지"
+      - "git-secrets / gitleaks 등 pre-commit hook으로 시크릿 커밋 방지"
+    test_criteria:
+      happy: "앱 바이너리 디컴파일 후 시크릿 미발견"
+      failure: "APK/IPA 내에서 API 키 문자열 패턴 검출 시 실패"
+      boundary: "서버 발급 임시 토큰 만료 후 갱신 정상 동작"
+
+  # ─── MASVS-AUTH: 인증 및 세션 관리 ───
+
+  - id: "MASVS-AUTH-1"
+    title: "생체인증의 안전한 구현"
+    category: auth
+    components: [SDKClient, Auth]
+    implementation:
+      - "iOS: LAContext + Keychain(kSecAccessControlBiometryCurrentSet) 연동 — evaluatePolicy 단독 사용 금지"
+      - "Android: BiometricPrompt + KeyStore(setUserAuthenticationRequired) 연동"
+      - "생체인증 실패 시 안전한 폴백(PIN/패스워드) 제공, 무제한 재시도 금지"
+      - "생체 등록 변경(새 지문 추가) 감지 시 재인증 요구"
+      - "CryptoObject 바인딩: 생체인증 결과를 암호화 작업과 연계하여 우회 방지"
+    test_criteria:
+      happy: "등록된 생체정보로 인증 성공 + Keychain/Keystore 키 접근"
+      failure: "Frida로 evaluatePolicy 반환값 변조 시에도 Keychain 접근 불가"
+      boundary: "새 지문 등록 후 기존 생체인증 키 무효화 확인"
+
+  - id: "MASVS-AUTH-2"
+    title: "세션 토큰의 안전한 관리"
+    category: auth
+    components: [SDKClient, Auth, APIServer]
+    implementation:
+      - "세션 토큰은 Keychain/Keystore에 저장 — 메모리 또는 평문 파일 저장 금지"
+      - "Access Token 만료: 최대 15분, Refresh Token: 최대 30일 + 1회성 사용"
+      - "Refresh Token 재사용 감지 시 전체 세션 즉시 무효화(Token Rotation)"
+      - "로그아웃 시 클라이언트 + 서버 양측에서 토큰 폐기"
+      - "백그라운드 전환 시 토큰 메모리 보호 (iOS: applicationDidEnterBackground)"
+    test_criteria:
+      happy: "Access Token 만료 시 Refresh Token으로 자동 갱신"
+      failure: "만료된 Refresh Token으로 갱신 시도 시 401 + 재로그인 유도"
+      boundary: "동일 Refresh Token 2회 사용 시 전체 세션 무효화"
+
+  - id: "MASVS-AUTH-3"
+    title: "민감 작업에 대한 Step-up 인증"
+    category: auth
+    components: [SDKClient, Auth, APIServer]
+    implementation:
+      - "결제, 비밀번호 변경, 개인정보 조회 등 민감 작업 시 추가 인증 요구"
+      - "Step-up 인증 수단: 생체인증, PIN 재입력, OTP/MFA"
+      - "Step-up 토큰은 짧은 유효기간(5분 이내) + 단일 작업 바인딩"
+      - "인증 레벨을 토큰 클레임에 포함, 서버에서 작업별 최소 인증 레벨 검증"
+    test_criteria:
+      happy: "결제 요청 시 생체인증 완료 후 처리 성공"
+      failure: "Step-up 인증 없이 민감 API 호출 시 403"
+      boundary: "Step-up 토큰 5분 초과 후 재사용 시도 시 거부"
+
+  # ─── MASVS-NETWORK: 네트워크 통신 ───
+
+  - id: "MASVS-NETWORK-1"
+    title: "TLS 설정 및 평문 통신 차단"
+    category: network
+    components: [SDKClient, Infra]
+    implementation:
+      - "TLS 1.2 이상 필수, TLS 1.3 권장 — SSLv3/TLS 1.0/1.1 비활성화"
+      - "iOS: App Transport Security(ATS) 활성화, NSAllowsArbitraryLoads=false"
+      - "Android: NetworkSecurityConfig에서 cleartextTrafficPermitted=false"
+      - "강력한 Cipher Suite만 허용: ECDHE+AES-GCM, ChaCha20-Poly1305"
+      - "HTTP 통신 완전 차단 — 디버그 빌드 포함 모든 환경에서 HTTPS 강제"
+    test_criteria:
+      happy: "TLS 1.3으로 API 통신 정상 수행"
+      failure: "HTTP 평문 요청 시 연결 거부"
+      boundary: "TLS 1.1 다운그레이드 시도 시 핸드셰이크 실패"
+
+  - id: "MASVS-NETWORK-2"
+    title: "Certificate Pinning 적용"
+    category: network
+    components: [SDKClient, Infra]
+    implementation:
+      - "공개키 피닝(SPKI pinning) 적용 — 인증서 자체 피닝보다 키 피닝 권장"
+      - "백업 핀 최소 1개 포함: 기본 키 + 백업 키(다른 CA 경로)"
+      - "iOS: URLSessionDelegate certificateChain 검증 또는 TrustKit 사용"
+      - "Android: NetworkSecurityConfig <pin-set> 또는 OkHttp CertificatePinner"
+      - "WebView 내 네트워크 요청에도 피닝 적용 — shouldInterceptRequest로 검증"
+      - "피닝 실패 시 연결 즉시 종료 + 보안 이벤트 로깅"
+    test_criteria:
+      happy: "유효한 서버 인증서로 피닝 검증 통과"
+      failure: "MITM 프록시(Burp/Charles) 인증서 → 연결 거부"
+      boundary: "백업 핀으로 전환 시 정상 연결 유지"
+
+  - id: "MASVS-NETWORK-3"
+    title: "WebView 네트워크 보안"
+    category: network
+    components: [SDKClient]
+    implementation:
+      - "WebView 로드 URL allowlist 검증 — shouldOverrideUrlLoading/decidePolicyFor에서 도메인 확인"
+      - "Mixed Content 차단: HTTPS 페이지 내 HTTP 리소스 로드 금지"
+      - "WebView에서도 Certificate Pinning 적용 (네이티브 네트워크 레이어 인터셉트)"
+      - "로컬 파일 접근 차단: setAllowFileAccess(false), setAllowFileAccessFromFileURLs(false)"
+    test_criteria:
+      happy: "allowlist 도메인의 HTTPS 페이지 정상 로드"
+      failure: "비허용 도메인 또는 HTTP URL 로드 시 차단"
+      boundary: "리다이렉트를 통한 비허용 도메인 접근 시 차단"
+
+  # ─── MASVS-PLATFORM: 플랫폼 상호작용 ───
+
+  - id: "MASVS-PLATFORM-1"
+    title: "IPC 보안 (Deep Link, Intent, URL Scheme)"
+    category: platform
+    components: [SDKClient]
+    implementation:
+      - "Android: Intent 수신 시 발신자 검증, exported=false 기본값"
+      - "iOS: Universal Links 사용 권장 (Custom URL Scheme보다 안전), AASA 검증"
+      - "Deep Link 파라미터 검증: 입력값 sanitization, 인증 상태 확인 후 처리"
+      - "Implicit Intent에 민감 데이터 포함 금지 — Explicit Intent 또는 PendingIntent 사용"
+      - "URL Scheme hijacking 방지: 앱 설치 확인 + Universal Links 우선 사용"
+    test_criteria:
+      happy: "유효한 Deep Link로 앱 내 올바른 화면 이동"
+      failure: "악의적 파라미터 포함 Deep Link → sanitization 후 안전 처리"
+      boundary: "미인증 상태에서 인증 필요 Deep Link 수신 시 로그인 화면으로 리다이렉트"
+
+  - id: "MASVS-PLATFORM-2"
+    title: "WebView 보안 (JavaScript Interface, Content Loading)"
+    category: platform
+    components: [SDKClient]
+    implementation:
+      - "JavaScript Interface 최소화: @JavascriptInterface 메서드를 필요 최소한으로 제한"
+      - "Native Bridge 메시지 검증: origin 확인, 메시지 스키마 검증, 허용 액션 화이트리스트"
+      - "document-start 시점 injection: 브릿지 코드를 페이지 로드 전에 주입하여 변조 방지"
+      - "JavaScript 비활성화 기본값: 필요한 WebView에서만 setJavaScriptEnabled(true)"
+      - "evaluateJavaScript 호출 시 사용자 입력 직접 삽입 금지 — 파라미터 직렬화 후 전달"
+      - "file:// 및 content:// 스킴 로드 차단"
+    test_criteria:
+      happy: "허용된 브릿지 메서드 호출 → 네이티브 기능 정상 실행"
+      failure: "비허용 브릿지 메서드 호출 → 거부 + 보안 로그"
+      boundary: "JavaScript injection을 통한 브릿지 메서드 열거 시도 → 차단"
+
+  - id: "MASVS-PLATFORM-3"
+    title: "권한 모델 및 최소 권한 원칙"
+    category: platform
+    components: [SDKClient]
+    implementation:
+      - "런타임 퍼미션: 사용 시점에 요청, 앱 시작 시 일괄 요청 금지"
+      - "최소 권한: 기능에 필요한 최소 퍼미션만 선언 (AndroidManifest.xml / Info.plist)"
+      - "퍼미션 거부 시 기능 저하(graceful degradation), 앱 크래시 금지"
+      - "위치/카메라/마이크 등 민감 퍼미션: 사용 목적 명시, 백그라운드 사용 최소화"
+    test_criteria:
+      happy: "퍼미션 승인 후 해당 기능 정상 동작"
+      failure: "퍼미션 거부 시 앱 크래시 없이 대체 흐름 제공"
+      boundary: "한 번 거부 후 재요청 시 적절한 근거 화면 표시"
+
+  # ─── MASVS-CODE: 코드 품질 및 빌드 설정 ───
+
+  - id: "MASVS-CODE-1"
+    title: "앱 무결성 검증 (Anti-tampering)"
+    category: code
+    components: [SDKClient]
+    implementation:
+      - "서명 검증: 런타임에 APK/IPA 서명 무결성 확인"
+      - "Android: Play Integrity API / SafetyNet Attestation 활용"
+      - "iOS: App Attest(DeviceCheck framework)로 앱 무결성 검증"
+      - "서버사이드 검증: 클라이언트 attestation 토큰을 서버에서 검증"
+      - "변조 감지 시 앱 종료 또는 기능 제한 + 서버 알림"
+    test_criteria:
+      happy: "정품 앱에서 무결성 검증 통과"
+      failure: "리패키징된 APK 실행 시 무결성 검증 실패 → 기능 차단"
+      boundary: "디버그 빌드와 릴리스 빌드의 서명 분리 확인"
+
+  - id: "MASVS-CODE-2"
+    title: "디버그/릴리스 빌드 분리"
+    category: code
+    components: [SDKClient, Infra]
+    implementation:
+      - "릴리스 빌드: debuggable=false(Android), 디버거 연결 차단"
+      - "릴리스 빌드에서 로깅 레벨 최소화 — verbose/debug 로그 제거"
+      - "개발용 서버 URL, 테스트 계정, 목 데이터 릴리스 빌드에서 완전 제거"
+      - "ProGuard/R8(Android), Bitcode(iOS) 최적화로 코드 노출 최소화"
+    test_criteria:
+      happy: "릴리스 빌드에서 디버그 기능 미동작 확인"
+      failure: "릴리스 APK에 debuggable=true 플래그 발견 시 실패"
+      boundary: "릴리스 빌드에서 개발 서버 URL 문자열 미포함 확인"
+
+  - id: "MASVS-CODE-3"
+    title: "서드파티 의존성 보안"
+    category: code
+    components: [SDKClient]
+    implementation:
+      - "의존성 취약점 스캔: npm audit / gradle dependencyCheckAnalyze / pod audit 자동화"
+      - "CRITICAL/HIGH CVE → 72시간 내 패치 또는 완화 조치"
+      - "lockfile 커밋 필수: package-lock.json, Podfile.lock, gradle.lockfile"
+      - "미사용 의존성 정기 제거 — 공격 표면 최소화"
+    test_criteria:
+      happy: "CI 파이프라인에서 의존성 스캔 통과"
+      failure: "CRITICAL CVE 포함 라이브러리 → 빌드 경고/실패"
+      boundary: "간접(transitive) 의존성의 CVE도 탐지"
+
+  # ─── MASVS-RESILIENCE: 리버스 엔지니어링 대응 ───
+
+  - id: "MASVS-RESILIENCE-1"
+    title: "루트/탈옥 탐지"
+    category: resilience
+    components: [SDKClient]
+    implementation:
+      - "다중 탐지 기법 조합: 파일 시스템 체크, 바이너리 체크, 환경 변수 검사"
+      - "Android: su 바이너리 존재, Magisk/Xposed 모듈 탐지, SELinux 상태 확인"
+      - "iOS: Cydia/Sileo 설치 확인, 샌드박스 무결성, fork() 동작 확인"
+      - "탐지 결과에 따른 정책: 민감 기능 차단 또는 서버에 리스크 시그널 전송"
+      - "탐지 로직 난독화: 단순 문자열 매칭으로 우회할 수 없도록 동적 검사"
+    test_criteria:
+      happy: "정상 디바이스에서 루트/탈옥 미탐지"
+      failure: "루팅된 디바이스에서 민감 기능 접근 차단"
+      boundary: "Magisk Hide/Shamiko 등 은닉 도구 사용 시에도 탐지 시도"
+
+  - id: "MASVS-RESILIENCE-2"
+    title: "안티 디버깅 및 런타임 보호"
+    category: resilience
+    components: [SDKClient]
+    implementation:
+      - "디버거 연결 탐지: ptrace(PT_DENY_ATTACH)(iOS), Debug.isDebuggerConnected()(Android)"
+      - "Frida/Xposed 등 동적 계측 도구 탐지: 포트 스캔, 라이브러리 로드 감시"
+      - "에뮬레이터 탐지: 하드웨어 특성, 센서 유무, 빌드 프로퍼티 검사"
+      - "탐지 시 앱 종료 또는 기능 제한 — 단순 로그만 남기는 것은 불충분"
+      - "탐지 로직을 네이티브(C/C++) 레이어에 구현하여 후킹 난이도 향상"
+    test_criteria:
+      happy: "정상 실행 환경에서 안티디버깅 미트리거"
+      failure: "Frida 연결 상태에서 앱 실행 시 탐지 + 기능 차단"
+      boundary: "에뮬레이터에서 실행 시 탐지 + 정책에 따른 처리"
+
+  - id: "MASVS-RESILIENCE-3"
+    title: "코드 난독화"
+    category: resilience
+    components: [SDKClient]
+    implementation:
+      - "Android: R8/ProGuard 난독화 적용, 클래스/메서드/필드명 난독화"
+      - "iOS: Swift/ObjC 심볼 스트리핑, 민감 로직은 C/C++로 구현"
+      - "문자열 암호화: 민감 문자열(URL, 키 이름)을 런타임 복호화 방식으로 보호"
+      - "제어 흐름 난독화(Control Flow Obfuscation) 적용 권장"
+      - "React Native/Flutter: Hermes 바이트코드 사용, JavaScript 번들 난독화"
+    test_criteria:
+      happy: "난독화된 바이너리에서 원본 클래스명/메서드명 미노출"
+      failure: "디컴파일 시 주요 비즈니스 로직 클래스명 그대로 노출 시 실패"
+      boundary: "mapping.txt/dSYM 보안 관리 확인 (외부 유출 시 난독화 무력화)"

@@ -1,0 +1,175 @@
+{
+  "version": "1.0.0",
+  "name": "ch015",
+  "description": "AI-powered source code security assessment multi-agent system",
+  "sourceDirectories": ["src", "lib", "app", "components", "pages", "features", "services", "api", "server", "backend", "hooks", "mcp-server", "harness", "Source", "Plugins", "Packages"],
+  "codeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java", ".rb", ".php", ".dart", ".sol", ".ex", ".exs", ".sql", ".yaml", ".yml", ".cpp", ".h", ".hpp", ".c", ".cc", ".mm", ".m", ".kt", ".kts", ".swift", ".cs"],
+
+  "ch015": {
+    "securityScoreThreshold": 85,
+    "reportOutputDir": ".nunchi/reports/",
+
+    "limits": {
+      "max_session_tokens": null,
+      "cost_limit_usd": null,
+      "max_agent_depth": 1,
+      "max_feedback_iterations": 2,
+      "max_objection_cycles": 2,
+      "per_tool_budget": {},
+      "warn_threshold_ratio": 0.8,
+      "abort_threshold_ratio": 1.0
+    },
+
+    "compliance": {
+      "defaultMode": "patch-verify",
+      "deltaScanThresholds": {
+        "autoReauditRatio": 0.30,
+        "askReauditRatio": 0.15,
+        "autoReauditNewFiles": 20,
+        "autoReauditDimensions": 3
+      }
+    },
+
+    "excludeCategories": {
+      "dos": true,
+      "internalTls": true,
+      "configMistake": true
+    },
+
+    "agentModel": {
+      "default": "opus",
+      "costOptimized": false,
+      "routing": {
+        "tier0_scanner": "haiku",
+        "tier1_va": "sonnet",
+        "tier1_verify": "sonnet",
+        "tier2_deep": "opus",
+        "tier2_pentest": "opus"
+      }
+    },
+
+    "dimensionParallelism": {
+      "enabled": false,
+      "mode": "sequential",
+      "min_source_files": 50
+    },
+
+    "reconCache": {
+      "enabled": true,
+      "ttl_days": 7,
+      "cache_dir": ".ch015/cache/recon/"
+    },
+
+    "analysisMode": {
+      "default": "llm",
+      "ast": {
+        "semgrepConfig": ["p/default", "p/secrets"],
+        "maxTaintPaths": 50,
+        "maxSemgrepFindings": 100,
+        "callGraphDepth": 6,
+        "timeout": 120,
+        "languages": ["javascript", "typescript", "python", "go", "java", "rust", "c", "cpp", "kotlin", "swift", "c_sharp"],
+        "fallbackToLlm": false
+      }
+    }
+  },
+
+  "scoring": {
+    "cvss": {
+      "critical": { "min": 9.0, "max": 10.0 },
+      "high": { "min": 7.0, "max": 8.9 },
+      "medium": { "min": 4.0, "max": 6.9 },
+      "low": { "min": 0.1, "max": 3.9 },
+      "info": { "min": 0.0, "max": 0.0 }
+    },
+    "securityScore": {
+      "formula": "100 - (critical * 25 + high * 10 + medium * 3 + low * 1)",
+      "weights": { "critical": 25, "high": 10, "medium": 3, "low": 1 },
+      "passThreshold": 85,
+      "zeroToleranceSeverities": ["critical"],
+      "maxHighFindings": 2,
+      "cvssGate": 9.0
+    }
+  },
+
+  "harness": {
+    "eval": {
+      "evidenceTolerance": 10,
+      "maxHallucinationRate": 0.05
+    },
+    "fat": {
+      "k": 2,
+      "arms": [
+        { "name": "opus", "vaModel": "opus", "note": "opus-only 라우팅(ON, 대조군)" },
+        { "name": "haiku", "vaModel": "haiku", "note": "극단 cost-routing: VA→haiku(OFF)" }
+      ]
+    }
+  },
+
+  "projectLevel": {
+    "default": "basic",
+    "detection": {
+      "regulated": ["hipaa", "pci-dss", "gdpr", "sox", "iso27001", "fintech", "healthcare"],
+      "standard": ["supabase", "firebase", "auth", "payment", "api-keys"]
+    },
+    "levels": {
+      "basic":     { "standards": ["owasp-top10"], "depth": "standard" },
+      "standard":  { "standards": ["owasp-top10", "owasp-api-top10", "secure-coding"], "depth": "deep" },
+      "regulated": { "standards": ["owasp-top10", "owasp-api-top10", "secure-coding", "nist-800-53"], "depth": "exhaustive" }
+    }
+  },
+
+  "commands": {
+    "ch015:va": "vulnerability-assessment",
+    "ch015:verify": "adversarial-verification",
+    "ch015:pentest": "penetration-testing",
+    "ch015:redteam": "red-team-operation",
+    "ch015:report": "report-generation",
+    "ch015:fix": "remediation-guidance"
+  },
+
+  "feedbackLoop": {
+    "max_iterations": 2,
+    "convergence_threshold": 5,
+    "objection_weights": {
+      "false_positive": 3,
+      "not_proxy_pattern": 3,
+      "response_mitigated": 3,
+      "severity_dispute": 2,
+      "severity_overstatement": 2,
+      "severity_understatement": 2,
+      "asset_value_mismatch": 2,
+      "asset_inflation": 2,
+      "impact_gate_overclassified": 2,
+      "impact_gate_underclassified": 2,
+      "excessive_structural_weakness": 2,
+      "quantitative_correction": 2,
+      "evidence_insufficient": 2,
+      "evidence_gap": 2,
+      "reference_missing": 2,
+      "dependency_issue": 2,
+      "missing_finding": 1
+    }
+  },
+
+  "integrations": {
+    "enabled": false,
+    "jira": {
+      "issueType": "Bug",
+      "minSeverity": "HIGH",
+      "labels": ["ch015", "security-finding"]
+    },
+    "confluence": {
+      "titleFormat": "[CH015] {service} — {project} ({date})"
+    },
+    "slack": {
+      "notifyOn": ["CRITICAL", "HIGH"]
+    }
+  },
+
+  "conventions": {
+    "findingId": "F-{NNN}",
+    "severityLevels": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+    "language": "ko"
+  }
+}

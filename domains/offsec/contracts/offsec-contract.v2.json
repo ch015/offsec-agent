@@ -1,0 +1,768 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "nunchi.offsec.assessment",
+  "version": "2.0.0",
+  "executionMode": "host-bounded-workers",
+  "leadRole": "reporter",
+  "forbiddenModelTools": [
+    "Agent"
+  ],
+  "limits": {
+    "maxBudgetUsd": null,
+    "maxSubagentDepth": 1
+  },
+  "workUnitPolicy": {
+    "minimumSourceFiles": 50,
+    "maximumWorkUnits": 128,
+    "maximumConcurrency": 16,
+    "maxContextFilesPerUnit": 75
+  },
+  "isolation": {
+    "settingSources": [],
+    "strictMcpConfig": true,
+    "disableAutoMemory": true,
+    "inheritParentSecrets": false,
+    "sandboxRequired": true,
+    "networkDefaultDeny": true,
+    "permissionMode": "dontAsk",
+    "reportGate": "on"
+  },
+  "roles": {
+    "analyzer": {
+      "agentFile": "contracts/roles/analyzer.md",
+      "description": "8차원 보안 아키텍처 진단과 증거 기반 취약점 후보 생성을 담당하는 분석 역할",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Write",
+        "mcp__nunchi__submit_finding"
+      ],
+      "elevatedTools": [],
+      "skills": [
+        "nunchi-offsec:offsec-contract"
+      ],
+      "allowedDelegates": []
+    },
+    "reviewer": {
+      "agentFile": "contracts/roles/reviewer.md",
+      "description": "분석 산출물의 모든 finding을 실제 코드와 대조하여 검수·보정하는 검토 역할",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "mcp__nunchi__submit_finding"
+      ],
+      "elevatedTools": [],
+      "skills": [
+        "nunchi-offsec:offsec-contract"
+      ],
+      "allowedDelegates": []
+    },
+    "evaluator": {
+      "agentFile": "contracts/roles/evaluator.md",
+      "description": "검토된 취약점 목록을 기반으로 커버리지·심각도·전체 보안 수준을 객관적으로 평가하는 역할",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write"
+      ],
+      "elevatedTools": [],
+      "skills": [
+        "nunchi-offsec:offsec-contract"
+      ],
+      "allowedDelegates": []
+    },
+    "reporter": {
+      "agentFile": "contracts/roles/reporter.md",
+      "description": "평가 결과를 기반으로 최종 보안 보고서 초안을 작성하는 역할",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write"
+      ],
+      "elevatedTools": [],
+      "skills": [
+        "nunchi-offsec:offsec-contract"
+      ],
+      "allowedDelegates": []
+    }
+  },
+  "phases": [
+    {
+      "id": "recon",
+      "role": "host",
+      "requires": [],
+      "controller": "host",
+      "requiredMethodFiles": [],
+      "requiredArtifacts": [
+        "00_recon.json",
+        "00_dependency_graph.json"
+      ],
+      "optionalArtifacts": [
+        "00_host_recon.json"
+      ]
+    },
+    {
+      "id": "plan",
+      "role": "host",
+      "requires": [
+        "recon"
+      ],
+      "controller": "host",
+      "requiredMethodFiles": [],
+      "requiredArtifacts": [
+        "01_analysis_plan.json"
+      ],
+      "optionalArtifacts": []
+    },
+    {
+      "id": "analyze",
+      "role": "analyzer",
+      "requires": [
+        "plan"
+      ],
+      "requiredMethodFiles": [
+        "methods/analyze.md",
+        "skills/ch015/offsec/va/SKILL.md",
+        "knowledge-base/tier1-dimensions/a1-auth.md",
+        "knowledge-base/tier1-dimensions/a2-authz.md",
+        "knowledge-base/tier1-dimensions/a3-dataflow.md",
+        "knowledge-base/tier1-dimensions/a4-io.md",
+        "knowledge-base/tier1-dimensions/a5-secret.md",
+        "knowledge-base/tier1-dimensions/a6-deps.md",
+        "knowledge-base/tier1-dimensions/a7-error.md",
+        "knowledge-base/tier1-dimensions/a8-resource.md"
+      ],
+      "requiredArtifacts": [
+        "02_analysis_result.md",
+        "02_findings_index.yaml"
+      ],
+      "optionalArtifacts": [
+        "02_analysis_handoff.yaml"
+      ]
+    },
+    {
+      "id": "review",
+      "role": "reviewer",
+      "requires": [
+        "analyze"
+      ],
+      "requiredMethodFiles": [
+        "methods/review.md",
+        "skills/ch015/common/evidence-verification.md"
+      ],
+      "requiredArtifacts": [
+        "03_review_result.json"
+      ],
+      "optionalArtifacts": []
+    },
+    {
+      "id": "evaluate",
+      "role": "evaluator",
+      "requires": [
+        "review"
+      ],
+      "requiredMethodFiles": [
+        "methods/evaluate.md"
+      ],
+      "requiredArtifacts": [
+        "04_evaluation.json",
+        "04_evaluation_classification.yaml"
+      ],
+      "optionalArtifacts": []
+    },
+    {
+      "id": "report",
+      "role": "reporter",
+      "requires": [
+        "evaluate"
+      ],
+      "requiredMethodFiles": [
+        "methods/report.v2.md"
+      ],
+      "requiredArtifacts": [
+        "07_security_report.draft.md"
+      ],
+      "optionalArtifacts": []
+    }
+  ],
+  "hostExecution": {
+    "kind": "sealed-work-set",
+    "entrypoint": "assess",
+    "workerPhases": [
+      "analyze"
+    ],
+    "maximumWorkUnits": 128,
+    "maximumConcurrency": 16,
+    "completionBarrier": "all-settled-all-required",
+    "directPhaseExecution": "forbidden",
+    "workUnitArtifacts": {
+      "comment": "analyze phase의 per-unit 산출물은 work-units/<unitKey>/ 하위에 생성된다. 호스트가 00_work_unit_results.json으로 집계하며, review phase에는 집계된 결과와 standard-findings 원장이 전달된다.",
+      "perUnitDir": "work-units/{unitKey}",
+      "aggregationArtifact": "00_work_unit_results.json"
+    }
+  },
+  "publication": {
+    "phase": "report",
+    "draftArtifact": "07_security_report.draft.md",
+    "finalArtifact": "07_security_report.md"
+  },
+  "schemaResources": {
+    "phaseResultSchema": "contracts/offsec-phase-result-schema.v2.json",
+    "findingSchema": "contracts/offsec-finding-schema.v2.json"
+  },
+  "analysisResources": {
+    "semgrepManifest": "rules/semgrep/manifest.json",
+    "semgrepRules": [
+      "rules/semgrep/code.yml",
+      "rules/semgrep/iac.yml"
+    ]
+  },
+  "methodologyResources": {
+    "shared": [
+      "skills/ch015/common/compensating-control.md",
+      "skills/ch015/common/context-loading.md",
+      "skills/ch015/common/evidence-verification.md",
+      "skills/ch015/common/recon.md",
+      "skills/ch015/common/taint-analysis.md",
+      "knowledge-base/conventions/finding-id-naming.md",
+      "knowledge-base/patterns/coverage-matrix.yaml",
+      "knowledge-base/patterns/false_positive_patterns.yaml"
+    ],
+    "analysis": [
+      "skills/ch015/offsec/va/SKILL.md",
+      "skills/ch015/offsec/va/checklists/api.yaml",
+      "skills/ch015/offsec/va/checklists/db-layer.yaml",
+      "skills/ch015/offsec/va/checklists/native-client.yaml",
+      "skills/ch015/offsec/va/checklists/web-app.yaml",
+      "skills/ch015/offsec/va/compliance.md",
+      "skills/ch015/offsec/va/concurrency.md",
+      "skills/ch015/offsec/va/deep-analysis.md",
+      "skills/ch015/offsec/va/depth/access-control.md",
+      "skills/ch015/offsec/va/depth/auth-bypass.md",
+      "skills/ch015/offsec/va/depth/concurrency.md",
+      "skills/ch015/offsec/va/depth/crypto-misuse.md",
+      "skills/ch015/offsec/va/depth/data-flow.md",
+      "skills/ch015/offsec/va/depth/injection.md",
+      "skills/ch015/offsec/va/depth/ssrf.md",
+      "skills/ch015/offsec/va/principles/baas-trust-boundary.md",
+      "skills/ch015/offsec/va/principles/oauth-provider-misconfig.md",
+      "skills/ch015/offsec/va/principles/row-level-security.md",
+      "skills/ch015/offsec/va/principles/webhook-integrity.md",
+      "skills/ch015/offsec/va/regulatory.md",
+      "skills/ch015/offsec/va/supply-chain.md",
+      "knowledge-base/tier1-dimensions/a1-auth.md",
+      "knowledge-base/tier1-dimensions/a2-authz.md",
+      "knowledge-base/tier1-dimensions/a3-dataflow.md",
+      "knowledge-base/tier1-dimensions/a4-io.md",
+      "knowledge-base/tier1-dimensions/a5-secret.md",
+      "knowledge-base/tier1-dimensions/a6-deps.md",
+      "knowledge-base/tier1-dimensions/a7-error.md",
+      "knowledge-base/tier1-dimensions/a8-resource.md",
+      "knowledge-base/tier2-overlays/registry.yaml",
+      "knowledge-base/tier2-overlays/ai-agent.md",
+      "knowledge-base/tier2-overlays/cloud-aws.md",
+      "knowledge-base/tier2-overlays/cloud-k8s.md",
+      "knowledge-base/tier2-overlays/cloud.md",
+      "knowledge-base/tier2-overlays/commerce.md",
+      "knowledge-base/tier2-overlays/payment.md",
+      "knowledge-base/tier2-overlays/sdk.md",
+      "knowledge-base/tier2-overlays/tee-enclave.md",
+      "knowledge-base/tier2-overlays/web3-wallet.md",
+      "knowledge-base/tier2-overlays/web3.md"
+    ]
+  },
+  "phaseResultSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contractVersion",
+      "phase",
+      "role",
+      "status",
+      "artifacts",
+      "summary",
+      "metrics",
+      "unresolved"
+    ],
+    "properties": {
+      "contractVersion": {
+        "type": "string"
+      },
+      "phase": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "complete",
+          "blocked"
+        ]
+      },
+      "artifacts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "findingCount"
+        ],
+        "properties": {
+          "findingCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "unresolved": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "workUnit": {
+        "description": "work-unit identity 메타데이터. 호스트가 unit 결과를 올바른 plan/source에 라우팅하기 위한 식별자이며, 외부 변조 방어 목적이 아니다.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workUnitKey",
+          "workPlanSha256",
+          "assignedSourceSha256"
+        ],
+        "properties": {
+          "workUnitKey": {
+            "type": "string",
+            "pattern": "^unit-[a-f0-9]{16}$"
+          },
+          "workPlanSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "assignedSourceSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "findingSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "contractVersion",
+      "phase",
+      "role",
+      "round",
+      "title",
+      "verdict",
+      "severity",
+      "evidenceClass",
+      "reachability",
+      "preconditions",
+      "severityRationale",
+      "evidence",
+      "confidence",
+      "impact",
+      "remediation",
+      "standards",
+      "unresolved"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_-]*-[0-9]{3,}$"
+      },
+      "contractVersion": {
+        "type": "string"
+      },
+      "phase": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "round": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "verdict": {
+        "type": "string",
+        "enum": [
+          "supported",
+          "unsupported",
+          "abstain",
+          "escalate"
+        ]
+      },
+      "severity": {
+        "type": "string",
+        "enum": [
+          "CRITICAL",
+          "HIGH",
+          "MEDIUM",
+          "LOW",
+          "INFO"
+        ]
+      },
+      "evidenceClass": {
+        "type": "string",
+        "enum": [
+          "data-flow",
+          "configuration",
+          "access-control",
+          "runtime",
+          "documentation"
+        ]
+      },
+      "reachability": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "plausible",
+          "unconfirmed",
+          "not-applicable"
+        ]
+      },
+      "preconditions": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "severityRationale": {
+        "type": "string",
+        "minLength": 1
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "impact": {
+        "type": "string"
+      },
+      "remediation": {
+        "type": "string"
+      },
+      "standards": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      },
+      "unresolved": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "lineStart",
+            "lineEnd",
+            "quote"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "lineStart": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "lineEnd": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "quote": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "resources": [
+    {
+      "path": "contracts/roles/analyzer.md",
+      "sha256": "ddce6f5ffed3433fb07b0bf7fd82f768e3a8ac2a9fb8c78c436dc018ea67ab21"
+    },
+    {
+      "path": "skills/offsec-contract/SKILL.md",
+      "sha256": "76dfc0d329c55e38a3412fd4c375fdf8a3a88e474f5d4d9f519332ed506d1f72"
+    },
+    {
+      "path": "contracts/roles/reviewer.md",
+      "sha256": "ed2b82cb61767dcdb75ee12d79a2860cf5da0df9e16136ae796045af9ef087fe"
+    },
+    {
+      "path": "contracts/roles/evaluator.md",
+      "sha256": "7407512d8d9c46b89167d2ba354656fba1b65c9fc7679f87ad8715bda1fcab5c"
+    },
+    {
+      "path": "contracts/roles/reporter.md",
+      "sha256": "9cec3ddac0a63286086c04d62e892e7c81613c0cb5e1b06e8327491a12909061"
+    },
+    {
+      "path": "methods/analyze.md",
+      "sha256": "87433376e0c4e046e54b7a23e9d7297e7bbf4e5afeef573fadeeb0685fc43962"
+    },
+    {
+      "path": "skills/ch015/offsec/va/SKILL.md",
+      "sha256": "fca87180426d02d223ecc873304a10ef9d7066f4b27878f03c32133bec99ce09"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a1-auth.md",
+      "sha256": "a50a7a36eeecdba9a0a4e39e7faa6366ac05c2e47d984996d0c540a6115a1666"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a2-authz.md",
+      "sha256": "67c43f07d0402358095439dfcc42c2bf4a45e9cb15d9d60100b396d7815d7f14"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a3-dataflow.md",
+      "sha256": "4969ef483c9f218a2c885905ef71a1509b43839d5ef3e03b9a3035dc0641f603"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a4-io.md",
+      "sha256": "d0cc624271cec8cdaa3c13ffabcd369f6393835a08d83c8bf4f6b2fd1645a316"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a5-secret.md",
+      "sha256": "8554356df5bcda16c260755e78052ec3eedf137ecc12099d3b9bf3c6843ff62f"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a6-deps.md",
+      "sha256": "20cd5ab456dd0a47d8e0bf0f8c734d49eaceae594dc49c1ddd9de1addcbb03d2"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a7-error.md",
+      "sha256": "cc0ed1cc19f5f49fd8943d58c82ffb33d04dc262b116f05b24514b9cf1f63fae"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a8-resource.md",
+      "sha256": "33b9aea2e8926a48efcd9458b1800592a46f50c0ca4cac493ce2fab8ff7df1a1"
+    },
+    {
+      "path": "methods/review.md",
+      "sha256": "29f59aa537a392ddd0d4c4637a1e9bbb44c709336342fdee8330a2f697da11de"
+    },
+    {
+      "path": "skills/ch015/common/evidence-verification.md",
+      "sha256": "d009bdad1490db559284503e7cbb2e06554f991b59f74f9aa32f789e9fc98251"
+    },
+    {
+      "path": "methods/evaluate.md",
+      "sha256": "4e54671fb83f2333b10b0de4101a22b2858f71aee623857a92e13f243f76a446"
+    },
+    {
+      "path": "methods/report.v2.md",
+      "sha256": "6781e278dfaa2db8737c2625e90fe603c09870c4963ce475e0db7ddce3e7a2ef"
+    },
+    {
+      "path": "skills/ch015/common/compensating-control.md",
+      "sha256": "6c4ab62fdd1ff967660384afc8a97330d63db3abde495f96b0ef8447351bd929"
+    },
+    {
+      "path": "skills/ch015/common/context-loading.md",
+      "sha256": "5d327d99e1932cbeb62cb5ba0ce1f94d36df12e53d0335a76c500b1999d4d0f2"
+    },
+    {
+      "path": "skills/ch015/common/recon.md",
+      "sha256": "e96e9816d396f4fc122eaf0feea8d6d81986851d70f83bfbd8e7224e100149a8"
+    },
+    {
+      "path": "skills/ch015/common/taint-analysis.md",
+      "sha256": "b376b5796a2443842e17638cac33b18916be3169d1c44e7c324c0d155fdbeedb"
+    },
+    {
+      "path": "knowledge-base/conventions/finding-id-naming.md",
+      "sha256": "9a9b723db52e6528306924a5d708d4e54174fb81fb8b064432a7e5838e21b758"
+    },
+    {
+      "path": "knowledge-base/patterns/coverage-matrix.yaml",
+      "sha256": "1ff38bc4c2dfecc65d2cfc15bbc3b63e50ebbf57e2f0df7b607c6ee0ae313952"
+    },
+    {
+      "path": "knowledge-base/patterns/false_positive_patterns.yaml",
+      "sha256": "f33c631ff2ad66c3dbc14d439bed2ca1f973efa4f332461263d4f9f372d0b205"
+    },
+    {
+      "path": "skills/ch015/offsec/va/checklists/api.yaml",
+      "sha256": "997b9be05e3d6e20c2fef9133f8db26d26649d5893cd8219100da437cfcbed80"
+    },
+    {
+      "path": "skills/ch015/offsec/va/checklists/db-layer.yaml",
+      "sha256": "13b530990c9669719fae61928354b2476d6a123d10d4c76b3cc3ad53ff6d3da5"
+    },
+    {
+      "path": "skills/ch015/offsec/va/checklists/native-client.yaml",
+      "sha256": "7fbaa98f81e70e92df12a7c1a2eda05174d0b2013e88edc6b6d502eecd5aa3ba"
+    },
+    {
+      "path": "skills/ch015/offsec/va/checklists/web-app.yaml",
+      "sha256": "7862c361bf5fb3888b318378d1918c49c48aa974569bf26b2f77699dd6aff05f"
+    },
+    {
+      "path": "skills/ch015/offsec/va/compliance.md",
+      "sha256": "3b53944e681917f3c899df2192c3d2ac2e96ecaade1524aab3493101d411c9be"
+    },
+    {
+      "path": "skills/ch015/offsec/va/concurrency.md",
+      "sha256": "597ac0514c83ab663ca58b93a331a3881d6e3a5828a8ba41c64a2b780cc52711"
+    },
+    {
+      "path": "skills/ch015/offsec/va/deep-analysis.md",
+      "sha256": "ccb294b5c5eaf50f0fa44979c0c7da9d903ac1259ec2ffb17bbe43a2a9f2a88c"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/access-control.md",
+      "sha256": "b4831dd73f6b04f08da779f9df7d4192966ebb05a9c0ee6e199d73e2db3c0492"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/auth-bypass.md",
+      "sha256": "ab776d9e6b5c6fcf5df318ddb4378d851268d351de64ed8355a0e29d473ae110"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/concurrency.md",
+      "sha256": "dc029e80f0f926e788b19f1bdaac5bafd1497942d0e24b18d895b133a07c9ce2"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/crypto-misuse.md",
+      "sha256": "b85d7aeb0eba2ce2e277fe644a757324d0391ab2c9979dac532fc80aa2ddcd3d"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/data-flow.md",
+      "sha256": "0e1355cc75c329b86bfa3a632c339413ef4adeff7491bef6e5574e115d6cc310"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/injection.md",
+      "sha256": "451f03ffd87d79af4c47eebe8b20ee5e98a3889c394e890f3bfde0579238f41f"
+    },
+    {
+      "path": "skills/ch015/offsec/va/depth/ssrf.md",
+      "sha256": "d77c0c08344ce343ee720a17a461a6858af4461df5093e726afec45aab30942e"
+    },
+    {
+      "path": "skills/ch015/offsec/va/principles/baas-trust-boundary.md",
+      "sha256": "8d62d1378bd62594f6d61755923c30f1270fee050e32e26b64aed6596f08cf16"
+    },
+    {
+      "path": "skills/ch015/offsec/va/principles/oauth-provider-misconfig.md",
+      "sha256": "035e0c03d9d9797177bd4976f5cfc5f0e35414432c18761fbc72ae0629c49504"
+    },
+    {
+      "path": "skills/ch015/offsec/va/principles/row-level-security.md",
+      "sha256": "68d6232014846b26c5d70b9d85dcc467197874a918ae3e470c2897ca74d7dacc"
+    },
+    {
+      "path": "skills/ch015/offsec/va/principles/webhook-integrity.md",
+      "sha256": "f0bbec3a32aa15ab669258a1e61f06b188e07d087ef91343fbb31d100cee99c9"
+    },
+    {
+      "path": "skills/ch015/offsec/va/regulatory.md",
+      "sha256": "6fa80c44fe7e09bb614e2b51fd33a7b7c618bee1b234f18d8e3e5ecbfdf29899"
+    },
+    {
+      "path": "skills/ch015/offsec/va/supply-chain.md",
+      "sha256": "e581b5c4ebd0e75a9f7cd5db52f879d2ff3ba0ad2719b30543beef899a027610"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/registry.yaml",
+      "sha256": "8aa31d0fc25bd8e32fc7b8f1f559be34152215a2c1d03ccd8f536a8d9b8ed110"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/ai-agent.md",
+      "sha256": "6ed540af599af534c9b42dc54e85cc214d7f1ab3298f89db1fc3e197853aedfa"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/cloud-aws.md",
+      "sha256": "3fbb50fc2a1c50a0c7c1660c54fdee17dec34df6ec2545658f87739fe4cc68fc"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/cloud-k8s.md",
+      "sha256": "5843d9f1f1dc3033038ea8a36ac28db41c6f51f8ef67b1ade478d8bc3bb255c4"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/cloud.md",
+      "sha256": "98a08128fcdfff3bbe24cd9ea70f05b884672ebb7e86ff23bf3ff91872973fd0"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/commerce.md",
+      "sha256": "a5610f3235ac5e3e5188d62a38035fd4df244181f5106e2bcc31867fb4e27275"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/payment.md",
+      "sha256": "d0e283956b64d39e17780058c0662e077c3a5f1e70b029fe9357f6854fd4411d"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/sdk.md",
+      "sha256": "210921e9e2484b0adbb94e1ace5f2bfbb654300d6f9f656b218267c12f4d976c"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/tee-enclave.md",
+      "sha256": "66b440a79bfcb0c4b31b86b41861e1322121732066b697a739826e61b9d4a66b"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/web3-wallet.md",
+      "sha256": "065ce81e49f876b03957c5e77b48374f0dd1b0b3bb30be3703c2f0fd1bab1962"
+    },
+    {
+      "path": "knowledge-base/tier2-overlays/web3.md",
+      "sha256": "b8dfc6de8726772678c056aa7ddcf1c833e517ce6f6472a14bc20154d55ef434"
+    },
+    {
+      "path": "rules/semgrep/manifest.json",
+      "sha256": "08371c500661d89430021685309a1f2a39a305ceccd762d0361145e8695dea25"
+    },
+    {
+      "path": "rules/semgrep/code.yml",
+      "sha256": "6ea3acf6f61ac47c9d8aee86717a7e926353d1d369c9f0dcb7504ed35b331112"
+    },
+    {
+      "path": "rules/semgrep/iac.yml",
+      "sha256": "f385eb3f30e87cf072302f23505da2d1d3bcc2fd83b1a489b2b10762f6f411ae"
+    },
+    {
+      "path": "contracts/offsec-phase-result-schema.v2.json",
+      "sha256": "d6d27b9d4fde4cfe156699ea2f65c1ed5348384d283f0f0cdabe1a23cfe620b7"
+    },
+    {
+      "path": "contracts/offsec-finding-schema.v2.json",
+      "sha256": "87ec13f765f372c88985bc865671ba4137478dd06369a5dd4eead880493bb6b6"
+    }
+  ]
+}

@@ -1,0 +1,229 @@
+# Known Finding Patterns — CH015
+# Extracted from engagement golden datasets
+# Updated: 2026-04-23
+#
+# VA Phase 2 (Deep Analysis)에서 활성 도메인과 매칭되는 패턴이 있으면
+# 해당 패턴의 typical_check를 추가 질문으로 주입한다.
+# 패턴의 존재가 Finding을 자동 생성하지 않는다 — 방법론 기반 분석은 유지.
+#
+# Provenance: occurrences가 인용하는 dex_20260323, embedded_20260325 engagement는
+# 이 리포에 없는 외부 보존/아카이브된 engagement다 (knowledge-base/engagements/는
+# gitignored — 산출물은 별도 보존). 인용 자체는 유효한 골든 데이터셋 출처다.
+
+patterns:
+
+  - pattern_id: KF-001
+    name: "API 인증 전면 부재"
+    description: |
+      API 전체 또는 다수 엔드포인트에 인증 미들웨어가 적용되지 않아
+      비인증 사용자가 모든 API에 접근 가능한 상태.
+    typical_severity: CRITICAL
+    dimensions: [A1]
+    root_cause: ARCHITECTURE
+    typical_check: |
+      라우터/핸들러 등록부에서 인증 미들웨어 적용 범위를 확인한다.
+      전역 미들웨어 vs per-route 적용 여부, opt-out 목록 존재 여부를 검증한다.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-001
+        severity: CRITICAL
+        context: "dex-api 전체 API 무인증"
+      - engagement: embedded_20260325
+        finding: F-001
+        severity: CRITICAL
+        context: "test_mode에 의한 인증 전면 우회"
+
+  - pattern_id: KF-002
+    name: "Rate Limiting 전면 부재"
+    description: |
+      API 엔드포인트에 요청 속도 제한이 없어 brute-force,
+      credential stuffing, 리소스 소진 공격에 노출.
+    typical_severity: MEDIUM-HIGH
+    dimensions: [A8]
+    root_cause: CONFIGURATION
+    typical_check: |
+      미들웨어 체인에서 rate limiter 존재 여부를 확인한다.
+      인증 엔드포인트(login, register, password-reset)에 우선 확인.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-005
+        severity: MEDIUM
+        context: "dex-api Rate Limiting 미적용"
+      - engagement: dex_20260323
+        finding: F-115
+        severity: MEDIUM
+        context: "Aux services Rate Limiting 부재"
+      - engagement: embedded_20260325
+        finding: F-003
+        severity: HIGH
+        context: "Gateway Rate Limiting 전면 부재"
+      - engagement: embedded_20260325
+        finding: F-105
+        severity: HIGH
+        context: "Signer Rate Limiting 부재"
+
+  - pattern_id: KF-003
+    name: "에러 응답 내부 정보 노출"
+    description: |
+      에러 응답에 스택 트레이스, 파일 경로, DB 스키마, 내부 에러 메시지 등
+      공격자에게 유용한 정보가 포함되어 정찰 단계를 단축.
+    typical_severity: MEDIUM-HIGH
+    dimensions: [A7]
+    root_cause: CODE
+    typical_check: |
+      에러 핸들러/미들웨어에서 내부 에러를 클라이언트 응답으로 그대로 전달하는지 확인.
+      sentinel 에러 패턴, 에러 래핑, 에러 마스킹 로직의 존재와 완전성 검증.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-003
+        severity: HIGH
+        context: "에러 응답에 내부 메시지 노출"
+      - engagement: embedded_20260325
+        finding: F-004
+        severity: MEDIUM
+        context: "에러 메시지 내부 정보 노출 (sentinel 제거 후 잔여)"
+
+  - pattern_id: KF-004
+    name: "보안 헤더 미설정"
+    description: |
+      CSP, X-Frame-Options, HSTS, X-Content-Type-Options 등
+      표준 보안 헤더가 설정되지 않아 XSS, 클릭재킹 등 공격에 노출.
+    typical_severity: MEDIUM
+    dimensions: [A5]
+    root_cause: CONFIGURATION
+    typical_check: |
+      프레임워크의 보안 헤더 설정(helmet, secureHeaders 등)을 확인.
+      프론트엔드와 백엔드 양쪽에서 독립적으로 확인.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-011
+        severity: MEDIUM
+        context: "Backend 보안 헤더 미설정"
+      - engagement: dex_20260323
+        finding: F-012
+        severity: MEDIUM
+        context: "Next.js 프론트엔드 보안 헤더 미설정"
+      - engagement: embedded_20260325
+        finding: F-007
+        severity: MEDIUM
+        context: "보안 헤더 미설정"
+
+  - pattern_id: KF-005
+    name: "자격증명/시크릿 하드코딩"
+    description: |
+      API 키, DB 비밀번호, 서비스 토큰 등이 소스코드나 설정 파일에
+      하드코딩되어 시크릿 관리 체계 없이 운영.
+    typical_severity: HIGH
+    dimensions: [A5]
+    root_cause: CODE
+    typical_check: |
+      환경 변수 참조와 설정 파일에서 고정 시크릿 값을 검색.
+      Vault/SSM/KMS 등 시크릿 관리 서비스와의 연동 여부 확인.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-108
+        severity: HIGH
+        context: "자격증명 하드코딩"
+
+  - pattern_id: KF-006
+    name: "인증 기본값 비활성화 (opt-in 패턴)"
+    description: |
+      인증 기능이 설정 플래그로 제어되며 기본값이 비활성(false).
+      설정 누락만으로 인증이 전면 우회되는 아키텍처 결함.
+    typical_severity: CRITICAL
+    dimensions: [A1]
+    root_cause: ARCHITECTURE
+    typical_check: |
+      인증 미들웨어/설정에서 활성화 플래그의 기본값을 확인.
+      기본값이 false(opt-in)이면 설정 누락 시 무인증 동작 여부 검증.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-100
+        severity: CRITICAL
+        context: "HMAC 인증 기본값 false — opt-in 패턴"
+
+  - pattern_id: KF-007
+    name: "테스트/Mock 모드 프로덕션 혼입"
+    description: |
+      test_mode, mock 키 관리 등 개발/테스트용 코드 경로가 프로덕션
+      빌드에 포함되어 설정 하나로 보안 메커니즘 전면 우회 가능.
+    typical_severity: CRITICAL
+    dimensions: [A1, A5]
+    root_cause: ARCHITECTURE
+    typical_check: |
+      config 구조에서 test_mode, mock, dev 등의 플래그를 검색.
+      해당 플래그가 인증/암호화/키관리 등 보안 경로를 우회하는지 확인.
+      빌드 태그/환경 분리로 프로덕션에서 제거되는지 검증.
+    occurrences:
+      - engagement: embedded_20260325
+        finding: F-001
+        severity: CRITICAL
+        context: "test_mode에 의한 인증 전면 우회"
+      - engagement: embedded_20260325
+        finding: F-104
+        severity: CRITICAL
+        context: "MockKMS 프로덕션 사용 가능"
+
+  - pattern_id: KF-008
+    name: "Blockchain RPC 단일 장애점"
+    description: |
+      블록체인 데이터 수집 서비스가 단일 RPC 노드에 의존하여
+      노드 장애 또는 조작 시 데이터 무결성 위험.
+    typical_severity: HIGH
+    dimensions: [A6]
+    root_cause: ARCHITECTURE
+    domains: [Web3, DEX]
+    typical_check: |
+      RPC 클라이언트 설정에서 노드 URL 수와 failover/검증 로직 확인.
+      단일 노드 의존 시 데이터 교차 검증 메커니즘 존재 여부 확인.
+    occurrences:
+      - engagement: dex_20260323
+        finding: F-104
+        severity: HIGH
+        context: "4개 collector 단일 RPC 의존"
+
+  - pattern_id: KF-009
+    name: "결제 금액 서버 사이드 미검증"
+    description: |
+      결제 요청 시 클라이언트가 전송한 금액을 서버에서 재계산/검증하지 않아
+      가격 조작, 할인 남용, 환율 차이 익스플로잇이 가능한 상태.
+    typical_severity: HIGH-CRITICAL
+    dimensions: [A3, A4]
+    root_cause: CODE
+    domains: [Payment, Commerce]
+    typical_check: |
+      결제 API에서 최종 금액이 서버 DB/세션의 가격 기준으로 재계산되는지 확인.
+      할인/쿠폰/세금 적용 후 최종 금액의 서버 사이드 검증 로직 확인.
+      환율 적용 시 세션 락(lock) 일관성 확인.
+
+  - pattern_id: KF-010
+    name: "결제 상태 머신 비정상 전이"
+    description: |
+      결제/주문 상태 전이가 서버에서 원자적으로 관리되지 않아
+      비정상 전이(cancelled→succeeded, refunded→processing)가 가능하거나
+      결제-주문 간 트랜잭션 일관성이 보장되지 않는 상태.
+    typical_severity: HIGH
+    dimensions: [A3]
+    root_cause: ARCHITECTURE
+    domains: [Payment, Commerce]
+    typical_check: |
+      상태 전이 로직에서 허용된 전이 목록이 명시적으로 정의되는지 확인.
+      비정상 전이 요청이 서버에서 거부되는지 검증.
+      결제 완료↔주문 생성 간 트랜잭션 원자성 확인.
+
+  - pattern_id: KF-011
+    name: "저장 카드 토큰 스코프/노출 미검증"
+    description: |
+      PG 저장 카드 토큰 또는 saved_tokens metadata가 payer_uid, 고객사,
+      gateway/merchant 계정, country/currency 범위에 묶이지 않거나
+      API 응답/로그/클라이언트 상태로 과다 노출되어 타인 카드 metadata 조회,
+      저장 카드 오용, PCI DSS 스코프 확대가 가능한 상태.
+    typical_severity: HIGH-CRITICAL
+    dimensions: [A2, A3, A5]
+    root_cause: ARCHITECTURE
+    domains: [Payment]
+    typical_check: |
+      quotes/saved_tokens 응답이 인증 사용자와 payer_uid/project를 서버에서 바인딩하는지 확인.
+      token 원문, cryptogram, CVV, 전체 PAN이 API 응답/로그/프론트 상태에 노출되지 않는지 검증.
+      마지막 결제수단 우선 정렬과 fallback 처리에서 country/currency/gateway 필터를 우회하지 않는지 확인.
+      Worldpay 등 PG hosted page 경계 밖에서 저장 카드 선택/결제 실행 API가 활성화되어 있는지 검토.

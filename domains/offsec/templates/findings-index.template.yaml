@@ -1,0 +1,104 @@
+# CH015 Findings Index Template
+#
+# 전문 보고서의 경량 동반 파일. 하류 에이전트가 전문 Read 대신 인덱스를 먼저 참조하여
+# 필요한 Finding만 선택적으로 Read(offset/limit)할 수 있게 한다.
+#
+# 생성 시점: VA Phase 5 보고서 완료 직후 (Phase 5.1)
+# 생성 주체: VA Auditor
+# 소비자: Verifier (R1 증거 감사), Pentester (Route_F 대상 추출), OffSec Lead (Convergence)
+# 예상 크기: Finding 20건 기준 ~2-3K 토큰
+
+engagement_id: "{{engagement_id}}"
+phase: "va"
+round: "{{round}}"
+source_report: "{{report_filename}}"
+raw_ledger: "{{raw_ledger_filename}}"
+pentest_plan: "{{pentest_plan_filename}}"
+generated_at: "{{timestamp}}"
+
+summary:
+  security_score: "{{score}}/100 ({{grade}})"
+  finding_count:
+    CRITICAL: "{{critical_count}}"
+    HIGH: "{{high_count}}"
+    MEDIUM: "{{medium_count}}"
+    LOW: "{{low_count}}"
+    STRUCTURAL_WEAKNESS: "{{sw_count}}"
+  unverified_ratio: "{{unverified_pct}}%"
+  dimensions_covered:{{^dimensions_covered}} []{{/dimensions_covered}}
+{{#dimensions_covered}}
+    - "{{.}}"
+{{/dimensions_covered}}
+
+candidate_summary:
+  total: "{{candidate_total}}"
+  confirmed: "{{confirmed_count}}"
+  downgraded: "{{downgraded_count}}"
+  backlog: "{{backlog_count}}"
+  excluded: "{{excluded_count}}"
+  pending_pentest: "{{pending_pentest_count}}"
+  pending_external: "{{pending_external_count}}"
+  folded_into: "{{folded_count}}"
+  false_positive: "{{false_positive_count}}"
+  out_of_scope: "{{out_of_scope_count}}"
+  disputed: "{{disputed_count}}"
+  unclassified: "{{unclassified_count}}"
+  publish_allowed: "{{publish_allowed}}"
+
+findings:{{^findings}} []{{/findings}}
+{{#findings}}
+  - id: "{{id}}"
+    title: "{{title}}"
+    severity: "{{severity}}"
+    dimension: "{{dimension}}"
+    location: "{{location}}"
+    root_cause: "{{root_cause}}"
+    affected_instance_count: "{{affected_instance_count}}"
+    evidence_class: "{{evidence_class}}"
+    cwe: "{{cwe}}"
+    cvss: "{{cvss}}"
+    classification: "{{classification}}"
+    prerequisite_category: "{{prerequisite_category}}"
+    report_line_start: {{report_line_start}}
+    report_line_end: {{report_line_end}}
+{{/findings}}
+
+candidate_refs:{{^candidate_refs}} []{{/candidate_refs}}
+{{#candidate_refs}}
+  - candidate_id: "{{candidate_id}}"
+    title: "{{title}}"
+    status: "{{status}}"
+    severity_current: "{{severity_current}}"
+    final_id: "{{final_id}}"
+    folded_into: "{{folded_into}}"
+    report_line_start: {{report_line_start}}
+    report_line_end: {{report_line_end}}
+{{/candidate_refs}}
+
+pending_verification:
+  PENTEST:{{^pending_pentest}} []{{/pending_pentest}}
+{{#pending_pentest}}
+    - finding_id: "{{finding_id}}"
+      control: "{{control}}"
+      claim: "{{claim}}"
+      unverifiable_reason: "{{unverifiable_reason}}"
+      report_line_start: {{report_line_start}}
+      report_line_end: {{report_line_end}}
+{{/pending_pentest}}
+  REDTEAM:{{^pending_redteam}} []{{/pending_redteam}}
+{{#pending_redteam}}
+    - finding_id: "{{finding_id}}"
+      control: "{{control}}"
+      claim: "{{claim}}"
+      unverifiable_reason: "{{unverifiable_reason}}"
+      report_line_start: {{report_line_start}}
+      report_line_end: {{report_line_end}}
+{{/pending_redteam}}
+  EXTERNAL:{{^pending_external}} []{{/pending_external}}
+{{#pending_external}}
+    - finding_id: "{{finding_id}}"
+      control: "{{control}}"
+      required_access: "{{required_access}}"
+      report_line_start: {{report_line_start}}
+      report_line_end: {{report_line_end}}
+{{/pending_external}}

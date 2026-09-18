@@ -1,0 +1,248 @@
+# Privacy Regulations — 주요 프라이버시 규제
+# GDPR, UAE DPL, 한국 개인정보보호법, FATF AML, OFAC 제재
+# 기술 보안 관점의 구현 요건 정리 (법률 자문 아님)
+
+standard:
+  id: "privacy"
+  name: "Privacy & Regulatory Requirements"
+  version: "2024"
+  disclaimer: "본 내용은 기술 보안 관점의 참고 정보이며, 법률 자문을 대체하지 않습니다."
+
+requirements:
+
+  # ─── GDPR ───
+  - id: "GDPR Art.5"
+    title: "개인정보 처리 원칙"
+    jurisdiction: [eu, global]
+    components: [DataLayer, APIServer, Auth]
+    implementation:
+      - "목적 제한: 수집 목적 명시, 목적 외 처리 금지"
+      - "최소 수집: 서비스에 필요한 최소 데이터만 수집"
+      - "보존 기한: 목적 달성 후 즉시 삭제 (보존 기한 정책 수립)"
+      - "정확성: 사용자 데이터 수정 기능 제공"
+      - "무결성/기밀성: 적절한 기술적 보호조치 (암호화, 접근제어)"
+    test_criteria:
+      happy: "수집 동의 시 명시된 데이터만 저장"
+      failure: "동의 범위 외 데이터 수집 → 차단"
+      boundary: "보존 기한 만료 → 자동 삭제/익명화"
+
+  - id: "GDPR Art.17"
+    title: "삭제권 (Right to Erasure)"
+    jurisdiction: [eu, global]
+    components: [DataLayer, APIServer]
+    implementation:
+      - "삭제 API: 사용자 요청 시 30일 이내 개인정보 삭제"
+      - "범위: 주 DB + 백업 + 로그 + 캐시 + 서드파티 전달분"
+      - "법적 보존 의무 데이터: 삭제 예외 사유 고지"
+      - "삭제 증명: 삭제 완료 확인 + 기록"
+      - "Cryptographic Erasure: 대량 데이터 시 키 파기로 일괄 삭제"
+    test_criteria:
+      happy: "삭제 요청 → 30일 내 모든 저장소에서 삭제 완료"
+      failure: "삭제 후 해당 사용자 데이터 API 조회 → 404"
+      boundary: "법적 보존 의무 데이터 → 삭제 거부 + 사유 고지"
+
+  - id: "GDPR Art.25"
+    title: "Privacy by Design / by Default"
+    jurisdiction: [eu, global]
+    components: [all]
+    implementation:
+      - "기본 설정: 최소 데이터 공개 (opt-in, not opt-out)"
+      - "익명화/가명화: 분석 목적 데이터는 가명화 처리"
+      - "데이터 최소화: 불필요 필드 수집 금지"
+      - "접근 제어: PII 접근에 RBAC + 감사 로그"
+    test_criteria:
+      happy: "신규 가입 시 최소 필수 필드만 요구"
+      failure: "선택 동의 없이 마케팅 데이터 수집 → 차단"
+      boundary: "분석용 데이터 → 가명화 확인 (직접 식별 불가)"
+
+  - id: "GDPR Art.32"
+    title: "처리의 보안 (기술적 보호조치)"
+    jurisdiction: [eu, global]
+    components: [DataLayer, Infra]
+    implementation:
+      - "가명화 및 암호화: 개인정보 저장 시 AES-256 이상 암호화"
+      - "기밀성/무결성/가용성: 처리 시스템 보장"
+      - "복원력: 장애 시 적시에 접근/가용성 복원"
+      - "정기 테스트: 기술적 보호조치의 효과성 정기 평가"
+    test_criteria:
+      happy: "개인정보 DB 필드 → 암호화 저장 확인"
+      failure: "암호화 없이 PII 저장 → 위반"
+      boundary: "시스템 장애 후 복원 시간 ≤ RTO"
+
+  - id: "GDPR Art.33-34"
+    title: "침해 통지"
+    jurisdiction: [eu, global]
+    components: [Infra, APIServer]
+    implementation:
+      - "감독기관 통지: 인지 후 72시간 이내"
+      - "정보주체 통지: 고위험 시 지체 없이"
+      - "침해 기록: 모든 침해 사항 문서화 (발생 여부 무관)"
+      - "대응 계획: 사전 수립된 침해 대응 절차"
+    test_criteria:
+      happy: "침해 감지 → 72시간 내 통지 프로세스 시작"
+      failure: "침해 발생 후 통지 없이 7일 경과 → 위반"
+      boundary: "침해 범위 불확실 → 일단 통지 후 추가 조사"
+
+  # ─── UAE Federal Decree-Law 45/2021 (DPL) ───
+  - id: "UAE DPL Art.4"
+    title: "개인정보 처리 법적 근거"
+    jurisdiction: [uae]
+    components: [DataLayer, APIServer, Auth]
+    implementation:
+      - "동의: 명시적, 자유로운, 구체적, 정보에 입각한 동의"
+      - "동의 철회: 동의만큼 쉽게 철회 가능"
+      - "미성년자: 보호자 동의 필수"
+      - "동의 기록: 동의 시점, 범위, 방법 기록"
+    test_criteria:
+      happy: "명시적 동의 → 데이터 처리 허용"
+      failure: "동의 없이 처리 → 차단"
+      boundary: "동의 철회 → 이후 처리 즉시 중단"
+
+  - id: "UAE DPL Art.5"
+    title: "데이터 최소화 및 목적 제한"
+    jurisdiction: [uae]
+    components: [DataLayer, APIServer]
+    implementation:
+      - "목적 명시: 수집 시 처리 목적 명확히 고지"
+      - "최소 수집: 목적에 필요한 최소 데이터"
+      - "목적 외 처리: 정보주체 추가 동의 필요"
+      - "보존 기한: 목적 달성 후 삭제 (보존 일정 명시)"
+    test_criteria:
+      happy: "명시된 목적 범위 내 데이터 처리"
+      failure: "수집 목적에 명시되지 않은 제3자 공유 → 차단"
+      boundary: "보존 기한 만료 → 자동 삭제 트리거"
+
+  - id: "UAE DPL Art.6-7"
+    title: "정보주체 권리 보장"
+    jurisdiction: [uae]
+    components: [APIServer, DataLayer]
+    implementation:
+      - "접근권: 자신의 개인정보 열람 요청 기능"
+      - "정정권: 부정확한 정보 수정 요청 기능"
+      - "삭제권: 처리 근거 소멸 시 삭제 요청 기능"
+      - "이동권: 구조화된 기계 판독 형식으로 데이터 내보내기"
+      - "응답 기한: 요청 접수 후 30일 이내"
+    test_criteria:
+      happy: "데이터 내보내기 요청 → JSON/CSV 다운로드 제공"
+      failure: "삭제 요청 무시 → 법률 위반"
+      boundary: "법적 보존 의무 → 삭제 거부 + 사유 고지"
+
+  # ─── UAE Federal Decree-Law 46/2021 (AML/CFT) ───
+  - id: "UAE AML/CFT Art.16"
+    title: "고객 확인 의무 (CDD)"
+    jurisdiction: [uae]
+    components: [Auth, FDSEngine]
+    implementation:
+      - "KYC: 신원 확인 (정부 발급 ID, 주소 증명)"
+      - "EDD: 고위험 고객에 대한 강화된 확인 (PEP, 고위험 국가)"
+      - "지속적 모니터링: 거래 패턴 이상 탐지"
+      - "기록 보존: KYC 문서 + 거래 기록 최소 5년"
+    test_criteria:
+      happy: "KYC 완료 고객 → 서비스 이용 허용"
+      failure: "KYC 미완료 → 거래 기능 차단"
+      boundary: "EDD 대상 고객 → 추가 서류 요청 후 처리"
+
+  # ─── FATF Recommendations ───
+  - id: "FATF R.11"
+    title: "기록 보존"
+    jurisdiction: [global]
+    components: [DataLayer, FDSEngine]
+    implementation:
+      - "거래 기록: 최소 5년 보존"
+      - "고객 확인 기록: 관계 종료 후 최소 5년"
+      - "기록 형태: 법집행 기관 요청에 신속히 제공 가능"
+    test_criteria:
+      happy: "5년 이내 거래 기록 → 조회 가능"
+      failure: "3년 경과 기록 삭제 → 규제 위반"
+      boundary: "기록 보존 vs 삭제권 충돌 → 법적 보존 의무 우선"
+
+  - id: "FATF R.15/R.16"
+    title: "VASP(가상자산서비스제공자) 의무 — Travel Rule"
+    jurisdiction: [global]
+    components: [CryptoGateway, WalletManager]
+    implementation:
+      - "Travel Rule: $1,000/€1,000 이상 가상자산 이전 시 송수신자 정보 전달"
+      - "송신 정보: 이름, 계정번호(지갑주소), 주소/국가/고객번호"
+      - "수신 정보: 이름, 계정번호(지갑주소)"
+      - "정보 보존: 최소 5년"
+      - "위험 기반 접근: 거래 규모/빈도에 따라 차등 확인"
+    test_criteria:
+      happy: "$1,000 이상 전송 → Travel Rule 정보 첨부"
+      failure: "Travel Rule 정보 누락 → 전송 보류"
+      boundary: "$999 전송 → Travel Rule 미적용 (임계값 미만)"
+
+  - id: "FATF R.20"
+    title: "의심 거래 보고 (STR)"
+    jurisdiction: [global]
+    components: [FDSEngine]
+    implementation:
+      - "자동 탐지: 규칙 기반 + ML 기반 이상거래 탐지"
+      - "보고: FIU(Financial Intelligence Unit)에 의심거래 보고"
+      - "Tipping-off 금지: 고객에게 STR 보고 사실 알림 금지"
+      - "기록: 모든 STR 및 탐지 이력 보존"
+    test_criteria:
+      happy: "이상 패턴 감지 → 자동 STR 생성"
+      failure: "탐지 임계값 미설정 → 감사 지적"
+      boundary: "정상 거래 오탐 → STR 생성 후 분석팀 검토"
+
+  # ─── OFAC SDN ───
+  - id: "OFAC SDN (31 CFR Part 501)"
+    title: "제재 대상 차단"
+    jurisdiction: [global]
+    components: [Auth, FDSEngine, CryptoGateway]
+    implementation:
+      - "SDN 리스트 스크리닝: 신규 고객 + 모든 거래 상대방"
+      - "리스트 업데이트: SDN 리스트 변경 시 24시간 내 반영"
+      - "매칭: 퍼지 매칭 (유사 이름, 음역, 별칭)"
+      - "차단: 매칭 시 거래 즉시 동결 + 컴플라이언스 팀 보고"
+      - "블록체인: 주소 기반 스크리닝 (OFAC 지정 지갑 주소)"
+    test_criteria:
+      happy: "SDN 미해당 고객 → 정상 거래"
+      failure: "SDN 매칭 → 거래 동결 + 알림"
+      boundary: "퍼지 매칭 후보 → 수동 검토 큐 전달"
+
+  # ─── Dubai VARA (Law No. 4/2022) ───
+  - id: "Dubai Law No. 4/2022 Art.6"
+    title: "VASP 라이선스 및 운영 요건"
+    jurisdiction: [uae]
+    components: [CryptoGateway, WalletManager, Admin]
+    implementation:
+      - "⚠️ MoR(자기 상품 판매자) 포지셔닝 시 VASP 비해당 가능 — 법무 확인 필수"
+      - "VASP 해당 시: VARA 라이선스 취득 필수"
+      - "자산 분리: 고객 자산과 운영 자산 분리 보관"
+      - "거버넌스: 정보보안 책임자 지정, 보안 정책 수립"
+      - "침해 통지: 보안 사고 시 VARA에 즉시 보고"
+    test_criteria:
+      happy: "라이선스 보유 → 정상 운영"
+      failure: "라이선스 없이 VASP 서비스 제공 → 법률 위반"
+      boundary: "MoR 구조 변경 시 → VASP 재분류 위험 검토"
+
+  # ─── 한국 개인정보보호법 ───
+  - id: "개인정보보호법 제15조"
+    title: "개인정보 수집·이용"
+    jurisdiction: [kr]
+    components: [DataLayer, APIServer, Auth]
+    implementation:
+      - "동의: 수집 목적, 항목, 보유 기간 고지 후 동의"
+      - "필수/선택 분리: 필수 항목과 선택 항목 구분 동의"
+      - "미성년자: 법정대리인 동의 (만 14세 미만)"
+      - "고유 식별 정보: 주민번호 등 별도 동의 + 암호화"
+    test_criteria:
+      happy: "동의 후 명시된 항목만 수집"
+      failure: "동의 없이 수집 → 차단"
+      boundary: "선택 항목 미동의 → 서비스 이용 가능 (불이익 금지)"
+
+  - id: "개인정보보호법 제29조"
+    title: "안전조치 의무"
+    jurisdiction: [kr]
+    components: [DataLayer, Infra]
+    implementation:
+      - "접근 권한 관리: 개인정보 처리자 최소 권한"
+      - "접근 통제: 외부 접근 차단 (방화벽, IDS/IPS)"
+      - "암호화: 비밀번호 일방향 암호화, 고유식별정보·카드정보 양방향 암호화"
+      - "접속 기록: 개인정보 처리 시스템 접속 기록 최소 1년 보관"
+      - "물리적 안전조치: 개인정보 보관 장소 시건장치"
+    test_criteria:
+      happy: "개인정보 처리 → 접속 기록 자동 생성"
+      failure: "비밀번호 평문 저장 → 위반"
+      boundary: "접속 기록 1년 미만 삭제 → 위반"
