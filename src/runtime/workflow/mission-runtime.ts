@@ -1,4 +1,3 @@
-import type { Pool } from 'pg';
 import { relative, resolve, sep } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 
@@ -22,7 +21,7 @@ import {
 } from './state-store.js';
 import type { TelemetrySink } from './telemetry.js';
 
-type DatabasePool = Pool & SqlPool;
+type DatabasePool = SqlPool & { end(): Promise<void> };
 
 export type MissionRuntimeOptions = {
   backend?: 'file' | 'postgres';

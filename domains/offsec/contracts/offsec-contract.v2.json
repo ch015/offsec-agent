@@ -127,16 +127,7 @@
         "plan"
       ],
       "requiredMethodFiles": [
-        "methods/analyze.md",
-        "skills/ch015/offsec/va/SKILL.md",
-        "knowledge-base/tier1-dimensions/a1-auth.md",
-        "knowledge-base/tier1-dimensions/a2-authz.md",
-        "knowledge-base/tier1-dimensions/a3-dataflow.md",
-        "knowledge-base/tier1-dimensions/a4-io.md",
-        "knowledge-base/tier1-dimensions/a5-secret.md",
-        "knowledge-base/tier1-dimensions/a6-deps.md",
-        "knowledge-base/tier1-dimensions/a7-error.md",
-        "knowledge-base/tier1-dimensions/a8-resource.md"
+        "methods/analyze.md"
       ],
       "requiredArtifacts": [
         "02_analysis_result.md",
@@ -538,43 +529,7 @@
     },
     {
       "path": "methods/analyze.md",
-      "sha256": "87433376e0c4e046e54b7a23e9d7297e7bbf4e5afeef573fadeeb0685fc43962"
-    },
-    {
-      "path": "skills/ch015/offsec/va/SKILL.md",
-      "sha256": "fca87180426d02d223ecc873304a10ef9d7066f4b27878f03c32133bec99ce09"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a1-auth.md",
-      "sha256": "a50a7a36eeecdba9a0a4e39e7faa6366ac05c2e47d984996d0c540a6115a1666"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a2-authz.md",
-      "sha256": "67c43f07d0402358095439dfcc42c2bf4a45e9cb15d9d60100b396d7815d7f14"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a3-dataflow.md",
-      "sha256": "4969ef483c9f218a2c885905ef71a1509b43839d5ef3e03b9a3035dc0641f603"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a4-io.md",
-      "sha256": "d0cc624271cec8cdaa3c13ffabcd369f6393835a08d83c8bf4f6b2fd1645a316"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a5-secret.md",
-      "sha256": "8554356df5bcda16c260755e78052ec3eedf137ecc12099d3b9bf3c6843ff62f"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a6-deps.md",
-      "sha256": "20cd5ab456dd0a47d8e0bf0f8c734d49eaceae594dc49c1ddd9de1addcbb03d2"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a7-error.md",
-      "sha256": "cc0ed1cc19f5f49fd8943d58c82ffb33d04dc262b116f05b24514b9cf1f63fae"
-    },
-    {
-      "path": "knowledge-base/tier1-dimensions/a8-resource.md",
-      "sha256": "33b9aea2e8926a48efcd9458b1800592a46f50c0ca4cac493ce2fab8ff7df1a1"
+      "sha256": "a292b60264d2c56737ca3b9f2c19782abd50a1af5c95c700026916d044a468ad"
     },
     {
       "path": "methods/review.md",
@@ -586,11 +541,11 @@
     },
     {
       "path": "methods/evaluate.md",
-      "sha256": "4e54671fb83f2333b10b0de4101a22b2858f71aee623857a92e13f243f76a446"
+      "sha256": "7c07eb4d129b6b18cd60b2750375fe10bdb3d938988c17f5f217047067d5b730"
     },
     {
       "path": "methods/report.v2.md",
-      "sha256": "6781e278dfaa2db8737c2625e90fe603c09870c4963ce475e0db7ddce3e7a2ef"
+      "sha256": "5f1351cc09999739192763afe76ff7c151a8366f76545a2f642e2dda28a21e56"
     },
     {
       "path": "skills/ch015/common/compensating-control.md",
@@ -619,6 +574,10 @@
     {
       "path": "knowledge-base/patterns/false_positive_patterns.yaml",
       "sha256": "f33c631ff2ad66c3dbc14d439bed2ca1f973efa4f332461263d4f9f372d0b205"
+    },
+    {
+      "path": "skills/ch015/offsec/va/SKILL.md",
+      "sha256": "fca87180426d02d223ecc873304a10ef9d7066f4b27878f03c32133bec99ce09"
     },
     {
       "path": "skills/ch015/offsec/va/checklists/api.yaml",
@@ -699,6 +658,38 @@
     {
       "path": "skills/ch015/offsec/va/supply-chain.md",
       "sha256": "e581b5c4ebd0e75a9f7cd5db52f879d2ff3ba0ad2719b30543beef899a027610"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a1-auth.md",
+      "sha256": "a50a7a36eeecdba9a0a4e39e7faa6366ac05c2e47d984996d0c540a6115a1666"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a2-authz.md",
+      "sha256": "67c43f07d0402358095439dfcc42c2bf4a45e9cb15d9d60100b396d7815d7f14"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a3-dataflow.md",
+      "sha256": "4969ef483c9f218a2c885905ef71a1509b43839d5ef3e03b9a3035dc0641f603"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a4-io.md",
+      "sha256": "d0cc624271cec8cdaa3c13ffabcd369f6393835a08d83c8bf4f6b2fd1645a316"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a5-secret.md",
+      "sha256": "8554356df5bcda16c260755e78052ec3eedf137ecc12099d3b9bf3c6843ff62f"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a6-deps.md",
+      "sha256": "20cd5ab456dd0a47d8e0bf0f8c734d49eaceae594dc49c1ddd9de1addcbb03d2"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a7-error.md",
+      "sha256": "cc0ed1cc19f5f49fd8943d58c82ffb33d04dc262b116f05b24514b9cf1f63fae"
+    },
+    {
+      "path": "knowledge-base/tier1-dimensions/a8-resource.md",
+      "sha256": "33b9aea2e8926a48efcd9458b1800592a46f50c0ca4cac493ce2fab8ff7df1a1"
     },
     {
       "path": "knowledge-base/tier2-overlays/registry.yaml",

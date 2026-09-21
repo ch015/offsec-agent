@@ -11,9 +11,6 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.229
         version: 0.3.229(@anthropic-ai/sdk@0.123.0(zod@4.5.4))(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4)
-      '@tree-sitter-grammars/tree-sitter-kotlin':
-        specifier: ^1.1.0
-        version: 1.1.0(tree-sitter@0.22.4)
       js-yaml:
         specifier: ^4.3.1
         version: 4.3.2
@@ -26,6 +23,28 @@ importers:
       tree-sitter:
         specifier: ^0.22.4
         version: 0.22.4
+      tree-sitter-javascript:
+        specifier: ^0.23.1
+        version: 0.23.1(tree-sitter@0.22.4)
+      tree-sitter-typescript:
+        specifier: ^0.23.2
+        version: 0.23.2(tree-sitter@0.22.4)
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@tree-sitter-grammars/tree-sitter-kotlin':
+        specifier: ^1.1.0
+        version: 1.1.0(tree-sitter@0.22.4)
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^22.19.18
+        version: 22.20.1
+      '@types/pg':
+        specifier: ^8.20.4
+        version: 8.23.1
       tree-sitter-c:
         specifier: ^0.23.6
         version: 0.23.6(tree-sitter@0.22.4)
@@ -47,9 +66,6 @@ importers:
       tree-sitter-java:
         specifier: ^0.23.5
         version: 0.23.5(tree-sitter@0.22.4)
-      tree-sitter-javascript:
-        specifier: ^0.23.1
-        version: 0.23.1(tree-sitter@0.22.4)
       tree-sitter-objc:
         specifier: ^3.0.2
         version: 3.0.2(tree-sitter@0.22.4)
@@ -71,25 +87,9 @@ importers:
       tree-sitter-swift:
         specifier: ^0.7.1
         version: 0.7.1(tree-sitter@0.22.4)
-      tree-sitter-typescript:
-        specifier: ^0.23.2
-        version: 0.23.2(tree-sitter@0.22.4)
       tsx:
         specifier: ^4.22.4
         version: 4.23.13
-      zod:
-        specifier: ^4.1.12
-        version: 4.5.4
-    devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/node':
-        specifier: ^22.19.18
-        version: 22.20.1
-      '@types/pg':
-        specifier: ^8.20.4
-        version: 8.23.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

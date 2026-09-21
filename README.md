@@ -1,6 +1,6 @@
 # secops-offsec-agent
 
-문서 기준: 2026-09-18. [현재 개발 현황](../docs/development-status.ko.md) · [문서 목록](docs/README.md)
+문서 기준: 2026-09-21. [현재 개발 현황](../docs/development-status.ko.md) · [문서 목록](docs/README.md)
 
 기존 앱에서 직접 호출하는 공개 API: [`createOffsecAgent`](src/index.ts). `pnpm build:library` 후 모듈 import로 사용할 수 있습니다. [코드 연동 가이드](docs/embedding.md) · [앱 예제](../examples/embedded-app/agents.mjs)
 
@@ -36,7 +36,7 @@ src/runtime/
   workflow/           host 상태 기계·work-plan·의존성 그래프·scope assurance·상태 저장소
   live-*.ts           라이브 DAST 브로커·세션·증거 계약 (PENTEST 경로)
   missions/assess.ts        취약점 진단 진입점 (v1 — pentest/redteam/feedback loop)
-  missions/assess-v2.ts     취약점 진단 진입점 (v2 — 선형 6-phase 파이프라인)
+  missions/assess-v2.ts     취약점 진단 진입점 (v2 — 6-phase + 조건부 교차 단위 후속 분석)
   missions/assess-resume.ts PostgreSQL 백엔드 run 재개 진입점 (v1)
   providers/          Anthropic Agent SDK provider 런타임
 
@@ -56,7 +56,7 @@ docs/                OffSec 관련 결정과 관측 기록
 
 ### 전제 조건
 
-- Node.js ≥ 22.18.0, pnpm (최근 검증 환경: Node 22.18.0 / pnpm 9.15.0)
+- Node.js ≥ 22.18.0, pnpm (최근 검증 환경: Node 22.18.0 / pnpm 10.14.0)
 - `pnpm install` 완료
 - Claude Agent SDK 인증·설정 사용 가능 (`ANTHROPIC_API_KEY` 또는 OAuth profile)
 
@@ -65,12 +65,17 @@ docs/                OffSec 관련 결정과 관측 기록
 > 다시 설치해야 한다. `pnpm approve-builds`는 해당 명령을 제공하는 pnpm 버전에서만 사용한다.
 > (typecheck·대부분의 테스트는 네이티브 빌드 없이 통과한다.)
 
+소비 앱의 기본 설치에는 JavaScript/TypeScript AST parser를 포함한다. 다른 언어 parser는
+선택형 peer dependency이며 대상 언어에 맞게 추가한다. 저장소 개발용 `pnpm install`에는
+전체 parser 개발 의존성이 포함된다. SDK·PostgreSQL·Playwright는 import 시 로드하지 않고
+해당 실행 경로에서 로드한다. [설치·탐지 개선 상세](docs/detection-improvements.md)
+
 모든 플래그는 `--key=value` 형식만 지원한다 (`--key value` 불가).
 
 ### 취약점 진단 (assess — v1)
 
 > **v1**은 pentest/redteam/feedback loop·verifier·objection 시스템을 포함한 진단 경로다.
-> 선형 파이프라인 v2는 아래 [취약점 진단 (assess — v2)](#취약점-진단-assess--v2) 참조.
+> v2는 아래 [취약점 진단 (assess — v2)](#취약점-진단-assess--v2) 참조.
 
 ```bash
 # 기본 실행 — model=opus, review-model=sonnet, max-turns=120, verification=VA_ONLY
@@ -146,14 +151,15 @@ pnpm assess:resume -- --engagement-dir=<path> --request-id=<id> \
 
 ### 취약점 진단 (assess — v2)
 
-v2는 v1의 pentest/redteam/feedback loop·verifier·objection 시스템을 제거한 **선형
-6-phase 파이프라인**이다. 계약 정본은 `domains/offsec/contracts/offsec-contract.v2.json`
+v2는 v1의 pentest/redteam/feedback loop·verifier·objection 시스템을 제거한
+**6-phase 파이프라인**이다. 분석 단위 사이에 근거 있는 미해결 질문이 있으면 review 전에
+analyze를 root에서 한 라운드 추가한다. 계약 정본은 `domains/offsec/contracts/offsec-contract.v2.json`
 (`version: 2.0.0`, `leadRole: reporter`)이다.
 
 #### v2 워크플로
 
 ```
-recon → plan → analyze → review → evaluate → report
+recon → plan → analyze → [조건부 교차 단위 analyze 1회] → review → evaluate → report
 ```
 
 | phase | 실행 주체 | 산출물 (요약) |
@@ -167,7 +173,13 @@ recon → plan → analyze → review → evaluate → report
 
 `recon`·`plan`은 host가 결정론적으로 실행하고, `analyze`는 work-unit 단위로 병렬 실행되며,
 `review`·`evaluate`·`report`는 root host가 계약 검증 아래 순차 실행한다. v1과 달리
-verifier objection·feedback iteration이 없다. v2는 항상 작업 단위를 사용하며 `--work-units=off`는 거부한다. 병렬 분석은 전체 예산을 나눠 예약하고, 일부 단위 실패는 미검토 파일 공개 및 종료 코드 2로 표시한다.
+verifier objection·feedback iteration이 없다. v2는 항상 작업 단위를 사용하며 `--work-units=off`는 거부한다.
+기본 동시성은 2다. 설정한 예산의 30%는 분석 이후 단계에 남기며, review 이후 10%, evaluate 이후 5%를 남긴다.
+일부 단위 실패는 미검토 파일 공개 및 종료 코드 2로 표시한다.
+
+analyzer는 짧은 A1–A8 방법 카드와 담당 파일의 증거 색인을 먼저 읽고 필요한 상세 방법론·AST/Semgrep
+후보·실제 소스를 조회한다. 후속 분석 질문은 실제 소스 인용과 서로 다른 단위의 파일을 포함해야 한다.
+기본 최대 3개 질문을 한 세션(최대 32턴)에 모으며, 유효한 질문이 없으면 추가 세션을 실행하지 않는다.
 
 #### v2 역할 (roles)
 
@@ -198,6 +210,7 @@ v2 assess 플래그는 v1과 동일하되 pentest 전용 플래그(`--verificati
 `--test-url`, `--live-test-profile`, `--auth-interaction`)는 지원하지 않는다:
 `--model`, `--review-model`, `--effort`, `--max-turns`, `--max-usd`, `--semgrep`,
 `--work-units`, `--max-concurrency`, `--engagement-dir`.
+v2 전용 `--max-followup-hypotheses=<0..8>`은 교차 단위 후속 질문 수를 제한한다(기본 3, 0이면 비활성화).
 
 #### v2 출력 구조
 
@@ -213,8 +226,12 @@ v2는 대상 리포 하위의 `.nunchi` 디렉토리에 engagement를 기록한�
     01_analysis_plan.json
     00_work_plan.json
     work-units/<unitKey>/attempt-N/  # analyze phase per-unit 산출물
+      00_evidence_index.json         # 작은 후보 색인과 분석 공백 수
+      00_evidence_details.json       # 해당 파일 관련 후보·sanitizer·parse 실패 상세
     00_work_unit_results.json        # host가 집계한 unit 결과
     00_scope_assurance.json
+    00_followup_plan.json            # 선택된 질문·보류/무효 요청 수
+    00_analysis_coverage.json        # 실행·읽기 지표와 분석의 한계
     standard-findings/               # 승격된 finding 원장
     02_analysis_result.md
     03_review_result.json
@@ -225,6 +242,10 @@ v2는 대상 리포 하위의 `.nunchi` 디렉토리에 engagement를 기록한�
 
 `--engagement-dir`로 절대경로를 지정하면 `.nunchi/reports/<id>` 대신 해당 경로에 기록한다.
 비어 있지 않은 기존 engagement 디렉토리는 거부된다.
+
+`coverage.complete`는 작업 단위 실행 완료를 의미한다. 읽기 수가 높거나 보고서가 발행돼도
+취약점 누락이 없음을 증명하지 않으며 `semanticCoverage`는 `not-proven`이다.
+v2 중단 재개·증분 분석 캐시는 아직 제공하지 않는다.
 
 ### 평가 (고정 산출물 evaluator — agent 실행·live 품질이 아님)
 
@@ -239,9 +260,9 @@ pnpm eval:offsec:prepare-pilot  # 파일럿 준비
 > `evals/offsec/adapters/current.ts`, v2 산출물은 `evals/offsec/adapters/current-v2.ts`가
 > 각 계약의 phase 순위로 finding lineage를 정규화한다. `policy.json`의 `declaredClaims`는
 > v2가 생성하지 않는 `pentest`·`redteam-iac`를 제외하고 `semgrep`·`large-repository`만
-> 선언한다. 벤치마크 러너·판정 스크립트(`run-offsec-benchmark`, `adjudicate-offsec-benchmark`)와
-> A/B 비교(`scripts/ab-compare.ts`)는 아직 v1 phase 마커·objection YAML을 전제로 하므로
-> v2 산출물에는 직접 적용할 수 없다(v2 지원은 후속 작업).
+> 선언한다. 벤치마크 CLI는 기본 v2를 실행하며 `--workflow-version=v1`로 v1을 선택한다.
+> v2는 주 모델과 다른 고정 버전의 `--review-model=<id>`가 필요하다. 판정은 정규화된 finding을
+> 사용하며 A/B 비교는 v1/v2 phase를 구분한다. 실제 모델의 탐지율·오탐률·비용은 별도 corpus 실행으로 측정해야 한다.
 
 ### 로컬 PostgreSQL & 공유 상태 실행 (선택)
 
@@ -309,7 +330,8 @@ Cross-attempt artifact는 같은 run의 검증된 경로만 허용한다. 재시
 ### v2 (assess:v2)
 
 v2는 v1의 pentest/redteam/feedback loop·verifier·objection 시스템을 완전히 제거하고
-`recon → plan → analyze → review → evaluate → report` 선형 파이프라인으로 단순화했다.
+`recon → plan → analyze → review → evaluate → report`를 기본 흐름으로 사용한다.
+분석 단계에는 근거와 범위가 확인된 교차 단위 질문을 위한 선택적 root analyze 한 라운드가 있다.
 검증은 별도 verifier phase 대신 `review` phase가 모든 finding을 실제 코드와 재대조하는
 방식으로 수행하고, `evaluate` phase가 커버리지·심각도를 객관 평가한 뒤 `reporter`(lead
 role)가 초안을 작성하고 호스트 게이트가 최종 발행한다. `analyze`는 work-unit 단위 병렬 실행이며, 완료 unit이

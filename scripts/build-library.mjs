@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -12,7 +12,7 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 for (const name of ['domains', 'templates']) {
   const from = join(root, name);
   if (existsSync(from)) cpSync(from, join(dist, name), { recursive: true, filter: file => {
-    const parts = file.slice(root.length + 1).split('/');
+    const parts = relative(root, file).split('/');
     return !parts.some(p => ['node_modules', '.git', '__tests__', 'test', '.nunchi', '.recon-cache', 'engagements'].includes(p)
       || /(^|\.)env($|\.)/.test(p) && !p.endsWith('.env.example'));
   } });
@@ -23,7 +23,7 @@ function copySql(dir) {
     const file = join(dir, entry.name);
     if (entry.isDirectory() && entry.name !== '__tests__') copySql(file);
     else if (entry.isFile() && entry.name.endsWith('.sql')) {
-      const to = join(dist, file.slice(root.length + 1)); mkdirSync(dirname(to), { recursive: true }); cpSync(file, to);
+      const to = join(dist, relative(root, file)); mkdirSync(dirname(to), { recursive: true }); cpSync(file, to);
     }
   }
 }

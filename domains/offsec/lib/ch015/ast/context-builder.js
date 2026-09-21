@@ -22,6 +22,7 @@ const MAX_SEMGREP_FINDINGS = 100;
 const DEFAULT_CALL_GRAPH_DEPTH = 8;
 
 async function buildAstContext(targetPath, options = {}) {
+  targetPath = fs.realpathSync(targetPath);
   const config = loadConfig(targetPath, options);
   const startTime = Date.now();
 
@@ -29,10 +30,14 @@ async function buildAstContext(targetPath, options = {}) {
   log('[AST] Starting analysis...');
 
   // Step 1: Collect source files
-  const files = collectSourceFiles(targetPath, config);
+  // Host-sealed scope is authoritative, including monorepo/custom directories.
+  // Never widen it with directory discovery or the legacy Semgrep hint list.
+  const requested = options.sourceFiles === undefined ? null : normalizeSourceFiles(targetPath, options.sourceFiles);
+  const supported = requested?.filter(file => config.extensions.includes(path.extname(file).toLowerCase()));
+  const files = supported ? supported.slice(0, config.maxFiles) : collectSourceFiles(targetPath, config);
   log(`[AST] Found ${files.length} source files`);
 
-  if (files.length === 0) {
+  if (files.length === 0 && requested === null) {
     return { ok: false, error: 'No source files found', stats: {} };
   }
 
@@ -63,12 +68,13 @@ async function buildAstContext(targetPath, options = {}) {
   let semgrepResult = { ok: false, status: 'disabled', findings: [], stats: {} };
   if (config.runSemgrep) {
     log('[AST] Running Semgrep...');
-    const semgrepFiles = [...new Set([...files, ...(options.semgrepFiles || [])])];
+    const semgrepFiles = requested ?? [...new Set([...files, ...(options.semgrepFiles || [])])];
     semgrepResult = await runSemgrep(targetPath, {
       manifestPath: config.semgrepManifest,
       files: semgrepFiles,
       maxFindings: config.maxSemgrepFindings,
       timeout: (config.timeout || 120) * 1000,
+      ...(options.semgrepExecFile ? { execFileImpl: options.semgrepExecFile } : {}),
     });
     log(`[AST] Semgrep: ${semgrepResult.findings.length} findings`);
   } else {
@@ -83,6 +89,13 @@ async function buildAstContext(targetPath, options = {}) {
     semgrepResult,
     parseResult,
     config,
+    scope: requested && {
+      mode: 'manifest',
+      requested_files: requested.map(file => path.relative(targetPath, file).split(path.sep).join('/')),
+      parsed_files: parseResult.parsed.map(item => path.relative(targetPath, item.filePath).split(path.sep).join('/')),
+      unsupported_files: requested.filter(file => !config.extensions.includes(path.extname(file).toLowerCase())).map(file => path.relative(targetPath, file).split(path.sep).join('/')),
+      skipped_files: supported.slice(config.maxFiles).map(file => path.relative(targetPath, file).split(path.sep).join('/')),
+    },
     elapsed: Date.now() - startTime,
   });
 
@@ -111,6 +124,20 @@ async function buildAstContext(targetPath, options = {}) {
   };
 }
 
+function normalizeSourceFiles(targetPath, sourceFiles) {
+  if (!Array.isArray(sourceFiles)) throw new Error('sourceFiles must be an exact file list');
+  const root = fs.realpathSync(targetPath);
+  return [...new Set(sourceFiles.map(file => {
+    if (typeof file !== 'string' || !file) throw new Error('Invalid sourceFiles entry');
+    const resolved = fs.realpathSync(path.resolve(root, file));
+    const rel = path.relative(root, resolved);
+    if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) || !fs.statSync(resolved).isFile()) {
+      throw new Error(`sourceFiles entry is outside the target or is not a file: ${file}`);
+    }
+    return resolved;
+  }))].sort();
+}
+
 function loadConfig(targetPath, options) {
   let projectConfig = {};
   const configPath = path.join(targetPath, 'ch015.config.json');
@@ -126,7 +153,7 @@ function loadConfig(targetPath, options) {
     sourceDirs: projectConfig.sourceDirectories || DEFAULT_SOURCE_DIRS,
     extensions: getSupportedExtensions(),
     codeExtensions: projectConfig.codeExtensions || [],
-    maxFiles: options.maxFiles || MAX_FILES,
+    maxFiles: Number.isInteger(options.maxFiles) && options.maxFiles > 0 ? options.maxFiles : MAX_FILES,
     maxDataFlows: astConfig.maxDataFlows || options.maxDataFlows || MAX_DATA_FLOWS,
     maxTaintPaths: astConfig.maxTaintPaths || options.maxTaintPaths || MAX_TAINT_PATHS,
     maxSemgrepFindings: astConfig.maxSemgrepFindings || options.maxSemgrepFindings || MAX_SEMGREP_FINDINGS,
@@ -209,19 +236,20 @@ function shouldSkipDir(name) {
 }
 
 function assembleContext(data) {
-  const { callGraph, dataFlows, taintPaths, semgrepResult, parseResult, elapsed, config } = data;
+  const { callGraph, dataFlows, taintPaths, semgrepResult, parseResult, elapsed, config, scope } = data;
 
   // 캡에 도달하면 recall이 조용히 잘렸다는 신호 — 소비자가 상한 상향을 결정할 수 있게 노출.
   const cfg = config || {};
   const collectedFiles = parseResult.parsed.length + parseResult.failed.length;
   const truncation = {
-    files: cfg.maxFiles ? collectedFiles >= cfg.maxFiles : false,
+    files: scope ? scope.skipped_files.length > 0 : Boolean(cfg.maxFiles && collectedFiles >= cfg.maxFiles),
     data_flows: cfg.maxDataFlows ? dataFlows.length >= cfg.maxDataFlows : false,
     taint_paths: cfg.maxTaintPaths ? taintPaths.length >= cfg.maxTaintPaths : false,
     semgrep_findings: Boolean(semgrepResult.stats?.truncated),
   };
 
   return {
+    ...(scope ? { scope } : {}),
     meta: {
       generated_at: new Date().toISOString(),
       analysis_time_ms: elapsed,

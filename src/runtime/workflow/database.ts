@@ -1,4 +1,5 @@
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { createRequire } from 'node:module';
 
 import type { SqlPool } from './run-lease.js';
 
@@ -26,7 +27,8 @@ export function createPostgresPool(env: DatabaseEnvironment = process.env): Pool
   if (!Number.isInteger(configuredMax) || configuredMax < 1 || configuredMax > 100) {
     throw new Error(`NUNCHI_DB_POOL_MAX가 잘못됐다: ${env.NUNCHI_DB_POOL_MAX}`);
   }
-  return new Pool({
+  const { Pool: PostgresPool } = createRequire(import.meta.url)('pg') as typeof import('pg');
+  return new PostgresPool({
     connectionString: databaseUrlFromEnv(env),
     max: configuredMax,
     application_name: env.NUNCHI_DB_APPLICATION_NAME ?? 'secops-offsec-agent',

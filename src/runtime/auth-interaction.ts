@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { chromium, type BrowserContext } from 'playwright-core';
+import type { BrowserContext } from 'playwright-core';
 
 import type { AuthInteractionMode } from './live-test-contract.js';
 import type {
@@ -167,6 +167,7 @@ async function defaultLauncher(input: {
   profileDir: string;
   executablePath?: string;
 }): Promise<BrowserContext> {
+  const { chromium } = await import('playwright-core');
   return await chromium.launchPersistentContext(input.profileDir, {
     headless: false,
     ...(input.executablePath ? { executablePath: input.executablePath } : { channel: 'chrome' }),

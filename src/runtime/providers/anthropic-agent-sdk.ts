@@ -1,5 +1,5 @@
 import type { ProviderCapability } from '../contracts/workflow-contract.js';
-import { DOMAINS, runSession, type LedgerRow, type SessionOutcome, type SessionSpec } from '../session.js';
+import { DOMAINS, runSession, type LedgerRow, type SessionOutcome, type SessionSpec } from '../session-runner.js';
 import {
   assertProviderCapabilities,
   ProviderRuntimeFailure,

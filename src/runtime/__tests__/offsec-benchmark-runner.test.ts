@@ -38,6 +38,18 @@ function options(overrides: Partial<BenchmarkRunnerOptions> = {}): BenchmarkRunn
 }
 
 describe('offsec benchmark runner', () => {
+  it('runs v2 with a fixed independent reviewer and a supported single-worker baseline', () => {
+    const value = options({ workflowVersion: 'v2', reviewModel: 'claude-sonnet-4-6' });
+    expect(planBenchmarkRuns(value)).toHaveLength(9);
+    const command = buildArmCommand({ options: value, arm: 'current-sequential', target: '/opaque/source', engagementDir: '/opaque/output' });
+    expect(command.args).toContain('assess:v2');
+    expect(command.args).toContain('--work-units=force');
+    expect(command.args).toContain('--max-concurrency=1');
+    expect(command.args).toContain('--review-model=claude-sonnet-4-6');
+    expect(command.args).not.toContain('--verification-mode=VA_ONLY');
+    expect(() => planBenchmarkRuns(options({ workflowVersion: 'v2' }))).toThrow('review model');
+    expect(() => planBenchmarkRuns(options({ workflowVersion: 'v2', reviewModel: 'sonnet' }))).toThrow('고정 model');
+  });
   it('produces stable randomized paired order without dropping or duplicating arms', () => {
     const first = planBenchmarkRuns(options());
     const second = planBenchmarkRuns(options());

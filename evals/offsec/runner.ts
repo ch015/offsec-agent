@@ -33,6 +33,7 @@ import {
 } from '../../src/runtime/offsec-benchmark.js';
 import { normalizeCh015MarkdownFindings } from './adapters/ch015.js';
 import { normalizeCurrentOffsecFindings } from './adapters/current.js';
+import { normalizeCurrentV2OffsecFindings } from './adapters/current-v2.js';
 
 const ExecutableArmSchema = z.enum(['ch015', 'current-sequential', 'current-parallel']);
 const ExactModelSchema = z.string().min(1).refine(
@@ -50,6 +51,8 @@ export const BenchmarkRunnerOptionsSchema = z.object({
   repetitions: z.number().int().positive(),
   provider: z.literal('anthropic'),
   model: ExactModelSchema,
+  reviewModel: ExactModelSchema.optional(),
+  workflowVersion: z.enum(['v1', 'v2']).optional(),
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
   maxTurns: z.number().int().positive(),
   randomizationSeed: z.number().int().nonnegative(),
@@ -59,6 +62,9 @@ export const BenchmarkRunnerOptionsSchema = z.object({
   ch015PluginRoot: z.string().min(1),
   dryRun: z.boolean(),
 }).strict().superRefine((value, context) => {
+  if (value.workflowVersion === 'v2' && (!value.reviewModel || value.reviewModel === value.model)) {
+    context.addIssue({ code: 'custom', path: ['reviewModel'], message: 'v2 benchmark에는 primary와 다른 고정 review model ID가 필요하다' });
+  }
   const unique = new Set(value.arms);
   if (unique.size !== value.arms.length) {
     context.addIssue({ code: 'custom', path: ['arms'], message: 'benchmark arm은 중복될 수 없다' });
@@ -142,14 +148,15 @@ export function buildArmCommand(input: {
     prompt,
     args: [
       '--dir', options.currentRoot,
-      'assess', target, prompt,
+      options.workflowVersion === 'v2' ? 'assess:v2' : 'assess', target, prompt,
       `--model=${options.model}`,
+      ...(options.reviewModel ? [`--review-model=${options.reviewModel}`] : []),
       `--effort=${options.effort}`,
       `--max-turns=${options.maxTurns}`,
       `--engagement-dir=${engagementDir}`,
-      '--verification-mode=VA_ONLY',
+      ...(options.workflowVersion === 'v2' ? [] : ['--verification-mode=VA_ONLY']),
       `--semgrep=${options.semgrepMode}`,
-      `--work-units=${arm === 'current-parallel' ? 'force' : 'off'}`,
+      `--work-units=${options.workflowVersion === 'v2' || arm === 'current-parallel' ? 'force' : 'off'}`,
       `--max-concurrency=${arm === 'current-parallel' ? options.maxConcurrency : 1}`,
     ],
   };
@@ -283,7 +290,7 @@ async function executePlannedRun(input: {
     .map((path) => `engagement/${path}`)]);
   const contractPath = item.arm === 'ch015'
     ? join(options.ch015PluginRoot, 'ch015.config.json')
-    : join(options.currentRoot, 'domains/offsec/contracts/offsec-contract.v1.json');
+    : join(options.currentRoot, `domains/offsec/contracts/offsec-contract.${options.workflowVersion ?? 'v1'}.json`);
   const resourceRoot = item.arm === 'ch015'
     ? options.ch015PluginRoot
     : join(options.currentRoot, 'domains/offsec');
@@ -302,7 +309,7 @@ async function executePlannedRun(input: {
     promptSha256: benchmarkSha256(TASK_TEMPLATE),
     contractSha256: benchmarkSha256(readFileSync(contractPath)),
     resourceManifestSha256: treeSha256(resourceRoot),
-    entrypoint: item.arm === 'ch015' ? 'claude-plugin' as const : 'nunchi-assess' as const,
+    entrypoint: item.arm === 'ch015' ? 'claude-plugin' as const : options.workflowVersion === 'v2' ? 'nunchi-assess-v2' as const : 'nunchi-assess' as const,
     commandSha256: benchmarkSha256(benchmarkStableJson({
       executable: command.executable,
       args: command.args,
@@ -310,6 +317,7 @@ async function executePlannedRun(input: {
     })),
     provider: options.provider,
     model: options.model,
+    ...(item.arm !== 'ch015' && options.reviewModel ? { reviewModel: options.reviewModel } : {}),
     effort: options.effort,
     maxTurns: options.maxTurns,
     randomizationSeed: options.randomizationSeed,
@@ -339,7 +347,9 @@ function writeNormalizedFindings(input: {
 }): void {
   const findings = input.item.arm === 'ch015'
     ? normalizeCh015Outputs(input)
-    : normalizeCurrentOffsecFindings({ engagementDir: input.engagementDir, run: input.run });
+    : input.run.entrypoint === 'nunchi-assess-v2'
+      ? normalizeCurrentV2OffsecFindings({ engagementDir: input.engagementDir, run: input.run })
+      : normalizeCurrentOffsecFindings({ engagementDir: input.engagementDir, run: input.run });
   const validated = validateNormalizedBenchmarkFindings({
     findings,
     run: input.run,
@@ -352,7 +362,7 @@ function writeNormalizedFindings(input: {
     schemaVersion: '1.0.0',
     runSha256: input.run.runSha256,
     sourceManifestSha256: input.sourceManifest.manifestSha256,
-    adapter: input.item.arm === 'ch015' ? 'ch015-markdown-v1' : 'current-standard-finding-v1',
+    adapter: input.item.arm === 'ch015' ? 'ch015-markdown-v1' : input.run.entrypoint === 'nunchi-assess-v2' ? 'current-standard-finding-v2' : 'current-standard-finding-v1',
     normalizedSha256: benchmarkSha256(benchmarkStableJson(validated)),
     normalizedFileSha256: benchmarkSha256(readFileSync(normalizedPath)),
   };

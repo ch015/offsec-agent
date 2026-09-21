@@ -1,11 +1,12 @@
 # OffSec 문서 안내
 
-기준: 2026-09-18. [프로젝트 README](../README.md) · [전체 개발 현황](../../docs/development-status.ko.md) · [전체 문서 목록](../../docs/documentation-index.ko.md).
+기준: 2026-09-21. [프로젝트 README](../README.md) · [전체 개발 현황](../../docs/development-status.ko.md) · [전체 문서 목록](../../docs/documentation-index.ko.md).
 
 ## 현재 사용 문서
 
 - [agent-autonomy.md](agent-autonomy.md)
 - [embedding.md](embedding.md)
+- [detection-improvements.md](detection-improvements.md)
 
 ## 이전 기록
 

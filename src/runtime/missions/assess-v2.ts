@@ -31,7 +31,7 @@ import { loadOffsecContract, type PhaseResult } from '../offsec-contract.js';
 import { OffsecDomainAdapter } from '../domains/offsec.js';
 import { AnthropicAgentRuntime } from '../providers/anthropic-agent-sdk.js';
 import { BudgetedRuntime } from '../providers/budgeted-runtime.js';
-import { runSession, type SessionOutcome, type SessionSpec } from '../session.js';
+import { runSession, type SessionOutcome, type SessionSpec } from '../session-runner.js';
 import { WorkflowHost } from '../workflow/engine.js';
 import { executeBoundedWork } from '../workflow/bounded-work-executor.js';
 import {
@@ -61,23 +61,18 @@ import {
   writeScopeAssurance,
   type UnitScopeObservationInput,
 } from '../workflow/scope-assurance.js';
-import { loadAndComputeGraphRag, serializeGraphContextForUnit } from '../workflow/graph-rag.js';
+import { computeGraphRag, serializeGraphContextForUnit, type NativeTaintPath } from '../workflow/graph-rag.js';
 import { runHostRecon } from '../workflow/host-recon.js';
+import { loadPreanalysisEvidence, writeUnitEvidence } from '../workflow/preanalysis-evidence.js';
+import { selectAnalysisFollowups } from '../workflow/analysis-followup.js';
 import {
   assertStandardFindingsRepresented,
   promoteStandardFindingRecords,
   readStandardFindingRecordReceipts,
   type StandardFindingRecordReceipt,
 } from '../finding-contract.js';
-import {
-  makeEngagementId,
-  recordOffsecPublication,
-  resolveRunBudget,
-  validateOffsecPublicationCandidate,
-  type PhaseExecution,
-  type SemgrepMode,
-  type WorkUnitMode,
-} from './assess.js';
+import { makeEngagementId, recordOffsecPublication, resolveRunBudget, validateSourcePublicationCandidate as validateOffsecPublicationCandidate } from './assessment-support.js';
+import type { PhaseExecution, SemgrepMode, WorkUnitMode } from './assess.js';
 
 const require = createRequire(import.meta.url);
 const agentPlan = require('../../../domains/offsec/lib/ch015/agent-plan.js') as {
@@ -97,6 +92,7 @@ const astTools = require('../../../domains/offsec/lib/ch015/ast/context-builder.
       outputPath: string;
       runSemgrep: boolean;
       semgrepFiles?: string[];
+      sourceFiles?: string[];
       logger: (message: string) => void;
     },
   ): Promise<AstBuildOutcome>;
@@ -123,6 +119,8 @@ export type AssessV2Input = {
   semgrepMode?: SemgrepMode;
   workUnitMode?: WorkUnitMode;
   maxConcurrency?: number;
+  /** At most one extra session for evidence-backed cross-unit questions. 0 disables it. */
+  maxFollowupHypotheses?: number;
   noCostGuard?: boolean;
 };
 
@@ -217,7 +215,9 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
   engagementDir: string;
   phases: PhaseExecution[];
   finalReport: string;
-  coverage: { complete: boolean; completedUnits: number; totalUnits: number; uncoveredFiles: string[] };
+  coverage: { complete: boolean; completedUnits: number; totalUnits: number; uncoveredFiles: string[];
+    semanticCoverage: 'not-proven'; ownedFilesRead: number; ownedFileCount: number;
+    preanalysisAvailable: boolean; followupQuestions: number; deferredFollowupQuestions: number };
 }> {
   // --- preflight ---------------------------------------------------------
   const target = resolve(input.target);
@@ -242,6 +242,10 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
   }
   if (input.maxConcurrency !== undefined && (!Number.isInteger(input.maxConcurrency) || input.maxConcurrency < 1)) {
     throw new Error(`maxConcurrency가 잘못됐다: ${input.maxConcurrency}`);
+  }
+  const maxFollowupHypotheses = input.maxFollowupHypotheses ?? 3;
+  if (!Number.isInteger(maxFollowupHypotheses) || maxFollowupHypotheses < 0 || maxFollowupHypotheses > 8) {
+    throw new Error('maxFollowupHypotheses must be an integer between 0 and 8');
   }
   if (primaryModel === reviewModel && !process.env.ALLOW_SAME_MODEL) {
     throw new Error('OffSec primary model과 review model은 달라야 한다 (개발 중 동일 모델 사용은 ALLOW_SAME_MODEL=1 설정)');
@@ -314,6 +318,7 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
       outputPath: astContextPath,
       runSemgrep: semgrepMode !== 'off',
       semgrepFiles: [...new Set(sealedSourceFiles)],
+      sourceFiles: [...new Set(sealedSourceFiles)],
       logger: (message) => log({ event: 'HostAstPreanalysis', message }),
     });
   } catch (error) {
@@ -403,11 +408,13 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
 
   try {
     const adapter = new OffsecDomainAdapter(contract);
-    const maxConcurrency = Math.min(input.maxConcurrency ?? contract.workUnitPolicy.maximumConcurrency,
+    const maxConcurrency = Math.min(input.maxConcurrency ?? 2,
       contract.workUnitPolicy.maximumConcurrency);
     const provider = new AnthropicAgentRuntime(sessionRunner);
     const runtime = maxBudgetUsd === undefined ? provider
-      : new BudgetedRuntime(provider, maxBudgetUsd, request => request.phase === 'analyze' ? maxConcurrency : 1);
+      : new BudgetedRuntime(provider, maxBudgetUsd,
+          request => request.phase === 'analyze' && request.options?.phaseRound !== 'cross-unit-followup' ? maxConcurrency : 1,
+          request => maxBudgetUsd * ({ analyze: 0.30, review: 0.10, evaluate: 0.05 }[request.phase] ?? 0));
     const modelGuard = new ModelIndependenceGuard();
     const phases: PhaseExecution[] = [];
     const combined: SessionOutcome = { texts: [], ledger: [] };
@@ -446,7 +453,8 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
     const workRoot = join(engagementDir, 'work-units');
     mkdirSync(workRoot, { recursive: true, mode: 0o700 });
 
-    const graphRag = await loadAndComputeGraphRag(engagementDir);
+    const preanalysis = loadPreanalysisEvidence(astContextPath, target, sealedSourceFiles);
+    const graphRag = computeGraphRag({ dependencyGraph, astContext: { taint_paths: preanalysis.taintPaths as unknown as NativeTaintPath[] } });
     if (graphRag) {
       log({
         event: 'HostGraphRagComputed',
@@ -482,6 +490,7 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
           assignedSourceSha256: unit.assignedSourceSha256,
         };
         const explorationInventory = join(unitDir, '00_source_exploration.json');
+        const evidence = writeUnitEvidence(unitDir, unit.ownedFiles.map(file => file.path), preanalysis);
         writeFileSync(explorationInventory, JSON.stringify({
           purpose: 'Optional follow-up context for an observed dependency. Finding ownership remains assignedFiles.',
           sourceFiles: sealedSourceFiles,
@@ -495,7 +504,7 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
           runRoot: engagementDir,
           runId: engagementId,
           hostEntrypoint: 'assess',
-          allowedReadFiles: [...new Set([...ownedSourceFiles, ...contextSourceFiles, ...sealedSourceFiles, ...sealedDependencyFiles, explorationInventory])],
+          allowedReadFiles: [...new Set([...ownedSourceFiles, ...contextSourceFiles, ...sealedSourceFiles, ...sealedDependencyFiles, explorationInventory, evidence.indexPath, evidence.detailPath])],
           signal: abortController.signal,
           ...(activeLease ? { leaseGuard: activeLease } : {}),
           ...(missionRuntime.artifactStore ? { artifactStore: missionRuntime.artifactStore } : {}),
@@ -514,6 +523,9 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
             assignedFiles: unit.ownedFiles.map((file) => file.path),
             dependencyContextFiles: unit.contextFiles.map((file) => file.path),
             explorationInventory,
+            evidenceIndex: evidence.indexPath,
+            evidenceDetails: evidence.detailPath,
+            preanalysis: evidence.summary,
             unresolvedCrossUnitEdges: unit.unresolvedEdges,
             typedDependencyEdges: getUnitTypedEdges(dependencyGraph, unit),
             ...(graphRag ? {
@@ -654,6 +666,7 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
 
     const executePhase = async (options: {
       id: string;
+      round?: string;
       inputs?: Record<string, unknown>;
       priorArtifactPaths?: readonly string[];
     }): Promise<PhaseExecution> => {
@@ -661,12 +674,14 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
       const artifacts = adapter.renderArtifacts(phase);
       const hosted = await host.executePhase({
         id: options.id,
+        round: options.round,
         inputs: options.inputs,
         ...(options.priorArtifactPaths ? { priorArtifactPaths: options.priorArtifactPaths } : {}),
         providerOptions: {
           model: phase.role === 'reviewer' ? reviewModel : primaryModel,
           effort: input.effort,
-          maxTurns: input.maxTurns,
+          maxTurns: options.round === 'cross-unit-followup' ? Math.min(input.maxTurns ?? 120, 32) : input.maxTurns,
+          phaseRound: options.round,
           readScope: 'exact',
           contractPath: V2_CONTRACT_PATH,
         },
@@ -681,12 +696,52 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
       return execution;
     };
 
+    // One bounded session for model-proposed questions grounded in real source.
+    const discoveryBudgetExhausted = maxBudgetUsd !== undefined && (await missionRuntime.read()).totalCostUsd >= maxBudgetUsd * 0.7;
+    const followups = selectAnalysisFollowups({
+      target, units: workPlan.units, maximum: discoveryBudgetExhausted ? 0 : maxFollowupHypotheses,
+      handoffs: fulfilled.flatMap(({ unit, analyze }) => analyze.artifacts
+        .filter(artifact => artifact.name === '02_analysis_handoff.yaml')
+        .map(artifact => ({ unitKey: unit.unitKey, path: artifact.path }))),
+    });
+    const followupPlanPath = join(engagementDir, '00_followup_plan.json');
+    writeFileSync(followupPlanPath, `${JSON.stringify(followups, null, 2)}\n`, { mode: 0o600 });
+    rootAllowedReadFiles.push(followupPlanPath);
+    if (followups.selected.length > 0) {
+      for (const unit of workPlan.units) assertOffsecWorkUnitIntact(workPlan, unit.unitKey);
+      refreshCanonicalFindingReadSet();
+      await executePhase({ id: 'analyze', round: 'cross-unit-followup', inputs: {
+        workUnitAnalysis: { resultsPath: workUnitResultPath }, followupHypotheses: followups.selected,
+        instruction: 'Resolve only these cross-unit questions. Reuse observations and seek counterevidence. Do not restart a whole-repository audit or request another follow-up.',
+      } });
+      for (const unit of workPlan.units) assertOffsecWorkUnitIntact(workPlan, unit.unitKey);
+    }
+    const analysisCoverage = {
+      complete: uncoveredFiles.length === 0,
+      completedUnits: completedUnitKeys.length, totalUnits: workPlan.units.length, uncoveredFiles,
+      semanticCoverage: 'not-proven' as const,
+      ownedFilesRead: scopeAssurance.units.reduce((sum, unit) => sum + unit.va.ownedFilesRead, 0),
+      ownedFileCount: workPlan.units.reduce((sum, unit) => sum + unit.ownedFiles.length, 0),
+      preanalysisAvailable: preanalysis.available,
+      followupQuestions: followups.selected.length,
+      deferredFollowupQuestions: followups.omitted,
+    };
+    const analysisCoveragePath = join(engagementDir, '00_analysis_coverage.json');
+    writeFileSync(analysisCoveragePath, `${JSON.stringify({ ...analysisCoverage,
+      disclosure: 'complete describes work-unit execution, not security completeness. Read counts do not prove semantic analysis. Inspect unresolved questions and preanalysis limitations.',
+      preanalysisLimitations: preanalysis.limitations,
+      unresolved: [...fulfilled.flatMap(({ analyze }) => analyze.result.unresolved ?? []), ...phases.flatMap(phase => phase.result.unresolved ?? [])],
+      invalidFollowupRequests: followups.invalid,
+    }, null, 2)}\n`, { mode: 0o600 });
+    rootAllowedReadFiles.push(analysisCoveragePath);
     refreshCanonicalFindingReadSet();
     const review = await executePhase({
       id: 'review',
       inputs: {
         workUnitResults: workUnitResultPath,
         completedUnitKeys,
+        analysisCoverage: analysisCoveragePath,
+        followupPlan: followupPlanPath,
         ...(uncoveredFiles.length > 0 ? { uncoveredFiles } : {}),
       },
     });
@@ -734,8 +789,7 @@ export async function assessV2(input: AssessV2Input, dependencies: AssessV2Depen
     });
 
     return { outcome: combined, engagementDir, phases, finalReport,
-      coverage: { complete: uncoveredFiles.length === 0, completedUnits: completedUnitKeys.length,
-        totalUnits: workPlan.units.length, uncoveredFiles } };
+      coverage: analysisCoverage };
   } finally {
     await missionRuntime.close();
   }
@@ -792,6 +846,7 @@ async function main(): Promise<void> {
     ...(semgrepFlag ? { semgrepMode: semgrepFlag as SemgrepMode } : {}),
     ...(workUnitsFlag ? { workUnitMode: workUnitsFlag as WorkUnitMode } : {}),
     ...(maxConcurrencyFlag ? { maxConcurrency: Number.parseInt(maxConcurrencyFlag, 10) } : {}),
+    ...(flags.has('max-followup-hypotheses') ? { maxFollowupHypotheses: Number(flags.get('max-followup-hypotheses')) } : {}),
     ...(engagementDirFlag ? { engagementDir: engagementDirFlag } : {}),
   };
 

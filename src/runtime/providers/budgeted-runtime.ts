@@ -8,12 +8,15 @@ export class BudgetedRuntime<TOptions, TRaw> implements ProviderRuntime<TOptions
   private reserved = 0;
   private active = 0;
   constructor(private readonly runtime: ProviderRuntime<TOptions, TRaw>, private readonly limit: number,
-    private readonly concurrency: (request: ProviderPhaseRequest<TOptions>) => number) {
+    private readonly concurrency: (request: ProviderPhaseRequest<TOptions>) => number,
+    private readonly reserveForLater: (request: ProviderPhaseRequest<TOptions>) => number = () => 0) {
     if (!Number.isFinite(limit) || limit <= 0) throw new Error('invalid mission budget');
     this.name = runtime.name; this.capabilities = runtime.capabilities;
   }
   async runPhase(request: ProviderPhaseRequest<TOptions>): Promise<ProviderPhaseOutcome<TRaw>> {
-    const available = this.limit - this.spent - this.reserved;
+    const futureReserve = this.reserveForLater(request);
+    if (!Number.isFinite(futureReserve) || futureReserve < 0 || futureReserve >= this.limit) throw new Error('invalid future phase budget reserve');
+    const available = this.limit - this.spent - this.reserved - futureReserve;
     const slots = Math.max(1, this.concurrency(request) - this.active);
     const allocation = Math.min(available / slots, request.maxBudgetUsd ?? available);
     if (!(allocation > 0)) throw new Error('mission budget is exhausted or reserved by active sessions');

@@ -1,6 +1,6 @@
 import { openSync, closeSync, writeFileSync, unlinkSync, mkdirSync, realpathSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
-import { runSession, type SessionSpec } from '../runtime/session.js';
+import { runSession, type SessionSpec } from '../runtime/session-runner.js';
 import { withPhaseMetrics, type PhaseMetricsSink } from '../runtime/workflow/phase-metrics.js';
 
 export type SessionRunner = typeof runSession;

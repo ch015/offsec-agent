@@ -4,6 +4,19 @@ import { ProviderRuntimeFailure, type ProviderPhaseRequest, type ProviderPhaseOu
 const request = (phase = 'analyze'): ProviderPhaseRequest => ({ contractId: 'test', contractVersion: '2.0.0', domain: 'offsec', mission: 'assessment', phase, role: 'analyzer', runId: 'budget', attempt: '1', target: '/tmp', engagementDir: '/tmp', prompt: '', requiredCapabilities: [], maxBudgetUsd: 10 });
 const outcome = (costUsd: number): ProviderPhaseOutcome => ({ provider: 'fixture', texts: [], events: [], usage: { provider: 'fixture', costUsd, accountingComplete: true }, raw: {} });
 describe('mission budget reservations', () => {
+  it('keeps review and publication funds available after discovery uses its allowance', async () => {
+    const allocations: number[] = [];
+    const provider: ProviderRuntime = { name: 'fixture', capabilities: new Set(), async runPhase(req) {
+      allocations.push(req.maxBudgetUsd!); return outcome(req.maxBudgetUsd!);
+    } };
+    const runtime = new BudgetedRuntime(provider, 10, () => 1, req => ({ analyze: 3, review: 1, evaluate: 0.5 }[req.phase] ?? 0));
+    await runtime.runPhase(request());
+    await expect(runtime.runPhase(request())).rejects.toThrow('exhausted');
+    await runtime.runPhase(request('review'));
+    await runtime.runPhase(request('evaluate'));
+    await runtime.runPhase(request('report'));
+    expect(allocations).toEqual([7, 2, 0.5, 0.5]);
+  });
   it('does not give concurrent sessions the same unspent budget and reuses only settled remainder', async () => {
     const pending: Array<{ allocation: number; resolve: (value: ProviderPhaseOutcome) => void }> = [];
     const provider: ProviderRuntime = { name: 'fixture', capabilities: new Set(), runPhase: req => new Promise(resolve => pending.push({ allocation: req.maxBudgetUsd!, resolve })) };

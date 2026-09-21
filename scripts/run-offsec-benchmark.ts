@@ -12,7 +12,7 @@ function parseArgs(argv: readonly string[]): Map<string, string> {
   const allowed = new Set([
     'corpus', 'source-manifest', 'case', 'target', 'output-root', 'arms', 'repetitions', 'provider',
     'model', 'effort', 'max-turns', 'seed', 'semgrep', 'max-concurrency', 'current-root',
-    'ch015-plugin-root', 'dry-run',
+    'ch015-plugin-root', 'dry-run', 'workflow-version', 'review-model',
   ]);
   const values = new Map<string, string>();
   for (const arg of argv) {
@@ -55,6 +55,8 @@ async function main(): Promise<void> {
     repetitions: positiveInteger(values, 'repetitions', 1),
     provider: values.get('provider') ?? 'anthropic',
     model: required(values, 'model'),
+    workflowVersion: values.get('workflow-version') ?? 'v2',
+    ...(values.has('review-model') ? { reviewModel: values.get('review-model') } : {}),
     effort: values.get('effort') ?? 'high',
     maxTurns: positiveInteger(values, 'max-turns', 120),
     randomizationSeed,

@@ -2,7 +2,7 @@ import { assessV2, type AssessV2Input, type AssessV2Dependencies } from '../runt
 import { absolutePath, assertSessionConfigured, executeInDirectory, sessionFor, type AgentSessionOptions, type AgentExecutionOptions } from './execution.js';
 
 export type OffsecAgentOptions = AgentSessionOptions & {
-  defaults?: Pick<AssessV2Input, 'model' | 'reviewModel' | 'effort' | 'maxTurns' | 'maxBudgetUsd' | 'maxConcurrency' | 'semgrepMode' | 'scope'>;
+  defaults?: Pick<AssessV2Input, 'model' | 'reviewModel' | 'effort' | 'maxTurns' | 'maxBudgetUsd' | 'maxConcurrency' | 'maxFollowupHypotheses' | 'semgrepMode' | 'scope'>;
   runtime?: AssessV2Dependencies['runtime'];
   astBuilder?: AssessV2Dependencies['astBuilder'];
 };

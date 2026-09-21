@@ -1,5 +1,9 @@
 # Evaluate contract card
 
+`00_analysis_coverage.json`의 complete는 작업 단위 실행 완료만 뜻한다. semanticCoverage는
+자동 증명되지 않는다. source Read 수, AST 미처리/실패, 후속 가설과 unresolved를 분리해서 설명한다.
+파일을 읽었다는 이유만으로 보안 검토가 충실했다고 판단하거나, 도구 후보가 없다고 안전 판정을 하지 않는다.
+
 이 문서는 `evaluate` phase의 강제 방법 카드다. evaluator는 다른 에이전트나 phase를
 호출하지 않고 review 산출물과 recon 정보를 기반으로 객관적 평가를 수행한다.
 evaluator는 finding을 추가·수정·삭제하지 않는다 (평가 전용).

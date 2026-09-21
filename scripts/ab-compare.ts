@@ -9,6 +9,8 @@ import { basename, join } from 'node:path';
 
 type Metrics = {
   label: string;
+  version: 'v1' | 'v2';
+  coverage: unknown;
   /** M1 반앵커링: verifier 가 VA 보고서 전에 자율 산출물을 썼는가 */
   anchoringViolation: boolean | null;
   /** M2 팬아웃 원장 행 수 (= 게이트를 통과한 위임 수) */
@@ -34,8 +36,15 @@ const PHASE_MARKERS: Record<string, RegExp> = {
   final_report: /^(07|08)_.*\.md$|final.*report/i,
 };
 
+const V2_PHASE_MARKERS: Record<string, RegExp> = {
+  recon: /^00_recon\.json$/, plan: /^01_analysis_plan\.json$/, analyze: /^00_work_unit_results\.json$/,
+  review: /^03_review_result\.json$/, evaluate: /^04_evaluation\.json$/, final_report: /^07_security_report\.md$/,
+};
+
 function readMetrics(dir: string): Metrics {
   const files = existsSync(dir) ? readdirSync(dir) : [];
+  const version = files.includes('assess-v2-checkpoint-input.json') ? 'v2' : 'v1';
+  const coverage = files.includes('00_analysis_coverage.json') ? JSON.parse(readFileSync(join(dir, '00_analysis_coverage.json'), 'utf8')) : null;
 
   const objections = files.find((f) => /^02_verify_objections-.*\.yaml$/.test(f));
   let anchoringViolation: boolean | null = null;
@@ -72,12 +81,13 @@ function readMetrics(dir: string): Metrics {
   }
 
   const phases: Record<string, boolean> = {};
-  for (const [phase, re] of Object.entries(PHASE_MARKERS)) {
+  for (const [phase, re] of Object.entries(version === 'v2' ? V2_PHASE_MARKERS : PHASE_MARKERS)) {
     phases[phase] = files.some((f) => re.test(f));
   }
 
   return {
     label: basename(dir),
+    version, coverage,
     anchoringViolation,
     invocationRows: countLines('agent_invocations.jsonl'),
     subagentStarts: hostLedger.filter((r) => r.event === 'SubagentStart').length,
@@ -105,12 +115,12 @@ console.log('-'.repeat(70));
 console.log(row('M1 anchoring_violation', a.anchoringViolation, b.anchoringViolation));
 console.log(row('M2 invocation 원장 행', a.invocationRows, b.invocationRows));
 console.log(row('M3 SubagentStart 관측', a.subagentStarts, b.subagentStarts));
-for (const phase of Object.keys(PHASE_MARKERS)) {
+console.log(row('workflow version', a.version, b.version));
+for (const phase of new Set([...Object.keys(a.phases), ...Object.keys(b.phases)])) {
   console.log(row(`M4 ${phase}`, a.phases[phase], b.phases[phase]));
 }
 console.log(row('M5 게이트 차단 종류', JSON.stringify(a.auditViolations), JSON.stringify(b.auditViolations)));
 console.log(row('M6 budget tokens', a.budgetTokens, b.budgetTokens));
 console.log(row('산출물 수', a.artifactCount, b.artifactCount));
-console.log(
-  '\nM2 vs M3 불일치는 위임이 팬아웃 게이트를 거치지 않았다는 뜻이다 (M3 는 호스트 관측이라 누락되지 않음).',
-);
+console.log(row('coverage observations', JSON.stringify(a.coverage), JSON.stringify(b.coverage)));
+console.log('\n산출물·실행 관측 비교이며 탐지율 평가가 아니다. v2에는 v1 verifier/objection 지표를 적용하지 않는다.');

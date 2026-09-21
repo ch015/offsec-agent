@@ -1,5 +1,8 @@
 # Report contract card
 
+`00_analysis_coverage.json`을 확인하고 작업 실행 완료와 의미적 보안 검토를 구분한다.
+사전 분석의 누락·실패와 남은 가설을 한계에 명시한다. complete=true만으로 전수 보안 검증을 주장하지 않는다.
+
 이 문서는 `report` phase의 강제 방법 카드다. reporter는 최종 파일이 아니라
 `07_security_report.draft.md`만 작성하며 발행 여부는 호스트 report gate가 결정한다.
 

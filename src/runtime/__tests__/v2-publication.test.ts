@@ -19,12 +19,20 @@ function fixture() {
   }
   return { target, engagementDir: join(target, '.secops/run'), engagementId: 'v2-publication-test', excludePaths: [join(target, '.secops')], semgrepMode: 'off' as const };
 }
-function runner(options: { failB?: boolean; disclose?: boolean; corruptScope?: boolean } = {}) {
+function runner(options: { failB?: boolean; disclose?: boolean; corruptScope?: boolean; handoff?: boolean; onSession?: (spec: SessionSpec) => void } = {}) {
   return async (spec: SessionSpec): Promise<SessionOutcome> => {
+    options.onSession?.(spec);
     if (options.failB && spec.workUnit?.ownedSourceFiles.some(f => f.endsWith('/b.ts'))) throw new Error('fixture unavailable unit');
     const phase = getOffsecPhase(spec.phase!, contract), artifacts = renderPhaseArtifacts(phase, spec.phaseRound);
+    const handoff = options.handoff && spec.workUnit?.ownedSourceFiles.some(file => file.endsWith('/a.ts'));
+    if (handoff) artifacts.required.push('02_analysis_handoff.yaml');
     for (const artifact of artifacts.required) {
       let content = '{}\n';
+      if (artifact === '02_analysis_handoff.yaml') content = JSON.stringify({ hypotheses: [{
+        question: 'Does the value from package a cross the boundary into package b?', impact: 'high',
+        files: ['packages/a/a.ts', 'packages/b/b.ts'],
+        observations: [{ path: 'packages/a/a.ts', lineStart: 1, lineEnd: 1, quote: 'export const a = 1;' }],
+      }] });
       if (phase.id === 'report') {
         content = '# Fixture report\nNo confirmed findings.\n';
         if (options.disclose) content += '분석 범위 미완료\npackages/b/b.ts\n';
@@ -39,6 +47,39 @@ function runner(options: { failB?: boolean; disclose?: boolean; corruptScope?: b
   };
 }
 describe('v2 publication evidence and coverage', () => {
+  it('runs one bounded cross-unit follow-up only when an evidence-backed handoff exists', async () => {
+    const sessions: SessionSpec[] = [];
+    const input = fixture();
+    const result = await assessV2(input, { sessionRunner: runner({ handoff: true, onSession: spec => sessions.push(spec) }) });
+    const followups = sessions.filter(spec => spec.phaseRound === 'cross-unit-followup');
+    expect(followups).toHaveLength(1);
+    expect(followups[0].maxTurns).toBe(32);
+    expect(followups[0].prompt).toContain('Does the value');
+    expect(sessions.map(spec => spec.phase)).toEqual(['analyze', 'analyze', 'analyze', 'review', 'evaluate', 'report']);
+    expect(result.coverage).toMatchObject({ followupQuestions: 1, semanticCoverage: 'not-proven', ownedFilesRead: 0 });
+  });
+  it('can disable extra sessions and reports deferred questions', async () => {
+    const sessions: SessionSpec[] = [];
+    const result = await assessV2({ ...fixture(), maxFollowupHypotheses: 0 }, { sessionRunner: runner({ handoff: true, onSession: spec => sessions.push(spec) }) });
+    expect(sessions).toHaveLength(5);
+    expect(result.coverage.deferredFollowupQuestions).toBe(1);
+  });
+  it('gives analyzers scoped static evidence and explicit gaps without requiring the global AST', async () => {
+    const input = fixture();
+    const sessions: SessionSpec[] = [];
+    await assessV2(input, { sessionRunner: runner({ onSession: spec => sessions.push(spec) }) });
+    const analyzes = sessions.filter(spec => spec.phase === 'analyze');
+    expect(analyzes).toHaveLength(2);
+    for (const spec of analyzes) {
+      const index = join(spec.engagementDir, '00_evidence_index.json');
+      const details = join(spec.engagementDir, '00_evidence_details.json');
+      expect(spec.allowedReadFiles).toContain(index);
+      expect(spec.allowedReadFiles).toContain(details);
+      expect(spec.prompt).toContain(index);
+      expect(JSON.parse(readFileSync(details, 'utf8')).parsedFiles).toHaveLength(1);
+      expect(JSON.parse(readFileSync(index, 'utf8')).limitations.join()).toContain('disabled');
+    }
+  });
   it('rejects unsupported work-unit disabling before creating run state', async () => {
     const input = fixture();
     await expect(assessV2({ ...input, workUnitMode: 'off' }, { sessionRunner: runner() })).rejects.toThrow('지원하지 않는다');

@@ -9,7 +9,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 
 // ─── Types ───
 
@@ -31,13 +31,26 @@ export interface AstContext {
   entry_points?: Array<{ file: string; line: number; type: string; handler: string }>;
   call_graph?: CallGraph;
   data_flows?: DataFlow[];
+  taint_paths?: NativeTaintPath[];
+}
+
+export interface NativeTaintPath {
+  source: { file: string; line?: number; expr?: string; type?: string };
+  sink: { file: string; line?: number; function: string; category: string };
+  via?: Array<{ file?: string; function?: string; callee?: string; line?: number }>;
+  sanitizers?: unknown[];
+  confidence?: number;
+  potential_cwe?: string;
+  tainted_arguments?: unknown[];
 }
 
 export interface TaintPath {
   source: { file: string; function: string; line?: number; type: string };
-  sink: { file: string; function: string; category: string };
+  sink: { file: string; function: string; category: string; line?: number };
   hops: string[]; // 함수 ID 경로
   hopCount: number;
+  origin?: 'ast-candidate' | 'call-heuristic';
+  evidence?: NativeTaintPath;
 }
 
 export interface FileCommunity {
@@ -113,6 +126,7 @@ const SOURCE_TYPES = new Set([
   'http_handler', 'express_route', 'api_route', 'sdk_export',
   'rpc_handler', 'websocket_handler', 'graphql_resolver',
   'cli_command', 'event_handler',
+  'http', 'http_controller', 'http_resource', 'graphql', 'websocket', 'cli', 'serverless', 'queue',
 ]);
 
 // ─── Implementation ───
@@ -134,7 +148,17 @@ export function computeGraphRag(input: {
   const funcToFile = buildFuncToFileMap(astContext.call_graph ?? {});
 
   // 3. Taint path 계산
-  const taintPaths = computeTaintPaths(astContext, funcToFile);
+  // Preserve the producer's candidates and counterevidence instead of rebuilding
+  // argument-aware results from names. Older artifacts retain heuristic support.
+  const taintPaths: TaintPath[] = Array.isArray(astContext.taint_paths)
+    ? astContext.taint_paths.map(candidate => ({
+        source: { file: candidate.source.file, function: candidate.source.expr ?? '<entry>', line: candidate.source.line, type: candidate.source.type ?? 'entry_point' },
+        sink: candidate.sink,
+        hops: [candidate.source.file, ...(candidate.via ?? []).flatMap(hop => hop.file ? [hop.file] : []), candidate.sink.file],
+        hopCount: (candidate.via ?? []).length + 1,
+        origin: 'ast-candidate', evidence: candidate,
+      }))
+    : computeTaintPaths(astContext, funcToFile);
 
   // 4. Community detection (label propagation)
   const communities = detectCommunities(dependencyGraph, fileAdj);
@@ -177,6 +201,7 @@ export async function loadAndComputeGraphRag(engagementDir: string): Promise<Gra
         entry_points: parsed.entry_points as AstContext['entry_points'],
         call_graph: parsed.call_graph as CallGraph,
         data_flows: parsed.data_flows as DataFlow[],
+        taint_paths: parsed.taint_paths as AstContext['taint_paths'],
       };
     } catch {
       // AST context 없이도 dependency graph만으로 community/centrality 계산 가능
@@ -252,15 +277,16 @@ function computeTaintPaths(astContext: AstContext, funcToFile: Map<string, strin
       for (const callee of node.calls) {
         // callee가 dangerous sink인지 확인
         const calleeName = callee.includes(':') ? callee.split(':').pop()! : callee;
-        const sinkCategory = DANGEROUS_SINKS[calleeName];
+        const sinkCategory = DANGEROUS_SINKS[calleeName] ?? DANGEROUS_SINKS[calleeName.split('.').pop()!];
 
         if (sinkCategory) {
-          const sinkFile = funcToFile.get(callee) ?? entry.file;
+          const sinkFile = funcToFile.get(callee) ?? funcToFile.get(current.funcId) ?? entry.file;
           results.push({
             source: { file: entry.file, function: entry.handler, line: entry.line, type: entry.type },
             sink: { file: sinkFile, function: calleeName, category: sinkCategory },
             hops: [...current.path, callee],
             hopCount: current.path.length,
+            origin: 'call-heuristic',
           });
           continue; // 이 경로는 완성
         }
@@ -289,11 +315,8 @@ function findFullFuncId(callGraph: CallGraph, callee: string, callerFuncId: stri
 
   // 부분 매칭 (끝이 :callee인 키)
   const suffix = `:${callee}`;
-  for (const key of Object.keys(callGraph)) {
-    if (key.endsWith(suffix)) return key;
-  }
-
-  return null;
+  const matches = Object.keys(callGraph).filter(key => key.endsWith(suffix));
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 function detectCommunities(graph: DependencyGraph, adj: FileAdjacency): FileCommunity[] {
@@ -427,7 +450,7 @@ function buildFileContextMap(input: {
     const relatedTaintPaths = taintPaths.filter((tp) =>
       tp.source.file === file ||
       tp.sink.file === file ||
-      tp.hops.some((h) => h.startsWith(file + ':')),
+      tp.hops.some((h) => h === file || h.startsWith(file + ':')),
     );
 
     map.set(file, {
@@ -442,52 +465,6 @@ function buildFileContextMap(input: {
   }
 
   return map;
-}
-
-// ─── Minimal YAML parser for AST context ───
-
-function parseAstContextYaml(content: string): AstContext {
-  // JSON으로 된 ast_context도 지원
-  if (content.trim().startsWith('{')) {
-    return JSON.parse(content);
-  }
-
-  // YAML은 js-yaml이 없으므로 구조만 추출 (best-effort)
-  const result: AstContext = {};
-
-  // entry_points 추출
-  const entryMatch = content.match(/entry_points:\s*\n((?:\s+-[\s\S]*?)(?=\n\w|\n$|$))/);
-  if (entryMatch) {
-    result.entry_points = [];
-    const entries = entryMatch[1].split(/\n\s+-\s/).filter(Boolean);
-    for (const entry of entries) {
-      const file = entry.match(/file:\s*(.+)/)?.[1]?.trim();
-      const line = parseInt(entry.match(/line:\s*(\d+)/)?.[1] ?? '0', 10);
-      const type = entry.match(/type:\s*(.+)/)?.[1]?.trim() ?? '';
-      const handler = entry.match(/handler:\s*(.+)/)?.[1]?.trim() ?? '';
-      if (file && handler) {
-        result.entry_points.push({ file, line, type, handler });
-      }
-    }
-  }
-
-  // call_graph는 복잡한 nested 구조 — 간이 파싱
-  const cgStart = content.indexOf('call_graph:');
-  if (cgStart >= 0) {
-    result.call_graph = {};
-    const cgSection = content.slice(cgStart);
-    // "  file:func:\n    calls:\n      - callee\n    called_by:\n      - caller"
-    const funcRegex = /^\s{2}(\S+):\s*\n\s{4}calls:\s*\n((?:\s{6}-\s.+\n)*)\s{4}called_by:\s*\n((?:\s{6}-\s.+\n)*)/gm;
-    let match;
-    while ((match = funcRegex.exec(cgSection)) !== null) {
-      const funcId = match[1];
-      const calls = [...match[2].matchAll(/\s{6}-\s(.+)/g)].map((m) => m[1].trim());
-      const calledBy = [...match[3].matchAll(/\s{6}-\s(.+)/g)].map((m) => m[1].trim());
-      result.call_graph[funcId] = { calls, called_by: calledBy };
-    }
-  }
-
-  return result;
 }
 
 // ─── Serialization for VA input ───
@@ -505,12 +482,12 @@ export function serializeGraphContextForUnit(
 
   // 이 unit에 관련된 taint paths
   const relevantPaths = graphRag.taintPaths.filter((tp) =>
-    unitFileSet.has(tp.source.file) || unitFileSet.has(tp.sink.file),
+    unitFileSet.has(tp.source.file) || unitFileSet.has(tp.sink.file) || tp.hops.some(hop => unitFiles.some(file => hop === file || hop.startsWith(`${file}:`))),
   );
   if (relevantPaths.length > 0) {
-    lines.push('## Taint Paths (source → dangerous sink)');
+    lines.push('## Candidate paths — verify reachability, arguments and guards; these are not confirmed vulnerabilities');
     for (const tp of relevantPaths.slice(0, 10)) {
-      lines.push(`- ${tp.source.file}:${tp.source.function} → ${tp.sink.function}() [${tp.sink.category}] (${tp.hopCount} hops)`);
+      lines.push(`- ${tp.source.file}:${tp.source.line ?? '?'} → ${tp.sink.file}:${tp.sink.line ?? '?'} ${tp.sink.function}() [${tp.sink.category}; ${tp.origin ?? 'call-heuristic'}] via ${tp.hops.join(' → ')}`);
     }
     lines.push('');
   }
