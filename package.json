@@ -75,6 +75,12 @@
   },
   "types": "./dist/src/index.d.ts",
   "main": "./dist/src/index.js",
+  "files": [
+    "dist",
+    "src",
+    "domains",
+    "templates"
+  ],
   "peerDependencies": {
     "@tree-sitter-grammars/tree-sitter-kotlin": "^1.1.0",
     "tree-sitter-c": "^0.23.6",

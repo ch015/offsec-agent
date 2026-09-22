@@ -18,6 +18,7 @@
 
 - [agent-autonomy.md](agent-autonomy.md)
 - [embedding.md](embedding.md)
+- [validation-2026-09-22.ko.md](validation-2026-09-22.ko.md) — 입력 검증·패키징과 회귀 결과
 - [detection-improvements.md](detection-improvements.md)
 - [analysis-storage-recovery.md](analysis-storage-recovery.md) — 외부 저장·백업/복원·재개·예산 증액
 - [도메인 계약과 이식 범위](../domains/offsec/README.md)

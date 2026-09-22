@@ -9,7 +9,8 @@ pnpm install --frozen-lockfile
 pnpm build:library
 ```
 
-앱의 workspace 또는 pnpm `link:` 의존성으로 이 디렉터리를 연결합니다. 기본 package export는 컴파일한 `dist/src/index.js`와 타입 선언을 사용합니다. TypeScript 실행기를 쓰는 앱은 `secops-offsec-agent/source` export도 사용할 수 있습니다. `dist`의 도메인/템플릿 리소스를 함께 유지하세요.
+앱의 workspace 또는 pnpm `link:` 의존성으로 이 디렉터리를 연결합니다. 기본 package export는 컴파일한 `dist/src/index.js`와 타입 선언을 사용합니다. TypeScript 실행기를 쓰는 앱은 `secops-offsec-agent/source` export도 사용할 수 있습니다. `dist`의 도메인/템플릿 리소스를 함께 유지하세요. 배포 archive는 `dist`, `src`, `domains`, `templates`를
+명시적 포함 목록으로 사용하므로 로컬 실행 산출물을 패키지에 포함하지 않습니다.
 
 ## 앱 연결 예제
 
@@ -32,6 +33,10 @@ import는 서버나 worker를 시작하지 않습니다. 모델 키는 인스턴
 `engagement/`와 `report/`를 분리합니다. 저장 루트는 `CH015_STATE_HOME`으로 지정합니다.
 기존 배치가 필요할 때만 `engagementDir: '/srv/results/job-123'`처럼 새/빈 절대경로를 지정합니다.
 재개에는 추측한 최신 폴더가 아닌 결과의 `engagementDir`를 보관해 사용하세요.
+
+`semgrepMode`는 `required`/`best-effort`/`off`, `maxTurns`는 양의 안전한 정수,
+`effort`는 `low`/`medium`/`high`/`xhigh`/`max`만 허용합니다. 잘못된 값은
+스캔·모델 실행·결과 디렉터리 생성 전에 거부합니다. CLI 숫자도 소수·부분 숫자를 정수로 잘라 받지 않습니다.
 
 `maxConcurrency` 기본값은 2입니다. `maxFollowupHypotheses`는 기본 3, 0..8 범위이며 0은 후속 분석을 끕니다.
 유효한 교차 단위 질문이 있을 때만 최대 32턴의 추가 분석 세션 한 라운드를 실행합니다.

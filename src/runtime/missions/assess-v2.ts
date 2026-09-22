@@ -256,6 +256,15 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
 
   if (!existsSync(target)) throw new Error(`진단 대상이 없다: ${target}`);
   if (!statSync(target).isDirectory()) throw new Error(`진단 대상은 디렉토리여야 한다: ${target}`);
+  if (!['required', 'best-effort', 'off'].includes(semgrepMode)) {
+    throw new Error(`semgrepMode must be required, best-effort or off: ${semgrepMode}`);
+  }
+  if (input.maxTurns !== undefined && (!Number.isSafeInteger(input.maxTurns) || input.maxTurns < 1)) {
+    throw new Error('maxTurns must be a positive safe integer');
+  }
+  if (input.effort !== undefined && !['low', 'medium', 'high', 'xhigh', 'max'].includes(input.effort)) {
+    throw new Error('effort must be low, medium, high, xhigh or max');
+  }
   if (!['auto', 'force'].includes(workUnitMode)) {
     throw new Error(`OffSec v2는 작업 분할을 항상 사용한다: workUnitMode=${workUnitMode}는 지원하지 않는다`);
   }
@@ -964,12 +973,12 @@ async function main(): Promise<void> {
     ...(flags.get('model') ? { model: flags.get('model') } : {}),
     ...(flags.get('review-model') ? { reviewModel: flags.get('review-model') } : {}),
     ...(effortFlag ? { effort: effortFlag as SessionSpec['effort'] } : {}),
-    ...(maxTurnsFlag ? { maxTurns: Number.parseInt(maxTurnsFlag, 10) } : {}),
+    ...(maxTurnsFlag !== undefined ? { maxTurns: Number(maxTurnsFlag) } : {}),
     ...(maxUsdFlag ? { maxBudgetUsd: Number(maxUsdFlag) } : {}),
     ...(flags.has('no-cost-guard') ? { noCostGuard: flags.get('no-cost-guard') === 'true' } : {}),
     ...(semgrepFlag ? { semgrepMode: semgrepFlag as SemgrepMode } : {}),
     ...(workUnitsFlag ? { workUnitMode: workUnitsFlag as WorkUnitMode } : {}),
-    ...(maxConcurrencyFlag ? { maxConcurrency: Number.parseInt(maxConcurrencyFlag, 10) } : {}),
+    ...(maxConcurrencyFlag !== undefined ? { maxConcurrency: Number(maxConcurrencyFlag) } : {}),
     ...(flags.has('max-followup-hypotheses') ? { maxFollowupHypotheses: Number(flags.get('max-followup-hypotheses')) } : {}),
     ...(engagementDirFlag ? { engagementDir: engagementDirFlag } : {}),
   };

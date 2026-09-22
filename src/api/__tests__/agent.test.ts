@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createOffsecAgent, type SessionSpec, type SessionOutcome, type PhaseMetrics } from '../../index.js';
 import { buildOptions } from '../../runtime/session.js';
 import { loadOffsecContract, getOffsecPhase, renderPhaseArtifacts, resolvePhaseMethodFiles } from '../../runtime/offsec-contract.js';
@@ -55,4 +55,21 @@ it('requires explicit paths and rejects pre-cancelled work before filesystem cha
   await expect(agent.run(input, { signal: AbortSignal.abort(new Error('cancelled before start')) })).rejects.toThrow('cancelled before start');
   expect(existsSync(input.engagementDir)).toBe(false);
   expect(() => createOffsecAgent({})).toThrow('apiKey or sessionRunner');
+});
+
+it.each([
+  { semgrepMode: 'requird' }, { maxTurns: 0 }, { maxTurns: 1.5 }, { maxTurns: Number.NaN }, { effort: 'extreme' },
+])('rejects invalid execution settings before scanning or creating output: %j', async invalid => {
+  const input = fixture(), astBuilder = vi.fn(), runner = vi.fn(scripted);
+  const agent = createOffsecAgent({ astBuilder, sessionRunner: runner });
+  await expect(agent.run({ ...input, ...invalid } as never)).rejects.toThrow(/semgrepMode|maxTurns|effort/);
+  expect(astBuilder).not.toHaveBeenCalled(); expect(runner).not.toHaveBeenCalled();
+  expect(existsSync(input.engagementDir)).toBe(false);
+});
+
+it('accepts the installed SDK xhigh effort level', async () => {
+  const runner = vi.fn(scripted);
+  const result = await createOffsecAgent({ sessionRunner: runner }).run({ ...fixture(), effort: 'xhigh' });
+  expect(result.status).toBe('published');
+  expect(runner.mock.calls.every(([spec]) => spec.effort === 'xhigh')).toBe(true);
 });
