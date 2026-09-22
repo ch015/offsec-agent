@@ -1,6 +1,6 @@
 # OffSec 탐지와 실행 비용 개선
 
-구현 기준: 2026-09-21. [코드 연동](embedding.md) · [행동 원칙](agent-autonomy.md)
+문서 현행화: 2026-09-22. 아래 크기·시간 측정은 2026-09-21 개선 당시 기록이다. [코드 연동](embedding.md) · [행동 원칙](agent-autonomy.md)
 
 ## 탐지에 필요한 근거 전달
 
@@ -85,7 +85,10 @@ import 측정은 warm filesystem에서 수행했고 실제 분석 중 최대 메
 고정 버전의 `--review-model`이 필요하다. `--workflow-version=v1`은 기존 평가 경로다.
 `scripts/ab-compare.ts`는 v1/v2 phase를 구분하지만 산출물 개수만으로 탐지율을 판정하지 않는다.
 
-이번 검증은 런타임 428개, 격리 PostgreSQL 통합 6개, 벤더 597개와 self-check 103개,
+2026-09-21 탐지·경량화 단계의 검증은 런타임 428개, 격리 PostgreSQL 통합 6개, 벤더 597개와 self-check 103개,
 타입·계약·빌드·별도 소비 앱 JS/엄격한 TS 사용이다. 모델 응답은 테스트 fixture를 사용했다.
 실제 모델의 탐지 정확도·오탐률·비용/시간, 실제 Semgrep 프로세스 실행과 고객 대상 진단은
-이번 검증에 포함되지 않았다. v2 중단 재개와 증분 분석 캐시도 후속 과제다.
+해당 검증에 포함되지 않았다. 이후 추가된 v2 재개는 `agent.resume(engagementDir)` 또는
+`pnpm assess:v2 /absolute/target --engagement-dir=/absolute/run/engagement --resume`으로 사용한다.
+완료 단위·checkpoint·예산 원장을 재사용하며 자세한 경계는 [저장·복구 안내](analysis-storage-recovery.md)를 따른다.
+증분 분석 캐시는 아직 제공하지 않는다.

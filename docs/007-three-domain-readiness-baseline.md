@@ -1,7 +1,7 @@
 # Three-domain production readiness baseline
 
-> **이전 기록 — 2026-09-18 현행화 메모.** 본문의 설계·명령·경로·수치와 완료 표시는 작성 당시 기록이며 현재 지원 범위를 보장하지 않는다.
-> 현재 상태: [개발 현황](../../docs/development-status.ko.md) · [현재 실행 안내](../README.md)
+> **이전 기록 — 2026-09-22 안내 갱신.** 본문의 설계·명령·경로·수치와 완료 표시는 작성 당시 기록이며 현재 지원 범위를 보장하지 않는다.
+> 현재 상태: [문서 안내](README.md) · [현재 실행 안내](../README.md)
 
 - Baseline captured: 2026-08-05T00:50:26Z
 - Repository: `secops-nunchi-agent`
@@ -35,7 +35,7 @@ The first sandboxed `pnpm eval:feedback` attempt failed before the evaluator ran
 
 The passing commands prove deterministic host and fixture behavior at this revision. The local PostgreSQL integration proves the repository transaction boundary, not a deployed database or shared artifact topology. The commands do not prove production readiness, semantic entailment, live provider quality, source truthfulness, multi-worker crash recovery, or regulatory compliance. Those claims remain gated by the external decisions in the plan.
 
-The machine-readable decisions and unresolved external inputs are recorded in [`three-domain-decision-registry.json`](../../secops-agent-feedback/docs/three-domain-decision-registry.json).
+The machine-readable decisions and unresolved external inputs are recorded in `secops-agent-feedback/docs/three-domain-decision-registry.json` in the former multi-domain workspace (not distributed with this standalone repository).
 
 ## Wave 1 progress
 

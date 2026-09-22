@@ -1,12 +1,26 @@
 # OffSec 문서 안내
 
-기준: 2026-09-21. [프로젝트 README](../README.md) · [전체 개발 현황](../../docs/development-status.ko.md) · [전체 문서 목록](../../docs/documentation-index.ko.md).
+기준: 2026-09-22. [프로젝트 README](../README.md). 이 문서와 아래 가이드는 이 저장소만 clone한 환경을 기준으로 한다.
+
+## 현재 지원 범위
+
+- 공개 `createOffsecAgent` API와 로컬 CLI를 제공한다. HTTP 게이트웨이·SOC·Feedback 서비스는 포함하지 않는다.
+- v1은 pentest/redteam/검증 흐름, v2는 병렬 단위 분석과 review/evaluate/report 및 조건부 교차 단위 후속 분석을 제공한다.
+- v2는 checkpoint에서 재개하고 완료 단위를 재사용한다. 복구 가능한 실패는 근거와 부분 보고서를 보존한다. 증분 분석 캐시는 미제공이다.
+- 기본 산출물은 타겟 밖 `~/.ch015/<레포>/<시간>_<커밋>_<UUID>/`에 저장한다. 현재는 파일/선택적 PostgreSQL 상태와 선택적 artifact store를 사용한다.
+- SQLite `state.db`, 영구 Finding ID/diff 연계, Nunchi 자동 전송과 보관·삭제 정책은 후속 범위다.
+- 기본 금액 상한은 없다. 명시한 금액 상한·턴·단위 timeout·취소·근거 무결성은 각 실행 규칙을 따른다.
+
+과거 통합 플랫폼의 상위 `docs/`, 앱 예제와 sibling Feedback decision registry는 이 배포에 포함되지 않는다.
+현재 OffSec 사용법은 이 저장소의 문서를 따르고, 아래 역사 기록의 외부 자산명은 출처로만 읽는다.
 
 ## 현재 사용 문서
 
 - [agent-autonomy.md](agent-autonomy.md)
 - [embedding.md](embedding.md)
 - [detection-improvements.md](detection-improvements.md)
+- [analysis-storage-recovery.md](analysis-storage-recovery.md) — 외부 저장·백업/복원·재개·예산 증액
+- [도메인 계약과 이식 범위](../domains/offsec/README.md)
 
 ## 이전 기록
 

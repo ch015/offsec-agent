@@ -56,7 +56,7 @@ const result = await agent.run({ target: '/absolute/repository' });
 const resumed = await agent.resume(result.engagementDir);
 ```
 
-CLI: `pnpm assess:v2 -- /absolute/repository --engagement-dir=/absolute/run/engagement --resume`.
+CLI: `pnpm assess:v2 /absolute/repository --engagement-dir=/absolute/run/engagement --resume`.
 
 새 v2 실행은 checkpoint와 준비 산출물의 해시를 검증하고, 완료된 phase outcome을 상태에 보존한다.
 재개는 완료 단위를 다시 모델에 요청하지 않는다. 프로세스 종료 시 열린 attempt는 중단으로 기록하고
@@ -148,11 +148,11 @@ PostgreSQL DB 자체의 백업, 실제 LLM 응답의 재생성까지 이 묶음�
 
 ```sh
 # 신규 실행: 기본 금액 상한 없음
-pnpm assess:v2 -- /absolute/repository
+pnpm assess:v2 /absolute/repository
 # 기존 미완료 실행: 금액 상한 해제
-pnpm assess:v2 -- /absolute/repository --engagement-dir=/absolute/run/engagement --resume --no-cost-guard
+pnpm assess:v2 /absolute/repository --engagement-dir=/absolute/run/engagement --resume --no-cost-guard
 # 기존 미완료 실행: 필요한 경우 특정 금액으로 증액
-pnpm assess:v2 -- /absolute/repository --engagement-dir=/absolute/run/engagement --resume --max-usd=1000
+pnpm assess:v2 /absolute/repository --engagement-dir=/absolute/run/engagement --resume --max-usd=1000
 ```
 
 SDK는 `agent.resume(directory, { noCostGuard: true })` 또는 `{ maxBudgetUsd: 1000 }`을

@@ -1,6 +1,6 @@
 # domains/offsec — 취약점 진단 리소스
 
-현재 구현 기준: 2026-09-18. [프로젝트 README](../../README.md) · [앱 코드 연동](../../docs/embedding.md).
+문서 기준: 2026-09-22. [프로젝트 README](../../README.md) · [앱 코드 연동](../../docs/embedding.md).
 
 Claude Agent SDK 로컬 플러그인이다. 호스트는 버전 계약을 읽어 역할별 `Options.agents`, 도구, 방법 카드와 스키마를 구성한다. 방법론/저수준 검증기는 CH015에서 이식한 뒤 현재 실행에 맞춰 보완했다. 원본 저장소를 런타임 의존성으로 사용하지 않는다.
 
@@ -31,6 +31,6 @@ Claude Agent SDK 로컬 플러그인이다. 호스트는 버전 계약을 읽어
 
 ## 이식·검증 기록
 
-미이식/대체/다른 도메인 소유 자산은 [decision registry](../../../secops-agent-feedback/docs/three-domain-decision-registry.json)의 `unportedAssets`에 기록한다. 이는 이식 당시 결정 기록이며, 현재 제품 기능은 프로젝트 README와 [개발 현황](../../../docs/development-status.ko.md)을 따른다.
+이식 당시 미이식/대체/다른 도메인 소유 자산은 통합 플랫폼의 `secops-agent-feedback/docs/three-domain-decision-registry.json` 내 `unportedAssets`에 기록했다. 해당 역사 자료는 이 독립 저장소에 포함하지 않는다. 현재 제품 기능과 제한은 [프로젝트 README](../../README.md)와 [문서 안내](../../docs/README.md)를 따른다.
 
 리포 루트에서 `pnpm check:contracts`는 역할·방법 카드·스키마 등의 계약 리소스 hash를 확인한다. 계약 리소스를 수정하면 `pnpm generate:contract-resources`로 갱신한다. `pnpm test:all`은 계약·타입·호스트 회귀·벤더 및 self-test를 실행한다. `pnpm probe:offsec <대상 절대경로>`는 실제 SDK 플러그인 로드·도구 제한을 확인하는 별도 프로브다.

@@ -1,7 +1,7 @@
 # OffSec P1/P2 Typed Dependency Graph and Budgeted Work-Plan Implementation
 
-> **이전 기록 — 2026-09-18 현행화 메모.** 본문의 설계·명령·경로·수치와 완료 표시는 작성 당시 기록이며 현재 지원 범위를 보장하지 않는다.
-> 현재 상태: [개발 현황](../../docs/development-status.ko.md) · [현재 실행 안내](../README.md)
+> **이전 기록 — 2026-09-22 안내 갱신.** 본문의 설계·명령·경로·수치와 완료 표시는 작성 당시 기록이며 현재 지원 범위를 보장하지 않는다.
+> 현재 상태: [문서 안내](README.md) · [현재 실행 안내](../README.md)
 
 Implementation report for `docs/019-offsec-p1-p2-dependency-planning-spec.md`.
 

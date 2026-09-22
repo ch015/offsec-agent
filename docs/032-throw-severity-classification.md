@@ -1,7 +1,7 @@
 # throw 전수 분류 — severity classification
 
-> **이전 기록 — 2026-09-18 현행화 메모.** 당시 측정·예외 분류 기록이다. 현재 OffSec v1/v2는 증거·범위·보고서 발행 게이트를 강제한다. warning-only/차단 없음 및 과거 throw·비용 수치를 현재 정책·성능으로 사용하지 않는다.
-> 현재 상태: [개발 현황](../../docs/development-status.ko.md) · [현재 실행 안내](../README.md)
+> **이전 기록 — 2026-09-22 안내 갱신.** 당시 측정·예외 분류 기록이다. 현재 OffSec v1/v2는 증거·범위·보고서 발행 게이트를 강제한다. warning-only/차단 없음 및 과거 throw·비용 수치를 현재 정책·성능으로 사용하지 않는다.
+> 현재 상태: [문서 안내](README.md) · [현재 실행 안내](../README.md)
 
 > 대상: `src/runtime/` 전체 (66개 파일, __tests__ 제외)
 > 총 throw: **796건**

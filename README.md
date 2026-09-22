@@ -1,8 +1,8 @@
 # secops-offsec-agent
 
-문서 기준: 2026-09-21. [현재 개발 현황](../docs/development-status.ko.md) · [문서 목록](docs/README.md)
+문서 기준: 2026-09-22. [현재 지원 범위·문서 목록](docs/README.md) · [저장·복구·재개](docs/analysis-storage-recovery.md)
 
-기존 앱에서 직접 호출하는 공개 API: [`createOffsecAgent`](src/index.ts). `pnpm build:library` 후 모듈 import로 사용할 수 있습니다. [코드 연동 가이드](docs/embedding.md) · [앱 예제](../examples/embedded-app/agents.mjs)
+기존 앱에서 직접 호출하는 공개 API: [`createOffsecAgent`](src/index.ts). `pnpm build:library` 후 모듈 import로 사용할 수 있습니다. [코드 연동 가이드](docs/embedding.md) · [앱 예제](docs/embedding.md#앱-연결-예제)
 
 취약점 진단(OffSec) 전용 로컬 에이전트. **Claude Agent SDK 호스트**가
 `domains/offsec` 로컬 플러그인을 로드하고, 역할별 SDK 세션과 병렬 작업 단위를 조율한다.
@@ -60,7 +60,7 @@ docs/                OffSec 관련 결정과 관측 기록
 - `pnpm install` 완료
 - Claude Agent SDK 인증·설정 사용 가능 (`ANTHROPIC_API_KEY` 또는 OAuth profile)
 
-> **참고**: tree-sitter 네이티브 바인딩은 `lib/ch015/ast/`의 AST 분석에 필요하다.
+> **참고**: tree-sitter 네이티브 바인딩은 `domains/offsec/lib/ch015/ast/`의 AST 분석에 필요하다.
 > 설치 도구의 build-script 정책으로 네이티브 빌드가 생략됐다면 tree-sitter 빌드를 허용하고
 > 다시 설치해야 한다. `pnpm approve-builds`는 해당 명령을 제공하는 pnpm 버전에서만 사용한다.
 > (typecheck·대부분의 테스트는 네이티브 빌드 없이 통과한다.)
@@ -70,7 +70,10 @@ docs/                OffSec 관련 결정과 관측 기록
 전체 parser 개발 의존성이 포함된다. SDK·PostgreSQL·Playwright는 import 시 로드하지 않고
 해당 실행 경로에서 로드한다. [설치·탐지 개선 상세](docs/detection-improvements.md)
 
-모든 플래그는 `--key=value` 형식만 지원한다 (`--key value` 불가).
+값을 받는 플래그는 `--key=value` 형식을 사용한다 (`--key value` 불가).
+v1 boolean은 `--no-cost-guard=true`처럼 값을 지정한다. v2는 `--resume`,
+`--no-cost-guard`의 값 없는 형식도 지원한다. 아래 pnpm 예제는 스크립트 이름 뒤에
+별도의 `--`를 넣지 않는다. 그 문자는 현재 CLI에서 대상/잘못된 인수로 해석된다.
 
 ### 취약점 진단 (assess — v1)
 
@@ -84,7 +87,7 @@ pnpm assess /absolute/path/to/target
 # 범위 지시문 추가
 pnpm assess /absolute/path/to/target "인증 모듈과 API 라우터만 진단"
 
-# 읽기 전용 대상이면 쓰기 가능한 engagement 디렉토리 지정 (새 디렉토리 또는 빈 디렉토리)
+# 저장 위치를 직접 지정할 때 (새 디렉토리 또는 빈 디렉토리; 기본값도 대상 밖에 저장)
 pnpm assess /absolute/path/to/target --engagement-dir=/tmp/eng-001
 
 # 모델을 명시적으로 변경 (model ≠ review-model 필수)
@@ -100,12 +103,12 @@ pnpm assess /absolute/path/to/target --model=sonnet --review-model=haiku
 |---|---|
 | `--model=<id>` | 주 모델 (기본 `opus`) |
 | `--review-model=<id>` | 리뷰 모델 (기본 `sonnet`); model과 달라야 함 |
-| `--effort=<low\|medium\|high\|max>` | 진단 깊이 |
+| `--effort=<low\|medium\|high\|xhigh\|max>` | 진단 깊이 |
 | `--max-turns=<n>` | 최대 턴 (기본 120) |
 | `--max-usd=<n>` | 비용 상한 (기본 무제한, v2 재개 시 증액 가능) |
-| `--no-cost-guard` | 금액 상한 해제 (v2 재개 포함) |
+| `--no-cost-guard=true` | v1 금액 상한 해제; v2는 `--no-cost-guard`도 지원 (재개 포함) |
 | `--verification-mode=<mode>` | `VA_ONLY` (기본) · `VA_PENTEST` · `VA_PENTEST_REDTEAM` |
-| `--semgrep=<mode>` | `required` (기본) · `best-effort` · `off` |
+| `--semgrep=<mode>` | v1 기본 `required`, v2 기본 `best-effort`; `off` 선택 가능 |
 | `--work-units=<mode>` | `auto` (기본) · `force` · `off` |
 | `--max-concurrency=<n>` | 병렬 work-unit 수 |
 | `--engagement-dir=<path>` | 결과 출력 절대 경로 (새/빈 디렉토리 권장) |
@@ -143,12 +146,13 @@ pnpm assess /absolute/path/to/target --verification-mode=VA_PENTEST \
 
 #### 로컬 headed-browser 재개
 
-PostgreSQL backend로 시작한 run에 대해:
+PostgreSQL backend로 시작한 v1의 사용자 인증 대기는 공개 API `resumeAssessOwnerAuth`로
+이어갈 수 있다. 요청 ID·SHA-256·상태 version과 앱의 인증 adapter가 필요하다.
+[앱 연동의 v1 재개 예제](docs/embedding.md#v1-사용자-인증-후-재개)를 따른다.
 
-```bash
-pnpm assess:resume -- --engagement-dir=<path> --request-id=<id> \
-  --request-sha256=<sha256> --expected-version=<n>
-```
+현재 `assess:resume` CLI의 인수 파서는 필수 `--request-sha256`의 숫자를 허용하지 않아
+해당 명령으로는 재개할 수 없다. CLI 수정 전에는 위 API를 사용한다. v2의 `--resume`과
+`agent.resume()`은 별도 경로이며 이 제한을 받지 않는다.
 
 ### 취약점 진단 (assess — v2)
 
@@ -210,17 +214,21 @@ pnpm assess:v2 /absolute/path/to/target --model=sonnet --review-model=haiku
 v2 assess 플래그는 v1과 동일하되 pentest 전용 플래그(`--verification-mode`,
 `--test-url`, `--live-test-profile`, `--auth-interaction`)는 지원하지 않는다:
 `--model`, `--review-model`, `--effort`, `--max-turns`, `--max-usd`, `--no-cost-guard`, `--semgrep`,
-`--work-units`, `--max-concurrency`, `--engagement-dir`.
+`--work-units`, `--max-concurrency`, `--engagement-dir`, `--resume`.
+`--resume`은 저장된 입력을 재사용하며 기존 실행의 `--engagement-dir`이 필요하다.
+재개 시 변경할 수 있는 금액 옵션과 범위 경계는 [저장·복구 안내](docs/analysis-storage-recovery.md)를 따른다.
 v2 전용 `--max-followup-hypotheses=<0..8>`은 교차 단위 후속 질문 수를 제한한다(기본 3, 0이면 비활성화).
 
 #### v2 출력 구조
 
-v2는 대상 리포 하위의 `.nunchi` 디렉토리에 engagement를 기록한다 (자동으로 `.gitignore` 생성):
+v2 기본 출력은 대상 밖의 실행별 디렉터리다. `CH015_STATE_HOME`으로 저장 루트를 바꿀 수 있다.
+타겟에 `.nunchi`나 `.gitignore`를 만들지 않으며, 현재 상태 backend는 파일/선택적 PostgreSQL이다.
+SQLite 전환과 Nunchi 전송은 [현재 구현 경계](docs/analysis-storage-recovery.md)를 참조한다.
 
-```
-<target>/.nunchi/
-  .gitignore                         # 산출물 전체 미추적 (취약점 상세 포함)
-  reports/<engagementId>/            # engagement 루트
+```text
+~/.ch015/<대상 레포명>/<UTC시간>_<커밋 또는 nogit>_<UUID>/
+  run.json                          # 실행·타겟 정체성
+  engagement/                       # 상태·근거·checkpoint·복구 자료
     00_recon.json
     00_dependency_graph.json
     00_ast_context.yaml
@@ -237,16 +245,21 @@ v2는 대상 리포 하위의 `.nunchi` 디렉토리에 engagement를 기록한�
     02_analysis_result.md
     03_review_result.json
     04_evaluation.json
-    07_security_report.md            # 최종 발행 보고서 (draft → rename)
+    07_security_report.draft.md      # phase 완료 근거로 보존하는 초안
+    07_security_report.md            # 발행 내용의 검증용 사본
     host-ledger.jsonl                # host 실행 원장
+  report/
+    07_security_report.md            # 사용자에게 발행하는 보고서 (초안 보존 후 별도 복사)
 ```
 
-`--engagement-dir`로 절대경로를 지정하면 기존 파일 배치를 유지한다. v2는 `--resume` 또는 SDK `agent.resume(engagementDir)`로 완료 단계를 재사용한다.
-비어 있지 않은 기존 engagement 디렉토리는 거부된다.
+`--engagement-dir`로 절대경로를 지정하면 기존 파일 배치를 유지한다. 신규 실행은 비어 있지 않은
+디렉터리를 거부한다. 기존 실행은 `--resume` 또는 SDK `agent.resume(engagementDir)`로 완료 단계를
+재사용한다. 기본 저장 경로는 타겟과 겹칠 수 없다.
+최종 파일이 있어도 상태 기록이 끝나지 않았을 수 있으므로 실행/발행 상태를 함께 확인한다.
 
 `coverage.complete`는 작업 단위 실행 완료를 의미한다. 읽기 수가 높거나 보고서가 발행돼도
 취약점 누락이 없음을 증명하지 않으며 `semanticCoverage`는 `not-proven`이다.
-v2 중단 재개·증분 분석 캐시는 아직 제공하지 않는다.
+v2 중단 실행은 `agent.resume(engagementDir)` 또는 CLI `--resume`으로 재개한다. 증분 분석 캐시는 아직 제공하지 않는다.
 
 ### 평가 (고정 산출물 evaluator — agent 실행·live 품질이 아님)
 
@@ -281,9 +294,13 @@ NUNCHI_STATE_BACKEND=postgres NUNCHI_DATABASE_URL=<url> \
 ### 운영 (admin)
 
 ```bash
-pnpm run:admin -- inspect --engagement=<path> --run-id=<id>
-pnpm run:admin -- recover-publication --engagement=<path> --run-id=<id>
+pnpm run:admin inspect --engagement=<path> --run-id=<id>
+pnpm run:admin recover-publication --engagement=<path> --run-id=<id>
 ```
+
+`recover-publication`은 v1 발행 복구용이다. v2는 `--resume` 또는 `agent.resume()`으로
+완료 phase를 재사용하여 남은 발행 절차를 수행한다. PostgreSQL 실행에는 admin에도
+`--backend=postgres`와 해당 DB 설정을 전달한다.
 
 ### 프로브 & 테스트
 

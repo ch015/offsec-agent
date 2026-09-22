@@ -1,7 +1,7 @@
 # Phase 2: OffSec Webhook 연동 설계
 
-> **이전 기록 — 2026-09-18 현행화 메모.** 통합 플랫폼 시점의 설계·운영 기록이다. 현재 OffSec는 모듈/CLI, Feedback와 SOC는 각각 분리된 gateway를 사용한다. 당시 라우트·배포 수량·비용 예상은 현재 운영 보장이 아니다.
-> 현재 상태: [개발 현황](../../docs/development-status.ko.md) · [현재 실행 안내](../README.md) · [현재 서비스 API](../../docs/service-api.ko.md)
+> **이전 기록 — 2026-09-22 안내 갱신.** 통합 플랫폼 시점의 설계·운영 기록이다. 현재 OffSec는 모듈/CLI이며 다른 도메인의 서비스 상태는 이 저장소의 지원 범위가 아니다. 당시 라우트·배포 수량·비용 예상은 현재 운영 보장이 아니다.
+> 현재 상태: [문서 안내](README.md) · [현재 실행 안내](../README.md) · 이 독립 모듈에는 HTTP 서비스 API가 없다.
 
 Status: 설계 (2026-08-12)
 Parent: `docs/021-service-platform-architecture.md`
