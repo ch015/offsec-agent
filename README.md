@@ -91,7 +91,7 @@ pnpm assess /absolute/path/to/target --engagement-dir=/tmp/eng-001
 pnpm assess /absolute/path/to/target --model=sonnet --review-model=haiku
 ```
 
-기본 출력은 `<target>/.nunchi/reports/<engagementId>/`에 기록된다.
+신규 기본 출력은 `~/.ch015/<대상 레포명>/<UTC시간>_<커밋>_<UUID>/`에 기록된다. `engagement/`와 `report/`를 분리한다.
 비어 있지 않은 기존 engagement 디렉토리는 retry/resume 경로를 제외하고 거부된다.
 
 #### assess 옵션
@@ -102,7 +102,8 @@ pnpm assess /absolute/path/to/target --model=sonnet --review-model=haiku
 | `--review-model=<id>` | 리뷰 모델 (기본 `sonnet`); model과 달라야 함 |
 | `--effort=<low\|medium\|high\|max>` | 진단 깊이 |
 | `--max-turns=<n>` | 최대 턴 (기본 120) |
-| `--max-usd=<n>` | 비용 상한 |
+| `--max-usd=<n>` | 비용 상한 (기본 무제한, v2 재개 시 증액 가능) |
+| `--no-cost-guard` | 금액 상한 해제 (v2 재개 포함) |
 | `--verification-mode=<mode>` | `VA_ONLY` (기본) · `VA_PENTEST` · `VA_PENTEST_REDTEAM` |
 | `--semgrep=<mode>` | `required` (기본) · `best-effort` · `off` |
 | `--work-units=<mode>` | `auto` (기본) · `force` · `off` |
@@ -193,7 +194,7 @@ analyzer는 짧은 A1–A8 방법 카드와 담당 파일의 증거 색인을 �
 #### v2 실행
 
 ```bash
-# 기본 실행 — model=opus, review-model=sonnet, semgrep=required, work-units=auto
+# v2 기본 실행 — model=opus, review-model=sonnet, semgrep=best-effort, work-units=auto
 pnpm assess:v2 /absolute/path/to/target
 
 # 범위 지시문 추가
@@ -208,7 +209,7 @@ pnpm assess:v2 /absolute/path/to/target --model=sonnet --review-model=haiku
 
 v2 assess 플래그는 v1과 동일하되 pentest 전용 플래그(`--verification-mode`,
 `--test-url`, `--live-test-profile`, `--auth-interaction`)는 지원하지 않는다:
-`--model`, `--review-model`, `--effort`, `--max-turns`, `--max-usd`, `--semgrep`,
+`--model`, `--review-model`, `--effort`, `--max-turns`, `--max-usd`, `--no-cost-guard`, `--semgrep`,
 `--work-units`, `--max-concurrency`, `--engagement-dir`.
 v2 전용 `--max-followup-hypotheses=<0..8>`은 교차 단위 후속 질문 수를 제한한다(기본 3, 0이면 비활성화).
 
@@ -240,7 +241,7 @@ v2는 대상 리포 하위의 `.nunchi` 디렉토리에 engagement를 기록한�
     host-ledger.jsonl                # host 실행 원장
 ```
 
-`--engagement-dir`로 절대경로를 지정하면 `.nunchi/reports/<id>` 대신 해당 경로에 기록한다.
+`--engagement-dir`로 절대경로를 지정하면 기존 파일 배치를 유지한다. v2는 `--resume` 또는 SDK `agent.resume(engagementDir)`로 완료 단계를 재사용한다.
 비어 있지 않은 기존 engagement 디렉토리는 거부된다.
 
 `coverage.complete`는 작업 단위 실행 완료를 의미한다. 읽기 수가 높거나 보고서가 발행돼도
@@ -336,7 +337,7 @@ v2는 v1의 pentest/redteam/feedback loop·verifier·objection 시스템을 완�
 방식으로 수행하고, `evaluate` phase가 커버리지·심각도를 객관 평가한 뒤 `reporter`(lead
 role)가 초안을 작성하고 호스트 게이트가 최종 발행한다. `analyze`는 work-unit 단위 병렬 실행이며, 완료 unit이
 하나라도 있으면 진행한다(부분 완료는 `quarantinedUnits`/`uncoveredFiles`로 기록). 출력은
-대상 리포 하위 `.nunchi/reports/<id>`에 격리되고 `.gitignore`로 자동 미추적 처리된다.
+기본 실행은 대상 리포 밖의 실행별 저장소에 격리된다. 명시적인 기존 engagement 경로는 호환성을 유지한다.
 
 평가 어댑터(`evals/offsec/adapters/`)와 정책(`evals/offsec/policy.json`)은 계약 버전에
 맞춰 분리한다. v1 산출물은 `current.ts`(v1 phase 순위: va/verify/pentest/redteam …), v2
@@ -354,3 +355,5 @@ OffSec 호스트 역할·phase를 추가할 때는 계약과 해당 role/method 
 디렉토리가 아니라 진단 대상이다.
 
 행동 자율성, 종료 조건 및 운영 변경은 [에이전트 행동 지침](docs/agent-autonomy.md)을 참조한다.
+
+산출물 백업·복원, 부분 결과, SDK 재개, 외부 저장 실패 처리와 지원 범위는 [분석 저장 및 복구](docs/analysis-storage-recovery.md)를 참고한다.

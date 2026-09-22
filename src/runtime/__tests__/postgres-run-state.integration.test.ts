@@ -1,5 +1,10 @@
-import { randomUUID } from 'node:crypto';
-import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createOffsecAgent } from '../../index.js';
+import { committedBudget, increaseResumeBudget } from '../missions/assessment-budget.js';
+import { syntheticOutcome } from './resumption-fixture.js';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -33,10 +38,16 @@ suite('PostgresRunStateStore', () => {
       contractVersion: '1.0.0',
       domain: 'soc',
       mission: 'report',
+      maxBudgetUsd: 10,
     }, {
       backend: 'postgres', pool: database, artifactStore: artifacts, workerId: 'itest-mission', sharedEngagementRoot: '/tmp',
     });
     try {
+      await increaseResumeBudget(runtime, { maxBudgetUsd: 1000000 }, null);
+      expect((await database.query('SELECT max_budget_usd FROM nunchi_runs WHERE run_id = $1', [runId])).rows[0]?.max_budget_usd).toBe('1000000');
+      await increaseResumeBudget(runtime, { noCostGuard: true }, null);
+      expect((await runtime.read()).maxBudgetUsd).toBeUndefined();
+      expect((await database.query('SELECT max_budget_usd FROM nunchi_runs WHERE run_id = $1', [runId])).rows[0]?.max_budget_usd).toBeNull();
       const receipt = await artifacts.put({
         uri: `artifact://${runId}/blocked.json`,
         content: new TextEncoder().encode('{"blocked":true}'),
@@ -73,6 +84,34 @@ suite('PostgresRunStateStore', () => {
       rmSync(engagementDir, { recursive: true, force: true });
     }
   });
+
+  it('runs concurrent OffSec units with durable budget reservations and restores coverage on resume', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'offsec-pg-resume-'))), target = join(root, 'project');
+    const runId = `itest-offsec-${randomUUID()}`, engagementDir = join(root, 'run');
+    for (const name of ['a', 'b']) {
+      const dir = join(target, 'packages', name); mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name })); writeFileSync(join(dir, `${name}.ts`), `export const ${name} = 1;\n`);
+    }
+    let calls = 0;
+    const agent = createOffsecAgent({ sessionRunner: async spec => { calls++; return syntheticOutcome(spec); },
+      runtime: { backend: 'postgres', pool: pool!, artifactStore: new InMemoryArtifactStore(), sharedEngagementRoot: root } });
+    try {
+      const result = await agent.run({ target, engagementDir, engagementId: runId, maxBudgetUsd: 10, maxConcurrency: 2, semgrepMode: 'off' });
+      expect(result.status).toBe('published'); expect(calls).toBe(5);
+      const snapshot = await new PostgresRunStateStore(pool!, runId).read();
+      expect(Object.values(snapshot.budgetReservations ?? {})).toHaveLength(5);
+      expect(committedBudget(snapshot)).toBeCloseTo(0.05);
+      unlinkSync(join(engagementDir, '00_analysis_coverage.json')); calls = 0;
+      expect((await agent.resume(engagementDir)).status).toBe('published'); expect(calls).toBe(0);
+    } finally {
+      await pool!.query('DELETE FROM nunchi_outbox WHERE id LIKE $1', [`${runId}:%`]);
+      await pool!.query('DELETE FROM nunchi_artifact_receipts WHERE uri LIKE $1', [`artifact://runs/${createHash('sha256').update(runId).digest('hex').slice(0, 32)}/%`]);
+      await pool!.query('DELETE FROM nunchi_run_events WHERE run_id=$1', [runId]);
+      await pool!.query('DELETE FROM nunchi_run_leases WHERE run_id=$1', [runId]);
+      await pool!.query('DELETE FROM nunchi_runs WHERE run_id=$1', [runId]);
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it('transactionally appends, deduplicates, serializes races, and rejects stale fences', async () => {
     const database = pool!;

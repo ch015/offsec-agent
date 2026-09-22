@@ -83,3 +83,16 @@ export async function executeBoundedWork<TUnit extends { unitKey: string }, TVal
   }
   return results;
 }
+
+/** Bound each scheduling window without truncating the sealed analysis scope. */
+export async function executePagedWork<TUnit extends { unitKey: string }, TValue>(
+  input: Parameters<typeof executeBoundedWork<TUnit, TValue>>[0],
+): Promise<BoundedWorkResult<TUnit, TValue>[]> {
+  if (!Number.isInteger(input.maximumWorkUnits) || input.maximumWorkUnits < 1) throw new Error('invalid scheduling window');
+  if (new Set(input.units.map(unit => unit.unitKey)).size !== input.units.length) throw new Error('duplicate work unitKey');
+  const results: BoundedWorkResult<TUnit, TValue>[] = [];
+  for (let start = 0; start < input.units.length; start += input.maximumWorkUnits) {
+    results.push(...await executeBoundedWork({ ...input, units: input.units.slice(start, start + input.maximumWorkUnits) }));
+  }
+  return results;
+}

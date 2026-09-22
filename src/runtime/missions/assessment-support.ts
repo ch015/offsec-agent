@@ -46,22 +46,19 @@ export async function recordOffsecPublication(input: {
         producer: 'publication/host/1',
       })]
     : [];
-  await input.runtime.append({
+  await input.runtime.appendBatch([{
     type: 'publication.completed',
     eventId: `${input.runId}:publication-completed`,
     artifact: publicationArtifact,
     sourceManifestSha256: input.sourceManifestSha256,
-  }, {
+  }, { type: 'run.completed', eventId: `${input.runId}:completed` }], {
     artifactReceipts,
     outbox: [{
       id: `${input.runId}:publication-completed`,
       idempotencyKey: `${input.runId}:publication-completed`,
       topic: 'run.publication.completed',
       payload: { runId: input.runId, artifactSha256: publicationArtifact.sha256 },
-    }],
-  });
-  await input.runtime.append({ type: 'run.completed', eventId: `${input.runId}:completed` }, {
-    outbox: [{
+    }, {
       id: `${input.runId}:run-completed`,
       idempotencyKey: `${input.runId}:run-completed`,
       topic: 'run.completed',

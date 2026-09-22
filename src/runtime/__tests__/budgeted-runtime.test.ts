@@ -59,4 +59,21 @@ describe('mission budget reservations', () => {
     await runtime.runPhase({ ...request(), maxBudgetUsd: 2 });
     await expect(runtime.runPhase(request())).rejects.toThrow('exhausted');
   });
+  it('persists a reservation before the provider and settles known charges before returning', async () => {
+    const order: string[] = [];
+    const runtime = new BudgetedRuntime({ name: 'fixture', capabilities: new Set(), async runPhase(req) {
+      order.push('provider'); expect(req.maxBudgetUsd).toBeCloseTo(3.2); return outcome(1);
+    } }, 10, () => 1, () => 0, { spentUsd: 6.8,
+      async reserve(_request, amount) { order.push('reserve'); expect(amount).toBeCloseTo(3.2); },
+      async settle(_request, charge, complete) { order.push('settle'); expect(charge).toBe(1); expect(complete).toBe(true); },
+    });
+    await runtime.runPhase(request()); expect(order).toEqual(['reserve', 'provider', 'settle']);
+  });
+  it('does not invoke the provider if its reservation cannot be persisted', async () => {
+    let calls = 0;
+    const runtime = new BudgetedRuntime({ name: 'fixture', capabilities: new Set(), async runPhase() { calls++; return outcome(0); } },
+      10, () => 1, () => 0, { spentUsd: 0, async reserve() { throw new Error('disk unavailable'); }, async settle() { throw new Error('unexpected settle'); } });
+    await expect(runtime.runPhase(request())).rejects.toThrow('disk unavailable'); expect(calls).toBe(0);
+  });
+
 });

@@ -49,6 +49,9 @@ export interface ProviderRuntime<TOptions = unknown, TRaw = unknown> {
   runPhase(request: ProviderPhaseRequest<TOptions>): Promise<ProviderPhaseOutcome<TRaw>>;
 }
 
+/** The provider returned a result that cannot be consumed by the next phase. */
+export class PhaseResultFailure extends Error {}
+
 export class ProviderRuntimeFailure extends Error {
   constructor(
     message: string,

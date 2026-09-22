@@ -1,9 +1,5 @@
 import {
-  appendFileSync,
   existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -12,7 +8,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 
 import { ArtifactRefSchema, ProviderUsageSchema } from '../contracts/result-contract.js';
-import type { ArtifactReceipt } from './artifact-store.js';
+import { ArtifactReceiptSchema, type ArtifactReceipt } from './artifact-store.js';
+
+import { appendLedger, recoverLedger } from './file-ledger.js';
+import { atomicPrivateWrite, privateDirectory } from './storage-files.js';
 
 export const HostInputRecordSchema = z.object({
   inputRevision: z.number().int().nonnegative(),
@@ -43,6 +42,10 @@ const EventBaseSchema = z.object({
   eventId: z.string().min(1),
   at: z.string().datetime(),
   runId: z.string().min(1),
+  effects: z.object({
+    artifactReceipts: z.array(ArtifactReceiptSchema).optional(),
+    outbox: z.array(z.object({ id: z.string(), idempotencyKey: z.string(), topic: z.string(), payload: z.unknown() }).strict()).optional(),
+  }).strict().optional(),
 });
 
 const AttemptIdentitySchema = z.object({
@@ -101,6 +104,28 @@ export const RunEventSchema = z.discriminatedUnion('type', [
     type: z.literal('phase.failed'),
     reason: z.string().min(1),
   }),
+  EventBaseSchema.extend({
+    type: z.literal('run.budget-increased'),
+    previousMaxBudgetUsd: z.number().finite().positive().nullable(),
+    maxBudgetUsd: z.number().finite().positive().nullable(),
+  }),
+  EventBaseSchema.extend({
+    type: z.literal('budget.reserved'),
+    attemptKey: z.string().min(1),
+    amountUsd: z.number().finite().positive(),
+    recovered: z.boolean().optional(),
+  }),
+  EventBaseSchema.extend({
+    type: z.literal('budget.settled'),
+    attemptKey: z.string().min(1),
+    chargedUsd: z.number().finite().nonnegative(),
+    accountingComplete: z.boolean(),
+  }),
+  EventBaseSchema.extend({
+    type: z.literal('analysis.checkpoint'),
+    stage: z.enum(['units', 'review']),
+    artifacts: z.array(ArtifactRefSchema).min(1),
+  }),
   EventBaseSchema.extend({ type: z.literal('run.completed') }),
   EventBaseSchema.extend({
     type: z.literal('run.awaiting-input'),
@@ -149,12 +174,15 @@ export type RunSnapshot = {
   totalCostUsd: number;
   lastSeq: number;
   completedPhases: string[];
+  budgetReservations?: Record<string, { amountUsd: number; chargedUsd?: number; accountingComplete?: boolean }>;
+  analysisCheckpoint?: { stage: 'units' | 'review'; artifacts: z.infer<typeof ArtifactRefSchema>[] };
   attempts: Record<string, AttemptSnapshot>;
   inputManifest?: HostInputRecord;
   publication?: {
     artifact: z.infer<typeof ArtifactRefSchema>;
     sourceManifestSha256: string;
   };
+  effects?: Record<string, RunStateEffects>;
   blockReason?: string;
   awaitingInput?: {
     reason: string;
@@ -208,6 +236,14 @@ export type RunStateEffects = {
   outbox?: readonly RunOutboxEffect[];
 };
 
+export function eventWithEffects(event: NewRunEvent, effects: RunStateEffects = {}): NewRunEvent {
+  if (!Object.keys(effects).length) return event;
+  return { ...event, effects: {
+    ...(effects.artifactReceipts ? { artifactReceipts: [...effects.artifactReceipts] } : {}),
+    ...(effects.outbox ? { outbox: [...effects.outbox] } : {}),
+  } };
+}
+
 export function phaseAttemptKey(phase: string, round: string | undefined, attempt: number): string {
   return `${phase}:${round ?? '-'}:${attempt}`;
 }
@@ -237,8 +273,29 @@ function applyEvent(snapshot: RunSnapshot, event: RunEvent): void {
   if (snapshot.status !== 'running' && event.type !== 'run.created' && !(snapshot.status === 'awaiting-input' && resumeEvent)) {
     throw new Error(`종료된 run에는 event를 추가할 수 없다: ${snapshot.status}`);
   }
+  if (event.effects) (snapshot.effects ??= {})[event.eventId] = event.effects;
   if (event.type === 'run.created') {
     if (snapshot.lastSeq !== 0) throw new Error('run.created가 중복됐다');
+  } else if (event.type === 'run.budget-increased') {
+    if ((snapshot.maxBudgetUsd ?? null) !== event.previousMaxBudgetUsd) throw new Error('budget revision conflicts with current limit');
+    if (event.maxBudgetUsd !== null && (snapshot.maxBudgetUsd === undefined || event.maxBudgetUsd <= snapshot.maxBudgetUsd)) {
+      throw new Error('resume budget must increase the current limit');
+    }
+    snapshot.maxBudgetUsd = event.maxBudgetUsd ?? undefined;
+  } else if (event.type === 'budget.reserved') {
+    const attempt = snapshot.attempts[event.attemptKey];
+    if (!attempt || (attempt.status !== 'started' && !event.recovered)) throw new Error('budget reservation requires a started attempt');
+    const reservations = snapshot.budgetReservations ??= {};
+    if (reservations[event.attemptKey]) throw new Error('duplicate budget reservation');
+    reservations[event.attemptKey] = { amountUsd: event.amountUsd };
+  } else if (event.type === 'budget.settled') {
+    const reservation = snapshot.budgetReservations?.[event.attemptKey];
+    if (!reservation || reservation.chargedUsd !== undefined) throw new Error('budget settlement requires an unsettled reservation');
+    reservation.chargedUsd = event.chargedUsd;
+    reservation.accountingComplete = event.accountingComplete;
+  } else if (event.type === 'analysis.checkpoint') {
+    if (snapshot.analysisCheckpoint?.stage === 'review') throw new Error('review inputs are already sealed');
+    snapshot.analysisCheckpoint = { stage: event.stage, artifacts: event.artifacts };
   } else if (event.type === 'input.recorded') {
     if (snapshot.inputManifest) throw new Error('host input manifest가 중복됐다');
     if (event.input.inputRevision !== 0 || event.input.parent) throw new Error('최초 host input revision이 잘못됐다');
@@ -362,6 +419,8 @@ export class FileRunStateStore implements RunStateStore {
   readonly eventsPath: string;
   readonly snapshotPath: string;
   private snapshot: RunSnapshot;
+  private pendingLedger = false;
+  readonly recoveryWarnings: string[] = [];
   private readonly eventIds = new Set<string>();
   private readonly eventsById = new Map<string, RunEvent>();
 
@@ -388,7 +447,7 @@ export class FileRunStateStore implements RunStateStore {
     if (basename(engagementDir) === '' || dirname(engagementDir) === engagementDir) {
       throw new Error(`run state 경로가 지나치게 넓다: ${engagementDir}`);
     }
-    mkdirSync(engagementDir, { recursive: true, mode: 0o700 });
+    privateDirectory(engagementDir);
     const eventsPath = join(engagementDir, RUN_EVENTS_FILE);
     if (existsSync(eventsPath)) throw new Error(`run event ledger가 이미 있다: ${eventsPath}`);
     writeFileSync(eventsPath, '', { flag: 'wx', mode: 0o600 });
@@ -406,8 +465,10 @@ export class FileRunStateStore implements RunStateStore {
     });
     const snapshot = emptySnapshot(created as Extract<RunEvent, { type: 'run.created' }>);
     applyEvent(snapshot, created);
-    appendFileSync(eventsPath, `${JSON.stringify(created)}\n`, { encoding: 'utf8' });
+    const persisted = appendLedger(engagementDir, eventsPath, [created]);
     const store = new FileRunStateStore(engagementDir, snapshot, [created]);
+    store.pendingLedger = persisted.pending;
+    if (persisted.error) store.recoveryWarnings.push(persisted.error);
     store.writeSnapshot();
     return store;
   }
@@ -416,10 +477,7 @@ export class FileRunStateStore implements RunStateStore {
     const root = resolve(engagementDir);
     const eventsPath = join(root, RUN_EVENTS_FILE);
     if (!existsSync(eventsPath)) throw new Error(`run event ledger가 없다: ${eventsPath}`);
-    const events = readFileSync(eventsPath, 'utf8')
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => RunEventSchema.parse(JSON.parse(line)));
+    const events = recoverLedger(root, eventsPath, value => RunEventSchema.parse(value));
     const snapshot = replayRunEvents(events);
     const store = new FileRunStateStore(root, snapshot, events);
     store.writeSnapshot();
@@ -452,9 +510,10 @@ export class FileRunStateStore implements RunStateStore {
     }
     const batchIds = new Set<string>();
     for (const event of events) {
-      if (!batchIds.add(event.eventId) || this.eventIds.has(event.eventId)) {
+      if (batchIds.has(event.eventId) || this.eventIds.has(event.eventId)) {
         throw new Error(`run event batch id가 중복됐다: ${event.eventId}`);
       }
+      batchIds.add(event.eventId);
     }
     const next = structuredClone(this.snapshot);
     const storedEvents: RunEvent[] = [];
@@ -468,7 +527,15 @@ export class FileRunStateStore implements RunStateStore {
       applyEvent(next, stored);
       storedEvents.push(stored);
     }
-    appendFileSync(this.eventsPath, storedEvents.map((event) => `${JSON.stringify(event)}\n`).join(''), { encoding: 'utf8' });
+    if (this.pendingLedger) {
+      try {
+        recoverLedger(this.engagementDir, this.eventsPath, value => RunEventSchema.parse(value));
+        this.pendingLedger = false;
+      } catch (error) { this.recoveryWarnings.push(`ledger replay: ${String(error)}`); }
+    }
+    const persisted = appendLedger(this.engagementDir, this.eventsPath, storedEvents, this.pendingLedger);
+    this.pendingLedger = persisted.pending;
+    if (persisted.error) this.recoveryWarnings.push(persisted.error);
     this.snapshot = next;
     for (const stored of storedEvents) {
       this.eventIds.add(stored.eventId);
@@ -479,14 +546,9 @@ export class FileRunStateStore implements RunStateStore {
   }
 
   private writeSnapshot(): void {
-    const temporary = join(
-      this.engagementDir,
-      `.${RUN_STATE_FILE}.${process.pid}.${this.snapshot.lastSeq}.tmp`,
-    );
-    writeFileSync(temporary, `${JSON.stringify(this.snapshot, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
-    renameSync(temporary, this.snapshotPath);
+    // The fsynced ledger or write-ahead batch is authoritative. A projection failure
+    // must not turn a successfully persisted provider result into a failed phase.
+    try { atomicPrivateWrite(this.snapshotPath, `${JSON.stringify(this.snapshot, null, 2)}\n`); }
+    catch (error) { this.recoveryWarnings.push(`snapshot projection: ${String(error)}`); }
   }
 }

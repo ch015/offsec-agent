@@ -1,4 +1,5 @@
-import { openSync, closeSync, writeFileSync, unlinkSync, mkdirSync, realpathSync, existsSync } from 'node:fs';
+import { acquireRunLock } from '../runtime/workflow/run-lock.js';
+import { mkdirSync, realpathSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { runSession, type SessionSpec } from '../runtime/session-runner.js';
 import { withPhaseMetrics, type PhaseMetricsSink } from '../runtime/workflow/phase-metrics.js';
@@ -50,16 +51,13 @@ export async function executeInDirectory<T>(directory: string, options: AgentSes
   mkdirSync(dirname(directory), { recursive: true });
   const canonical = existsSync(directory) ? realpathSync(directory) : join(realpathSync(dirname(directory)), basename(directory));
   const lock = join(dirname(canonical), `.${basename(canonical)}.agent.lock`);
-  let fd: number;
-  try { fd = openSync(lock, 'wx', 0o600); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('Agent run is already active for this engagementDir'); throw error; }
+  const release = acquireRunLock(lock);
   try {
-    writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
     const result = await withPhaseMetrics(options.onMetrics ?? null, () => run(canonical));
     execution.signal?.throwIfAborted();
     return result;
   } catch (error) {
     execution.signal?.throwIfAborted();
     throw error;
-  } finally { try { closeSync(fd); } finally { unlinkSync(lock); } }
+  } finally { release(); }
 }

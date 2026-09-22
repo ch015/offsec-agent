@@ -1,3 +1,6 @@
+import { allocateRunLocation, reportDirectory } from '../workflow/run-location.js';
+import { privateDirectory } from '../workflow/storage-files.js';
+import { copyPublication } from './publication-files.js';
 import { makeEngagementId, resolveRunBudget, recordOffsecPublication, validateSourcePublicationCandidate } from './assessment-support.js';
 export { makeEngagementId, resolveRunBudget, recordOffsecPublication } from './assessment-support.js';
 /**
@@ -149,8 +152,9 @@ export type AssessInput = {
   /** 자연어 범위 지시. 비우면 전체 진단 */
   scope?: string;
   engagementId?: string;
-  /** 산출물·원장 위치. 기본은 <target>/.nunchi/reports/<engagementId> */
+  /** 명시적 기존 배치. 생략하면 타겟 밖의 UUID 실행 저장소를 만든다. */
   engagementDir?: string;
+  stateHome?: string;
   model?: string;
   reviewModel?: string;
   /** #18: Cross-model verification — 'openai:gpt-5.6-sol' 형식으로 다른 모델 계열의 verifier 사용. 미지정 시 reviewModel 사용. */
@@ -398,8 +402,7 @@ function publishValidatedReport(
     allowEmptyCandidates,
     preparedLiveDast,
   });
-  if (candidate === draft) renameSync(draft, final);
-  return final;
+  return copyPublication(engagementDir, publication.draftArtifact, publication.finalArtifact);
 }
 
 export async function assess(input: AssessInput, dependencies: AssessDependencies = {}): Promise<{
@@ -409,10 +412,11 @@ export async function assess(input: AssessInput, dependencies: AssessDependencie
   finalReport: string;
   workUnits?: WorkUnitSummary;
 }> {
+  if (!input.engagementDir) input = { ...input, ...allocateRunLocation(input) };
   const target = resolve(input.target);
   const engagementId = input.engagementId ?? makeEngagementId(target, new Date());
   const nunchiRoot = join(target, NUNCHI_DIR);
-  const engagementDir = resolve(input.engagementDir ?? join(nunchiRoot, 'reports', engagementId));
+  const engagementDir = resolve(input.engagementDir!);
   const verificationMode = input.verificationMode ?? 'VA_ONLY';
   const semgrepMode = input.semgrepMode ?? 'required';
   const workUnitMode = input.workUnitMode ?? 'auto';
@@ -452,7 +456,7 @@ export async function assess(input: AssessInput, dependencies: AssessDependencie
   ) {
     throw new Error(`기존 engagement를 덮어쓸 수 없다: ${engagementDir}`);
   }
-  mkdirSync(engagementDir, { recursive: true, mode: 0o700 });
+  privateDirectory(engagementDir);
   // engagementDir이 대상 레포의 .nunchi 하위일 때만 gitignore를 심는다
   // (--engagement-dir로 레포 밖을 지정한 경우는 사용자 소관).
   if (engagementDir.startsWith(resolve(nunchiRoot))) ensureNunchiGitignore(nunchiRoot);
@@ -1751,7 +1755,7 @@ export async function assess(input: AssessInput, dependencies: AssessDependencie
         contract.publication,
         preparedLiveDast,
       );
-  const expectedFinalReport = resolve(engagementDir, contract.publication.finalArtifact);
+  const expectedFinalReport = resolve(reportDirectory(engagementDir), contract.publication.finalArtifact);
   if (resolve(finalReport) !== expectedFinalReport || !existsSync(expectedFinalReport)) {
     throw new Error(`report publisher가 계약된 최종 artifact를 반환하지 않았다: ${finalReport}`);
   }

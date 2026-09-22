@@ -1,3 +1,4 @@
+import { managedPath, readManagedFile } from '../workflow/storage-files.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -71,7 +72,7 @@ export function createArtifactRef(input: {
     throw new Error(`artifact는 engagement 직속 파일이어야 한다: ${input.name}`);
   }
   if (!existsSync(path)) throw new Error(`artifact가 실제로 없다: ${path}`);
-  const content = readFileSync(path);
+  const content = readManagedFile(root, path);
   const sha256 = createHash('sha256').update(content).digest('hex');
   return ArtifactRefSchema.parse({
     id: `${input.phase}/${input.attempt}/${input.name}`,
@@ -118,7 +119,7 @@ export function verifyArtifactRef(artifact: ArtifactRef, engagementDir: string):
     throw new Error(`artifact ref가 engagement 밖을 가리킨다: ${artifact.path}`);
   }
   if (!existsSync(path)) throw new Error(`artifact ref 파일이 없다: ${path}`);
-  const content = readFileSync(path);
+  const content = readManagedFile(root, path);
   const observed = createHash('sha256').update(content).digest('hex');
   if (observed !== artifact.sha256) throw new Error(`artifact hash가 다르다: ${artifact.name}`);
   if (content.byteLength !== artifact.bytes) throw new Error(`artifact 크기가 다르다: ${artifact.name}`);
@@ -132,10 +133,11 @@ export function verifyRunArtifactRef(artifact: ArtifactRef, runRoot: string): vo
   if (
     artifactDir !== root &&
     !/^r\d{4}$/.test(revision) &&
-    !/^unit-[a-f0-9]{16}(?:[\\/]attempt-[12])?$/.test(workUnit)
+    !/^unit-[a-f0-9]{16}(?:[\\/]attempt-[1-9]\d*)?$/.test(workUnit)
   ) {
     throw new Error(`artifact ref가 run의 봉인 디렉터리 밖을 가리킨다: ${artifact.path}`);
   }
+  managedPath(root, artifact.path);
   verifyArtifactRef(artifact, artifactDir);
 }
 

@@ -99,17 +99,32 @@ describe('v2 publication evidence and coverage', () => {
   });
   it('does not publish if scope evidence is corrupted even when the model phase reports success', async () => {
     const input = fixture();
-    await expect(assessV2(input, { sessionRunner: runner({ corruptScope: true }) })).rejects.toThrow('report gate');
+    await expect(assessV2(input, { sessionRunner: runner({ corruptScope: true }) })).rejects.toThrow('artifact hash');
     expect(existsSync(join(input.engagementDir, '07_security_report.md'))).toBe(false);
   });
-  it('blocks a partial report that conceals an unreviewed unit', async () => {
+  it('adds host disclosure when the model omits an unreviewed unit', async () => {
     const input = fixture();
-    await expect(assessV2(input, { sessionRunner: runner({ failB: true }) })).rejects.toThrow('미검토 파일');
-    expect(existsSync(join(input.engagementDir, '07_security_report.md'))).toBe(false);
+    const result = await assessV2(input, { sessionRunner: runner({ failB: true }) });
+    expect(result.coverage.complete).toBe(false);
+    const report = readFileSync(result.finalReport, 'utf8');
+    expect(report).toContain('분석 범위 미완료');
+    for (const file of result.coverage.uncoveredFiles) expect(report).toContain(file);
   });
   it('retains useful partial work with explicit coverage and report disclosure', async () => {
     const input = fixture(), result = await assessV2(input, { sessionRunner: runner({ failB: true, disclose: true }) });
     expect(result.coverage).toMatchObject({ complete: false, completedUnits: 1, totalUnits: 2, uncoveredFiles: ['packages/b/b.ts'] });
     expect(readFileSync(result.finalReport, 'utf8')).toContain('분석 범위 미완료');
   });
+  it('continues review after optional follow-up provider failures and discloses the gap', async () => {
+    const phases: string[] = [];
+    const result = await assessV2(fixture(), { sessionRunner: runner({ handoff: true, disclose: true, onSession: spec => {
+      phases.push(spec.phase!);
+      if (spec.phaseRound === 'cross-unit-followup') throw new Error('fixture follow-up unavailable');
+    } }) });
+    expect(phases.slice(-3)).toEqual(['review', 'evaluate', 'report']);
+    expect(result.coverage.complete).toBe(false);
+    expect(result.coverage.deferredFollowupQuestions).toBeGreaterThan(0);
+    expect(readFileSync(result.finalReport, 'utf8')).toContain('분석 범위 미완료');
+  });
+
 });

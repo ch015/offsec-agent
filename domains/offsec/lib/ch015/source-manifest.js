@@ -125,6 +125,7 @@ function sourceManifestContentProjection(manifest) {
     projection.scope_inventory_schema_version = manifest.scope_inventory_schema_version;
     projection.scope_inventory_sha256 = manifest.scope_inventory_sha256;
   }
+  if (manifest.source_errors !== undefined) projection.source_errors = manifest.source_errors;
   return projection;
 }
 
@@ -193,7 +194,7 @@ function safeReadLineCount(filePath) {
   }
 }
 
-function walkSourceFiles(root, policy) {
+function walkSourceFiles(root, policy, errors = []) {
   const extensions = new Set(policy.codeExtensions);
   const excludedDirs = new Set(policy.excludedDirs);
   const files = [];
@@ -211,7 +212,8 @@ function walkSourceFiles(root, policy) {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      errors.push({ path: toPosix(path.relative(root, dir)) || '.', code: error.code || 'SOURCE_DIRECTORY_UNREADABLE' });
       return;
     }
 
@@ -234,7 +236,7 @@ function walkSourceFiles(root, policy) {
   return [...new Set(files)].sort();
 }
 
-function walkDependencyFiles(root, policy) {
+function walkDependencyFiles(root, policy, errors = []) {
   const excludedDirs = new Set(policy.excludedDirs);
   const excludedPaths = new Set((policy.excludedPaths || []).map((value) =>
     path.resolve(root, String(value))));
@@ -249,7 +251,8 @@ function walkDependencyFiles(root, policy) {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      errors.push({ path: toPosix(path.relative(root, dir)) || '.', code: error.code || 'SOURCE_DIRECTORY_UNREADABLE' });
       return;
     }
     for (const entry of entries) {
@@ -371,7 +374,7 @@ function classifyInventoryEntry(relPath, isSource, isDependency) {
 
 // 제외 디렉터리/경로 이후 도달 가능한 모든 일반 파일(심볼릭 링크 제외) — 확장자 제한 없음.
 // "무시된 build/vendor 디렉터리를 조사했다"는 주장이 아니라 대상 파일의 전수 인벤토리다.
-function walkEligibleFiles(root, policy) {
+function walkEligibleFiles(root, policy, errors = []) {
   const excludedDirs = new Set(policy.excludedDirs);
   const excludedPaths = new Set((policy.excludedPaths || []).map((value) =>
     path.resolve(root, String(value))));
@@ -386,7 +389,8 @@ function walkEligibleFiles(root, policy) {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      errors.push({ path: toPosix(path.relative(root, dir)) || '.', code: error.code || 'SOURCE_DIRECTORY_UNREADABLE' });
       return;
     }
     for (const entry of entries) {
@@ -565,8 +569,9 @@ function createSourceManifest(targetRoot, opts = {}) {
       !Number.isInteger(policy.maxUnitLoc) || policy.maxUnitLoc < 1) {
     throw new Error('source manifest unit limits must be positive integers');
   }
-  const sourceFiles = walkSourceFiles(root, policy);
-  const dependencyFiles = walkDependencyFiles(root, policy);
+  const sourceErrors = [];
+  const sourceFiles = walkSourceFiles(root, policy, sourceErrors);
+  const dependencyFiles = walkDependencyFiles(root, policy, sourceErrors);
   let locEstimate = 0;
   const locByFile = {};
 
@@ -578,37 +583,41 @@ function createSourceManifest(targetRoot, opts = {}) {
 
   const subprojectRoots = findSubprojectRoots(root, policy);
   const units = buildUnitBreakdown(sourceFiles, locByFile, subprojectRoots, policy);
-  const sourceReceipts = sourceFiles.map((rel) => {
-    const content = fs.readFileSync(path.join(root, rel));
-    return { path: rel, bytes: content.byteLength, sha256: sha256(content) };
-  });
-  const dependencyReceipts = dependencyFiles.map((rel) => {
-    const content = fs.readFileSync(path.join(root, rel));
-    return { path: rel, bytes: content.byteLength, sha256: sha256(content) };
-  });
+  const unreadable = new Map();
+  const readReceipt = rel => {
+    if (unreadable.has(rel)) return null;
+    try {
+      const content = fs.readFileSync(path.join(root, rel));
+      return { path: rel, bytes: content.byteLength, sha256: sha256(content) };
+    } catch (error) {
+      const issue = { path: rel, code: error.code || 'SOURCE_FILE_UNREADABLE' };
+      sourceErrors.push(issue); unreadable.set(rel, issue); return null;
+    }
+  };
+  const sourceReceipts = sourceFiles.flatMap(rel => { const value = readReceipt(rel); return value ? [value] : []; });
+  const dependencyReceipts = dependencyFiles.flatMap(rel => { const value = readReceipt(rel); return value ? [value] : []; });
 
   // 대상 하위 전체 적격 파일(제외 정책 적용 후) 인벤토리 — source_files/units는 바뀌지 않는다.
   const sourceFileSet = new Set(sourceFiles);
   const dependencyFileSet = new Set(dependencyFiles);
   const sourceReceiptByPath = new Map(sourceReceipts.map((receipt) => [receipt.path, receipt]));
   const dependencyReceiptByPath = new Map(dependencyReceipts.map((receipt) => [receipt.path, receipt]));
-  const eligibleFiles = walkEligibleFiles(root, policy);
+  const eligibleFiles = walkEligibleFiles(root, policy, sourceErrors);
   const scopeInventory = eligibleFiles.map((rel) => {
     const { classification, disposition } = classifyInventoryEntry(
       rel, sourceFileSet.has(rel), dependencyFileSet.has(rel));
     const reused = sourceReceiptByPath.get(rel) || dependencyReceiptByPath.get(rel);
-    const receipt = reused || (() => {
-      const content = fs.readFileSync(path.join(root, rel));
-      return { bytes: content.byteLength, sha256: sha256(content) };
-    })();
-    return { path: rel, classification, disposition, bytes: receipt.bytes, sha256: receipt.sha256 };
+    const receipt = reused || readReceipt(rel);
+    return receipt ? { path: rel, classification, disposition, bytes: receipt.bytes, sha256: receipt.sha256 }
+      : { path: rel, classification, disposition, read_error: unreadable.get(rel).code };
+
   });
   const securityResourceEntries = scopeInventory.filter((entry) =>
     entry.classification === 'security-resource' ||
     entry.classification === 'runtime-prompt' ||
     entry.classification === 'generated-runtime-resource');
   const securityResourceFiles = securityResourceEntries.map((entry) => entry.path);
-  const securityResourceReceipts = securityResourceEntries.map((entry) =>
+  const securityResourceReceipts = securityResourceEntries.filter(entry => entry.sha256).map((entry) =>
     ({ path: entry.path, bytes: entry.bytes, sha256: entry.sha256 }));
   const scopeInventorySha256 = sha256(stableJson(scopeInventory));
 
@@ -634,6 +643,7 @@ function createSourceManifest(targetRoot, opts = {}) {
     scope_inventory_schema_version: '1.0.0',
     scope_inventory_sha256: scopeInventorySha256,
     scope_inventory: scopeInventory,
+    ...(sourceErrors.length ? { source_errors: [...new Map(sourceErrors.map(issue => [issue.path + ":" + issue.code, issue])).values()] } : {}),
   };
 
   const contentHash = sourceManifestContentHash(core);

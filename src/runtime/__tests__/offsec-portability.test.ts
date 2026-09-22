@@ -12,9 +12,11 @@ describe('project-specific OffSec exclusions', () => {
     writeFileSync(join(excluded, 'secret.ts'), 'export const hidden = 2;\n');
     const engagementDir = join(target, '.secops', 'run');
     let reachedModel = false;
-    await expect(mission({ target, engagementDir, engagementId: 'portable-test', excludePaths: [excluded, join(target, '.secops')], semgrepMode: 'off', workUnitMode: _version === 'v1' ? 'off' : 'auto' }, {
+    const operation = mission({ target, engagementDir, engagementId: 'portable-test', excludePaths: [excluded, join(target, '.secops')], semgrepMode: 'off', workUnitMode: _version === 'v1' ? 'off' : 'auto' }, {
       sessionRunner: async () => { reachedModel = true; throw new Error('fixture stops before model execution'); },
-    })).rejects.toThrow();
+    });
+    if (_version === 'v1') await expect(operation).rejects.toThrow();
+    else await expect(operation).resolves.toMatchObject({ publicationStatus: 'partial', coverage: { complete: false } });
     expect(reachedModel).toBe(true);
     const manifest = JSON.parse(readFileSync(join(engagementDir, 'source_manifest.json'), 'utf8'));
     expect(manifest.source_files).toEqual(['app.ts']);

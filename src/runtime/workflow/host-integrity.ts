@@ -26,6 +26,7 @@ export function assertRunInputsIntact(snapshot: RunSnapshot, runRoot: string): v
     }
     assertHostResourceReceipts(attempt.hostResources ?? []);
   }
+  for (const artifact of snapshot.analysisCheckpoint?.artifacts ?? []) verifyRunArtifactRef(artifact, runRoot);
   const input = snapshot.inputManifest;
   if (!input) return;
   verifyRunArtifactRef(input.manifest, runRoot);

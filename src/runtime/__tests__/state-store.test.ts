@@ -31,6 +31,25 @@ function append(store: RunStateStore, event: NewRunEvent): void {
 }
 
 describe('FileRunStateStore', () => {
+  it('replays budget increases and removal without erasing recorded usage', () => {
+    const store = createStore();
+    append(store, { type: 'phase.started', eventId: 'budget:start', phase: 'analyze', attempt: 1 });
+    append(store, { type: 'attempt.received', eventId: 'budget:cost', phase: 'analyze', attempt: 1, usage: { provider: 'anthropic', costUsd: 12 } });
+    append(store, { type: 'run.budget-increased', eventId: 'budget:increase', previousMaxBudgetUsd: 30, maxBudgetUsd: 1000000 });
+    expect(FileRunStateStore.open(store.engagementDir).read().maxBudgetUsd).toBe(1000000);
+    append(store, { type: 'run.budget-increased', eventId: 'budget:remove', previousMaxBudgetUsd: 1000000, maxBudgetUsd: null });
+    const recovered = FileRunStateStore.open(store.engagementDir).read();
+    expect(recovered.maxBudgetUsd).toBeUndefined(); expect(recovered.totalCostUsd).toBe(12);
+    expect(() => append(store, { type: 'run.budget-increased', eventId: 'budget:reduce', previousMaxBudgetUsd: null, maxBudgetUsd: 1 })).toThrow(/increase/);
+  });
+
+  it('rejects stale or decreasing budget changes before adding a ledger entry', () => {
+    const store = createStore();
+    expect(() => append(store, { type: 'run.budget-increased', eventId: 'budget:stale', previousMaxBudgetUsd: 10, maxBudgetUsd: 100 })).toThrow(/conflicts/);
+    expect(() => append(store, { type: 'run.budget-increased', eventId: 'budget:lower', previousMaxBudgetUsd: 30, maxBudgetUsd: 20 })).toThrow(/increase/);
+    expect(FileRunStateStore.open(store.engagementDir).read().lastSeq).toBe(1);
+  });
+
   it('replays the event ledger and repairs a missing snapshot', () => {
     const store = createStore();
     append(store, { type: 'phase.started', eventId: 'va:start', phase: 'va', attempt: 1 });

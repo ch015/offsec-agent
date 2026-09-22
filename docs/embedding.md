@@ -15,7 +15,7 @@ pnpm build:library
 import { createOffsecAgent } from 'secops-offsec-agent';
 const agent = createOffsecAgent({
   apiKey: secrets.anthropicKey,
-  defaults: { maxBudgetUsd: 10, maxConcurrency: 2, maxFollowupHypotheses: 3 },
+  defaults: { maxConcurrency: 2, maxFollowupHypotheses: 3 }, // 금액 예산 기본값: 무제한
 });
 const result = await agent.run({
   target: '/srv/project', engagementDir: '/srv/results/job-123', scope: '인증 경계 검토',
@@ -27,6 +27,7 @@ const result = await agent.run({
 
 `maxConcurrency` 기본값은 2입니다. `maxFollowupHypotheses`는 기본 3, 0..8 범위이며 0은 후속 분석을 끕니다.
 유효한 교차 단위 질문이 있을 때만 최대 32턴의 추가 분석 세션 한 라운드를 실행합니다.
+`maxBudgetUsd`를 생략하면 기본 금액 상한은 없습니다. `defaults.noCostGuard: true`로 호출자가 전달한 금액 상한도 명시적으로 해제할 수 있습니다.
 `maxBudgetUsd`를 설정하면 분석 이후 단계를 위해 30%를 남기고 review 이후 10%, evaluate 이후 5%를 남깁니다.
 이 예약은 SDK 사용량 회계 기준이며 절대 결제 한도는 아닙니다.
 
@@ -45,4 +46,9 @@ TypeScript 소비 앱은 일반 Node.js 앱처럼 `@types/node`를 개발 의존
 
 같은 결과 디렉터리의 동시 실행은 거부합니다. 취소/실행 실패는 예외로 전달되며 이미 생성한 증거를 자동 삭제하지 않습니다. 이벤트 callback에서 예외를 던지지 않도록 앱에서 처리하세요.
 
-v2 실행 중단 재개와 증분 분석 캐시는 아직 없습니다. 공개된 v1 recovery API와 구분하세요.
+v2 중단 실행은 `agent.resume(engagementDir)`로 이어갑니다. 저장된 예산이 부족하면
+`agent.resume(engagementDir, { maxBudgetUsd: 1000 })`으로 증액하거나
+`agent.resume(engagementDir, { noCostGuard: true })`로 금액 상한을 해제합니다.
+변경은 원장에 기록되어 이후 옵션 없는 재개에도 유지됩니다. 기존 사용액·미정산 예약액과
+봉인된 입력은 보존합니다. 인스턴스 defaults 변경만으로 기존 실행 예산이 바뀌지는 않습니다.
+완료된 실행의 분석 범위를 늘리거나 증분 분석하는 기능과는 구분하세요.

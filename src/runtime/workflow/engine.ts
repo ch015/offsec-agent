@@ -1,3 +1,6 @@
+import { PhaseResultFailure } from '../providers/provider-runtime.js';
+import { MissionBudgetExhaustedError } from '../providers/budgeted-runtime.js';
+import { eventWithEffects } from './state-store.js';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -178,6 +181,7 @@ export class WorkflowHost<
       adapter: DomainAdapter<TLegacyContract, TLegacyPhase, TResult>;
       runtime: ProviderRuntime<TProviderOptions, TRaw>;
       state: RunStateBackend;
+      appendEvent?: (event: NewRunEvent, effects?: RunStateEffects) => Promise<Readonly<RunSnapshot>>;
       target: string;
       engagementDir: string;
       runRoot?: string;
@@ -222,6 +226,7 @@ export class WorkflowHost<
     providerOptions?: TProviderOptions;
     priorArtifactPaths?: readonly string[];
     deferRunBlocking?: boolean;
+    reuseCompleted?: boolean;
     resultIdentity?: {
       workUnitKey: string;
       workPlanSha256: string;
@@ -248,6 +253,17 @@ export class WorkflowHost<
     const snapshot = await this.readState();
     this.assertStateIdentity(snapshot);
     assertRunInputsIntact(snapshot, this.input.runRoot ?? this.input.engagementDir);
+    if (options.reuseCompleted) {
+      const completed = Object.values(snapshot.attempts).filter(a => a.phase === workflow.id && a.round === options.round && a.status === 'completed').sort((a, b) => b.attempt - a.attempt)[0];
+      if (completed) {
+        const stored = completed.result as { envelope: PhaseResultEnvelope; domainResult: TResult; recoveryOutcome?: ProviderPhaseOutcome<TRaw> };
+        if (!stored.recoveryOutcome) throw new Error('completed phase predates resumable outcomes; retain artifacts and start a new run');
+        this.input.outcomePolicy?.({ phase: workflow.id, role: workflow.role, outcome: stored.recoveryOutcome });
+        return { phase: workflow.id, role: workflow.role, round: options.round, attempt: completed.attempt,
+          result: stored.domainResult, artifacts: completed.artifacts ?? [], envelope: stored.envelope, outcome: stored.recoveryOutcome };
+      }
+    }
+
     const completed = new Set(
       Object.values(snapshot.attempts)
         .filter((attempt) => attempt.status === 'completed')
@@ -259,12 +275,12 @@ export class WorkflowHost<
       : snapshot.maxBudgetUsd - snapshot.totalCostUsd;
     if (remainingBudget !== undefined && remainingBudget <= 0) {
       if (lease) await lease.assertActive();
-      await this.appendState({
+      if (!options.deferRunBlocking) await this.appendState({
         type: 'run.blocked',
         eventId: `${this.input.runId}:budget-exhausted`,
         reason: `전체 예산을 소진해 ${workflow.id} phase를 시작할 수 없다`,
       }, lease);
-      throw new Error(`전체 예산을 소진해 ${workflow.id} phase를 시작할 수 없다`);
+      throw new MissionBudgetExhaustedError(`전체 예산을 소진해 ${workflow.id} phase를 시작할 수 없다`);
     }
 
     const maxRetryAttempts = this.getMaxRetryAttempts();
@@ -278,9 +294,9 @@ export class WorkflowHost<
       remainingBudget = snapshot.maxBudgetUsd - (await this.readState()).totalCostUsd;
       if (remainingBudget <= 0) {
         if (lease) await lease.assertActive();
-        await this.appendState({ type: 'run.blocked', eventId: `${this.input.runId}:budget-exhausted`,
+        if (!options.deferRunBlocking) await this.appendState({ type: 'run.blocked', eventId: `${this.input.runId}:budget-exhausted`,
           reason: `전체 예산을 소진해 ${workflow.id} 재시도를 시작할 수 없다` }, lease);
-        throw new Error(`전체 예산을 소진해 ${workflow.id} 재시도를 시작할 수 없다`);
+        throw new MissionBudgetExhaustedError(`전체 예산을 소진해 ${workflow.id} 재시도를 시작할 수 없다`);
       }
     }
 
@@ -370,6 +386,7 @@ export class WorkflowHost<
         onEvent: this.input.onEvent,
       });
 
+      this.input.signal?.throwIfAborted();
       if (lease) await lease.assertActive();
       await this.appendCompactionEvents(outcome.events, {
         phase: workflow.id,
@@ -414,7 +431,12 @@ export class WorkflowHost<
           provider: outcome.provider,
         }, lease);
       }
-      const result = this.validatePhaseResult(resultValue, legacy, options.round, attemptNum, maxRetryAttempts);
+      let result: TResult;
+      try { result = this.validatePhaseResult(resultValue, legacy, options.round, attemptNum, maxRetryAttempts); }
+      catch (error) {
+        if (error instanceof ValidationSafetyError) throw error;
+        throw new PhaseResultFailure(error instanceof Error ? error.message : String(error), { cause: error });
+      }
       this.assertArtifactContract(workflow, legacy, options.round, result.artifacts);
       const artifacts = result.artifacts.map((name) =>
         createArtifactRef({
@@ -463,7 +485,7 @@ export class WorkflowHost<
         ...(options.round ? { round: options.round } : {}),
         attempt,
         artifacts,
-        result: { envelope, domainResult: result },
+        result: { envelope, domainResult: result, recoveryOutcome: outcome },
         ...(hostResources.length > 0 ? { hostResources: receiptsOnly(hostResources) } : {}),
       }, lease, {
         artifactReceipts,
@@ -608,7 +630,7 @@ export class WorkflowHost<
     if (error instanceof ProviderRuntimeFailure) return false;
     if (!(error instanceof Error)) return false;
     // M10: structured validation signals
-    if (error instanceof ValidationRetryError) return true;
+    if (error instanceof ValidationRetryError || error instanceof PhaseResultFailure && error.cause instanceof ValidationRetryError) return true;
     if (error instanceof ValidationSafetyError) return false;
     const message = error.message;
     // Host integrity errors (assertHostResourceReceipts)
@@ -723,6 +745,7 @@ export class WorkflowHost<
     lease?: { fencingToken?(): number },
     effects: RunStateEffects = {},
   ): Promise<Readonly<RunSnapshot>> {
+    if (this.input.appendEvent) return this.input.appendEvent(event, effects);
     if (this.input.state.backend === 'postgres') {
       const expectedLastSeq = (await this.readState()).lastSeq;
       const fencingToken = lease?.fencingToken?.();
@@ -731,7 +754,7 @@ export class WorkflowHost<
       }
       return await this.input.state.appendBatchWithEffects([event], expectedLastSeq, fencingToken, effects);
     }
-    return this.input.state.append(event);
+    return this.input.state.append(eventWithEffects(event, effects));
   }
 
   private async appendCompactionEvents(

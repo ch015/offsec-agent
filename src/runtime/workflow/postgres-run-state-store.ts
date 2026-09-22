@@ -135,7 +135,8 @@ export class PostgresRunStateStore implements AsyncRunStateStore {
     if (events.length === 0) return await this.read();
     const eventIds = new Set<string>();
     for (const event of events) {
-      if (!eventIds.add(event.eventId)) throw new Error(`run event batch id가 중복됐다: ${event.eventId}`);
+      if (eventIds.has(event.eventId)) throw new Error(`run event batch id가 중복됐다: ${event.eventId}`);
+      eventIds.add(event.eventId);
     }
 
     const connection = await this.pool.connect();

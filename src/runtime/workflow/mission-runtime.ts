@@ -1,3 +1,4 @@
+import { eventWithEffects } from './state-store.js';
 import { relative, resolve, sep } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 
@@ -19,6 +20,7 @@ import {
   type RunSnapshot,
   type RunStateBackend,
 } from './state-store.js';
+import { ResilientArtifactStore } from './resilient-artifacts.js';
 import type { TelemetrySink } from './telemetry.js';
 
 type DatabasePool = SqlPool & { end(): Promise<void> };
@@ -67,7 +69,7 @@ export async function createMissionRuntime(
   const resources = postgresResources(options);
   try {
     const state = await PostgresRunStateStore.create(resources.pool, input);
-    return await postgresRuntime(state, resources, input.runId, options);
+    return await postgresRuntime(state, { ...resources, artifactStore: new ResilientArtifactStore(input.engagementDir, resources.artifactStore) }, input.runId, options);
   } catch (error) {
     if (resources.ownedPool) await resources.pool.end();
     throw error;
@@ -85,14 +87,14 @@ export async function openMissionRuntime(
   try {
     const state = new PostgresRunStateStore(resources.pool, input.runId);
     await state.read();
-    return await postgresRuntime(state, resources, input.runId, options);
+    return await postgresRuntime(state, { ...resources, artifactStore: new ResilientArtifactStore(input.engagementDir, resources.artifactStore) }, input.runId, options);
   } catch (error) {
     if (resources.ownedPool) await resources.pool.end();
     throw error;
   }
 }
 
-function selectedBackend(options: MissionRuntimeOptions): 'file' | 'postgres' {
+export function selectedBackend(options: MissionRuntimeOptions): 'file' | 'postgres' {
   const value = options.backend ?? options.env?.NUNCHI_STATE_BACKEND ?? process.env.NUNCHI_STATE_BACKEND ?? 'file';
   if (value !== 'file' && value !== 'postgres') throw new Error(`NUNCHI_STATE_BACKEND가 잘못됐다: ${value}`);
   return value;
@@ -115,10 +117,10 @@ function assertSharedEngagementPath(engagementDir: string, options: MissionRunti
 function fileRuntime(state: FileRunStateStore, options: MissionRuntimeOptions): MissionRuntime {
   return {
     state,
-    artifactStore: options.artifactStore,
+    artifactStore: new ResilientArtifactStore(state.engagementDir, options.artifactStore),
     telemetry: options.telemetry,
-    append: async (event) => state.append(event),
-    appendBatch: async (events) => state.appendBatch(events),
+    append: async (event, effects) => state.append(eventWithEffects(event, effects)),
+    appendBatch: async (events, effects) => state.appendBatch(events.map((event, i) => i === events.length - 1 ? eventWithEffects(event, effects) : event)),
     read: async () => state.read(),
     close: async () => undefined,
   };
@@ -153,31 +155,25 @@ async function postgresRuntime(
       ttlMs: options.leaseTtlMs ?? 1_800_000,
     },
   );
+  // All hosts in one mission share this writer. Read the version only after the
+  // preceding append finishes; explicit backend fencing/version checks stay intact.
+  let tail: Promise<unknown> = Promise.resolve();
+  const appendBatch = (events: readonly NewRunEvent[], effects: PostgresRunEffects = {}): Promise<Readonly<RunSnapshot>> => {
+    const operation = tail.then(async () => {
+      await lease.assertActive();
+      const snapshot = await state.read();
+      return state.appendBatchWithEffects(events, snapshot.lastSeq, lease.fencingToken(), effects);
+    });
+    tail = operation.catch(() => undefined);
+    return operation;
+  };
   return {
     state,
     artifactStore: resources.artifactStore,
     telemetry: options.telemetry,
     leaseGuard: lease,
-    append: async (event, effects = {}) => {
-      await lease.assertActive();
-      const snapshot = await state.read();
-      return await state.appendBatchWithEffects(
-        [event],
-        snapshot.lastSeq,
-        lease.fencingToken(),
-        effects,
-      );
-    },
-    appendBatch: async (events, effects = {}) => {
-      await lease.assertActive();
-      const snapshot = await state.read();
-      return await state.appendBatchWithEffects(
-        events,
-        snapshot.lastSeq,
-        lease.fencingToken(),
-        effects,
-      );
-    },
+    append: (event, effects) => appendBatch([event], effects),
+    appendBatch,
     read: async () => await state.read(),
     close: async () => {
       try {

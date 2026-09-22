@@ -373,6 +373,7 @@ export function buildOptions(spec: SessionSpec): Options {
     // 격리 — 사용자/프로젝트 settings.json 과 외부 MCP 를 차단한다.
     // 플러그인 훅은 이것과 무관하게 발화한다 (F1).
     settingSources: [],
+    persistSession: false, // Host checkpoints own recovery; do not leave unmanaged SDK transcripts.
     strictMcpConfig: true,
     sandbox: {
       enabled: true,
