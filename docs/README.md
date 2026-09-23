@@ -1,6 +1,6 @@
 # OffSec 문서 안내
 
-기준: 2026-09-22. [프로젝트 README](../README.md). 이 문서와 아래 가이드는 이 저장소만 clone한 환경을 기준으로 한다.
+기준: 2026-09-23. [프로젝트 README](../README.md). 이 문서와 아래 가이드는 이 저장소만 clone한 환경을 기준으로 한다.
 
 ## 현재 지원 범위
 
@@ -18,7 +18,8 @@
 
 - [agent-autonomy.md](agent-autonomy.md)
 - [embedding.md](embedding.md)
-- [validation-2026-09-22.ko.md](validation-2026-09-22.ko.md) — 입력 검증·패키징과 회귀 결과
+- [validation-2026-09-23.ko.md](validation-2026-09-23.ko.md) — 독립 lease 스키마 수정·검증 범위
+- [validation-2026-09-22.ko.md](validation-2026-09-22.ko.md) — 이전 입력 검증·패키징과 회귀 결과
 - [detection-improvements.md](detection-improvements.md)
 - [analysis-storage-recovery.md](analysis-storage-recovery.md) — 외부 저장·백업/복원·재개·예산 증액
 - [도메인 계약과 이식 범위](../domains/offsec/README.md)

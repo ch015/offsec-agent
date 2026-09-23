@@ -1,6 +1,6 @@
 # secops-offsec-agent
 
-문서 기준: 2026-09-22. [현재 지원 범위·문서 목록](docs/README.md) · [저장·복구·재개](docs/analysis-storage-recovery.md)
+문서 기준: 2026-09-23. [현재 지원 범위·문서 목록](docs/README.md) · [저장·복구·재개](docs/analysis-storage-recovery.md)
 
 기존 앱에서 직접 호출하는 공개 API: [`createOffsecAgent`](src/index.ts). `pnpm build:library` 후 모듈 import로 사용할 수 있습니다. [코드 연동 가이드](docs/embedding.md) · [앱 예제](docs/embedding.md#앱-연결-예제)
 
@@ -374,3 +374,5 @@ OffSec 호스트 역할·phase를 추가할 때는 계약과 해당 role/method 
 행동 자율성, 종료 조건 및 운영 변경은 [에이전트 행동 지침](docs/agent-autonomy.md)을 참조한다.
 
 산출물 백업·복원, 부분 결과, SDK 재개, 외부 저장 실패 처리와 지원 범위는 [분석 저장 및 복구](docs/analysis-storage-recovery.md)를 참고한다.
+
+2026-09-23에는 독립 PostgreSQL lease 스키마의 해제 실패를 수정했다. 추가 migration은 필요하지 않으며 fencing 검증을 유지한다. [이번 검증 범위](docs/validation-2026-09-23.ko.md)와 [저장·복구 경계](docs/analysis-storage-recovery.md)를 확인한다.

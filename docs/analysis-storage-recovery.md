@@ -163,3 +163,9 @@ SDK는 `agent.resume(directory, { noCostGuard: true })` 또는 `{ maxBudgetUsd: 
 
 금액 무제한은 provider 계정의 결제/호출 제한을 변경하지 않는다. 세션 기본 120턴,
 후속 분석 최대 32턴, unit 15분 timeout과 유한한 오류 재시도는 별도의 실행 제한이다.
+
+## 독립 PostgreSQL lease 스키마 호환성 — 2026-09-23
+
+`PostgresRunLeaseBackend.release()`는 독립 `postgres-run-lease.sql`에도 존재하는 `expires_at`만 갱신한다. 기존에 존재하지 않는 `updated_at`을 갱신해 lease 해제와 다음 재개를 막던 오류를 수정했다. lease 행을 삭제하지 않으므로 다음 소유자의 fencing token은 계속 증가하고 오래된 소유자의 해제 요청은 현재 소유권에 영향을 주지 않는다.
+
+이 수정에는 추가 schema migration이 필요하지 않다. [독립 lease 통합 검사](../src/runtime/__tests__/standalone-lease.integration.test.ts)와 [9월 23일 검증 기록](validation-2026-09-23.ko.md)을 참조한다. 살아 있는/외부 호스트 소유권을 임의로 탈취하는 변경은 아니다.
