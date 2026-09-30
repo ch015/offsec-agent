@@ -552,7 +552,7 @@ function errorMessage(error: unknown): string {
 export function defaultRunnerRoots(currentRoot: string): Pick<BenchmarkRunnerOptions, 'currentRoot' | 'ch015PluginRoot'> {
   return {
     currentRoot,
-    ch015PluginRoot: resolve(currentRoot, '../../ch015-pentester/plugins/ch015'),
+    ch015PluginRoot: resolve(currentRoot, '../../pentester/code-pentester/plugins/ch015'),
   };
 }
 
