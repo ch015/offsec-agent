@@ -4,6 +4,9 @@
 
 기존 앱에서 직접 호출하는 공개 API: [`createOffsecAgent`](src/index.ts). `pnpm build:library` 후 모듈 import로 사용할 수 있습니다. [코드 연동 가이드](docs/embedding.md) · [앱 예제](docs/embedding.md#앱-연결-예제)
 
+터미널 시연: [실행 명령과 발표 순서](examples/security-automation/CLI-GUIDE.txt).
+`bash examples/security-automation/demo.sh help`로 코드 전처리·HTTP 재현·OffSec·SOC 실행과 보관 결과 조회 명령을 확인합니다.
+
 취약점 진단(OffSec) 전용 로컬 에이전트. **Claude Agent SDK 호스트**가
 `domains/offsec` 로컬 플러그인을 로드하고, 역할별 SDK 세션과 병렬 작업 단위를 조율한다.
 

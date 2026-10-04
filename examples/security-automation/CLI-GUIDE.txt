@@ -1,0 +1,232 @@
+보안 진단 자동화 — CLI 시연 가이드
+==================================
+
+주제: 코드와 실제 요청에서 위험을 확인하고, 진단 보고서와 경보 조사 근거로 정리한다.
+대상: 로컬 합성 송장 서비스. Alice는 INV-A, Bob은 INV-B의 소유자다.
+취약 경로는 로그인 여부만 검사하고, 수정 경로는 송장의 소유자까지 검사한다.
+
+1. 시작 위치와 준비
+-------------------
+
+Git 보관 위치: offsec-agent 저장소의 examples/security-automation/.
+이 작업 공간의 기존 demo/security-automation 경로는 위 예제 디렉토리를 가리킨다.
+새로 clone한 환경에서는 offsec-agent 루트에서 cd examples/security-automation 으로 이동한다.
+아래 절대 경로 예시는 현재 시연 PC 기준이며, 에이전트 입력문은 bash demo.sh prompt로 생성할 수 있다.
+
+공통 작업 공간 배치가 다른 경우 필요한 저장소의 경로를 지정한다:
+
+  export DEMO_SOC_DIR=/path/to/soc-agent
+  export DEMO_CODE_DIR=/path/to/code-pentester
+  export DEMO_WEB_DIR=/path/to/web-pentester
+
+OffSec 경로는 예제가 포함된 저장소를 기본으로 사용한다.
+저장된 실행 기록 조회와 web HTTP 재현은 다른 저장소를 설치하지 않아도 사용할 수 있다.
+
+  cd /Users/philip/workdir/security-philip/security-project/demo/security-automation
+  bash demo.sh help
+  bash demo.sh prepare
+
+prepare는 OffSec·SOC 라이브러리를 빌드한다. 현재 체크아웃에 설치된 의존성을 사용한다.
+demo.sh는 설치된 Node 22.18.0을 선택한다. 다른 위치는 DEMO_NODE로 지정할 수 있다.
+code-pentester AST는 현재 네이티브 모듈에 맞는 설치된 Node 20을 별도로 사용한다.
+
+OffSec·SOC 실시간 실행에는 ANTHROPIC_API_KEY 환경변수가 필요하다.
+~/.zshrc에 설정된 키는 새 zsh 터미널에서 사용한다. 발표 화면에 키 값을 출력하지 않는다.
+키 설정 여부만 확인할 때:
+
+  test -n "${ANTHROPIC_API_KEY:-}" && echo 'API 키 설정됨' || echo 'API 키 설정 필요'
+
+아래 명령은 자체 프론트 화면 없이 터미널에서 실행된다.
+
+
+2. 발표용 실행 순서
+------------------
+
+[1] code-pentester — 코드 구조와 분석 준비 (약 1분 설명)
+
+  bash demo.sh code
+  bash demo.sh show code
+  bash demo.sh prompt
+
+확인할 내용:
+  - AST 분석으로 두 소스 파일의 함수·호출·진입점·데이터 흐름을 추출한다.
+  - 결과 통계와 ast-result.json 경로가 터미널에 표시된다.
+  - "code" 명령은 실제 AST 전처리다. 취약점 최종 판정은 아래 에이전트 진단에서 수행한다.
+
+설명 문장:
+  "코드 구조를 먼저 수집하고, 인증·권한 등 8개 보안 영역을 검토할 근거로 사용합니다."
+
+code-pentester의 전체 에이전트 시연은 CH015가 설치된 Codex/Claude Code 세션에서 수행한다.
+bash demo.sh prompt가 복사할 입력문을 출력한다. 출력되는 $ch015-va는 셸 명령이 아니다.
+
+  Codex 입력창:
+    $ch015-va /Users/philip/workdir/security-philip/security-project/demo/security-automation/fixture
+    로컬 합성 송장 서비스의 인증·소유권 검사를 진단하고 파일·줄 근거와 보완책을 제시해줘.
+    외부 대상 요청은 수행하지 마.
+
+  Claude Code 입력창:
+    /ch015:va --target /Users/philip/workdir/security-philip/security-project/demo/security-automation/fixture --mode ast
+
+이 입력문은 프로젝트의 기본 진단 진입점이다. 이번에 보관한 code 실행 기록은 AST 결과다.
+
+
+[2] 웹 요청 — 접근 제어 문제 재현 (약 2분 설명)
+
+  bash demo.sh web
+  bash demo.sh show web
+
+같은 Alice 계정으로 실제 로컬 HTTP 요청 세 건을 전송한다.
+
+  /api/invoices/INV-A      HTTP 200    본인 송장 조회
+  /api/invoices/INV-B      HTTP 200    타인 송장 조회 성공: 소유권 검사 누락
+  /fixed/invoices/INV-B    HTTP 403    소유권 검사를 적용한 경로에서 차단
+
+설명 문장:
+  "같은 사용자·같은 송장으로 요청해 소유권 검사 유무에 따른 응답 차이를 확인합니다."
+
+web 명령은 요청 재현 스크립트다. 실제 web-pentester 데스크톱 앱까지 보여줄 경우:
+
+  bash demo.sh web-app
+
+이 명령은 기존 Web Pentester 앱을 별도 시연 프로필로 열고, 동일 요청과 보안 헤더 검사를 준비한다.
+
+
+[3] OffSec Agent — 분석부터 검증된 보고서까지 (약 3분 설명)
+
+  bash demo.sh offsec
+  bash demo.sh show offsec
+
+실제 createOffsecAgent() API와 모델을 사용한다. 실행 과정과 결과가 터미널에 표시된다.
+
+  호스트: 소스 목록 수집 → 작업 계획
+  AI:     analyze → review → evaluate → report
+  호스트: 원본 근거·심각도·결과 형식·발행 조건 확인 → 보고서 발행
+
+확인할 내용:
+  - 단계별 "검증 통과" 여부
+  - finding ID와 소스 파일·줄 근거
+  - publicationStatus: published
+  - 07_security_report.md 최종 보고서
+
+설명 문장:
+  "분석 결과를 다른 모델이 원본 코드와 다시 대조합니다. 실행 프로그램은 심각도와
+  근거가 단계 사이에서 달라지지 않았는지 검사하고 보고서를 발행합니다."
+
+이 명령은 sonnet 분석·haiku 검토, 최대 45턴, 동시 작업 1개, 최대 $4·15분을 적용한다.
+입력은 fixture/의 두 파일이다. 정적 분석 시연이며 외부 요청이나 동적 공격은 하지 않는다.
+
+
+[4] SOC Agent — 경보를 조사 근거와 권고로 정리 (약 2분 설명)
+
+  bash demo.sh soc
+  bash demo.sh show soc
+
+실제 createSocAgent() API와 모델이 필요한 조회 도구를 선택한다.
+어댑터는 직전에 실행한 실제 HTTP 요청 로그와 합성 계정·규칙 정보를 제공한다.
+최근 1분 내 웹 요청 결과가 없으면 샘플 요청을 새로 생성한다.
+
+  경보 → 규칙·로그·계정 조회 → 근거 ID 검증 → 한국어 판단과 대응 권고
+
+확인할 내용:
+  - 전체 요청 3건: 본인 1건, 타인 2건(성공 1건·차단 1건)
+  - 조회 도구 이름, 인자, 반환한 관측 근거
+  - 한국어 요약과 권고, 근거 ID
+  - 실제 실행한 모델 호출 횟수와 도구 조회 횟수
+
+설명 문장:
+  "에이전트가 경보의 원인을 확인하는 데 필요한 로그와 계정을 조회하고,
+  사람이 검토할 수 있도록 근거와 대응 권고를 남깁니다."
+
+최대 8턴·10회 도구 요청·전체 3분, 모델 호출당 60초를 적용한다.
+데이터 연결은 시연용 어댑터다. 운영 SIEM 연동이나 계정 차단·알림 발송을 수행하지 않는다.
+
+
+3. 회의 전 일괄 리허설과 저장 결과 시연
+--------------------------------------
+
+  bash demo.sh rehearse
+  bash demo.sh status
+  bash demo.sh snapshot
+  bash demo.sh verify
+
+rehearse는 code → web → soc → offsec 순서로 실제 실행한다.
+AI 결과가 검증 조건을 충족하지 못하면 incomplete와 사유를 남기고 종료 코드 1을 반환한다.
+snapshot은 네 항목 모두 completed인 경우에만 recordings/index.json에 발표용 기록을 저장한다.
+verify는 저장 기록의 CLI 출력, 실제 요청 응답, SOC 근거와 건수, OffSec 발행·원본 조회 기록을 확인한다.
+
+회의에서 실제 실행 결과를 바로 보여주려면:
+
+  bash demo.sh show code --recorded
+  bash demo.sh show web --recorded
+  bash demo.sh show offsec --recorded
+  bash demo.sh show soc --recorded
+
+저장 기록 보기는 인터넷·API 키가 필요 없으며, 원래 실행 시각과 "저장된 실제 실행 기록"을 표시한다.
+--recorded를 생략하면 가장 최근 실행을 표시한다. show 명령은 모델을 다시 호출하지 않는다.
+
+JSON 원본을 확인하거나 저장하려면:
+
+  bash demo.sh show soc --json
+  bash demo.sh show offsec --recorded --json > offsec-demo-result.json
+
+
+4. curl로 직접 보여주는 방법
+---------------------------
+
+첫 번째 터미널:
+
+  bash demo.sh target
+
+두 번째 터미널:
+
+  curl -i -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8766/api/invoices/INV-A
+  curl -i -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8766/api/invoices/INV-B
+  curl -i -H 'Authorization: Bearer demo-alice' http://127.0.0.1:8766/fixed/invoices/INV-B
+
+demo-alice는 샘플 코드에 포함된 가짜 계정 토큰이다.
+첫 번째 터미널에서 Ctrl+C로 샘플 API를 종료한다.
+web/soc 명령은 필요한 동안 샘플 API를 자동으로 실행하므로 target을 미리 실행할 필요가 없다.
+
+
+5. OffSec 저장소의 기본 CLI로 직접 실행
+--------------------------------------
+
+시연 래퍼 대신 프로젝트 CLI를 보여줄 때 사용하는 동일 대상·모델·예산 설정이다.
+이 명령의 출력은 demo.sh의 latest 기록에 자동 등록되지 않는다.
+
+  cd /Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec
+  export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+  DEMO_ENGAGEMENT="$(mktemp -d /tmp/offsec-invoice-demo.XXXXXX)"
+  pnpm assess:v2 /Users/philip/workdir/security-philip/security-project/demo/security-automation/fixture \
+    '합성 송장 서비스의 인증·소유권 검사만 정적으로 진단하고 /api와 /fixed 경로의 차이를 한국어로 보고해줘. 외부 요청은 하지 마.' \
+    --model=sonnet --review-model=haiku --effort=low \
+    --max-turns=45 --max-usd=4 --max-concurrency=1 \
+    --max-followup-hypotheses=0 --semgrep=off \
+    --engagement-dir="$DEMO_ENGAGEMENT"
+  cat "$DEMO_ENGAGEMENT/07_security_report.md"
+
+OffSec CLI의 값이 있는 플래그는 --key=value 형식이다.
+pnpm assess:v2 뒤에 별도의 -- 구분자를 넣지 않는다.
+15분 전체 제한은 demo.sh offsec 래퍼에서 적용한다.
+
+
+6. 결과 파일과 문제 확인
+-----------------------
+
+  runs/latest.json                          최근 실행 목록
+  runs/<실행시각>-code/ast-result.json        실제 AST 통계와 산출물 경로
+  runs/<실행시각>-web/result.json             실제 HTTP 응답 세 건
+  runs/<실행시각>-offsec/engagement/           계획·취약점 원장·검토·평가·보고서
+  runs/<실행시각>-offsec/phase-metrics.json    단계별 실행 기록
+  runs/<실행시각>-soc/result.json             판단·도구 호출·관측 근거
+  runs/<실행시각>-soc/model-turns.json         모델 응답·사용량·호출 소요 시간
+  recordings/index.json                     발표용으로 보관한 성공 결과
+
+  - 모델 연결 실패: API 키 설정과 네트워크를 확인하거나 보관한 실행 기록을 보여준다.
+  - 검증 거부/incomplete: 사유와 실행 디렉토리를 확인한다. 성공 결과로 설명하지 않는다.
+  - 포트 사용 중: 동일 샘플 API면 재사용한다. 다른 서비스라면
+    DEMO_TARGET_PORT=8876 bash demo.sh web 처럼 시연 포트를 바꾼다.
+  - 단독 CLI 명령은 순서대로 실행한다. 여러 터미널에서 동시에 실행하면 latest.json이
+    서로 덮어써질 수 있으므로, 일괄 실행에는 rehearse를 사용한다.
+
+CLI·실제 모델 리허설의 최종 확인 내용은 verification.json에 기록한다.

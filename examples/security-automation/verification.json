@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "at": "2026-10-04T00:03:06.093Z",
+  "checks": [
+    "default command shows CLI help without launching a UI",
+    "code-pentester native skill prompt is available",
+    "CLI status command",
+    "four actual completed runs can be shown as JSON and labeled recordings without an API key",
+    "code-pentester real AST context and two parsed source files",
+    "real HTTP evidence: own invoice 200, other invoice 200, fixed route 403",
+    "real SOC model: Korean assessment, observed counts, valid evidence IDs, no unsupported ATT&CK mapping",
+    "OffSec: four actual model phases, publication gate passed, reviewer source Read in the review interval",
+    "OffSec canonical finding severities match the published evaluation counts"
+  ],
+  "revisions": {
+    "offsec": {
+      "baseCommit": "b9eaff8472efbf11862fbcf74d3dd2b5fd8bfe66",
+      "worktreeChanges": [
+        "M README.md",
+        "?? examples/"
+      ]
+    },
+    "soc": {
+      "baseCommit": "9cf846b1cfe309babb297c6af344a8e09c9db7eb",
+      "worktreeChanges": []
+    },
+    "code": {
+      "baseCommit": "b4f3d4fd64c1d31087ce8486bc6f751834b37b5c",
+      "worktreeChanges": []
+    },
+    "web": {
+      "baseCommit": "cd2110719920e8490ece01287a29f187558723fd",
+      "worktreeChanges": []
+    }
+  },
+  "runs": {
+    "code": {
+      "started": "2026-10-04T00:02:26.016Z",
+      "finished": "2026-10-04T00:02:26.122Z",
+      "directory": "/Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/runs/2026-10-04T00-02-26-016Z-code",
+      "source": "actual execution",
+      "artifactSha256": "a3ef6bd7cdd9917479fb6971c60e775f3c1fe2cd2ea0d2e5a69a36add1521548"
+    },
+    "web": {
+      "started": "2026-10-04T00:03:04.383Z",
+      "finished": "2026-10-04T00:03:04.392Z",
+      "directory": "/Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/runs/2026-10-04T00-03-04-383Z-web",
+      "source": "actual execution"
+    },
+    "offsec": {
+      "started": "2026-10-03T23:48:42.377Z",
+      "finished": "2026-10-03T23:52:14.462Z",
+      "directory": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-42-377Z-offsec",
+      "source": "actual execution",
+      "artifactSha256": "7ebf7dbfcd0eb0d4d3ea226e78f432ef89b0f1e9935ccae431c2500ab7c1990b"
+    },
+    "soc": {
+      "started": "2026-10-03T23:48:02.389Z",
+      "finished": "2026-10-03T23:48:30.643Z",
+      "directory": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-02-389Z-soc",
+      "source": "actual execution"
+    }
+  },
+  "offsec": {
+    "publicationStatus": "published",
+    "sourceReads": [
+      "/Users/philip/workdir/security-philip/security-project/demo/security-automation/fixture/server.mjs",
+      "/Users/philip/workdir/security-philip/security-project/demo/security-automation/fixture/invoices.mjs"
+    ],
+    "findings": 1,
+    "totalCostUsd": 0.7162417000000001
+  },
+  "soc": {
+    "modelCalls": 3,
+    "toolCalls": 2,
+    "counts": {
+      "total": 3,
+      "own": 1,
+      "other": 2,
+      "otherSuccess": 1,
+      "otherDenied": 1
+    }
+  },
+  "scope": [
+    "Code: AST preprocessing; native agent invocation is supplied separately.",
+    "Web: loopback HTTP replay; actual Electron/Rust app proof is in .runtime/web-demo-proof.json.",
+    "OffSec: real model API and publication gate with local fixes.",
+    "SOC: real model with local synthetic data adapter; no production SIEM or messaging."
+  ]
+}

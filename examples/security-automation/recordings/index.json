@@ -1,0 +1,493 @@
+{
+  "code": {
+    "kind": "code",
+    "source": "recording",
+    "status": "completed",
+    "started": "2026-10-04T00:02:26.016Z",
+    "directory": "/Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/runs/2026-10-04T00-02-26-016Z-code",
+    "finished": "2026-10-04T00:02:26.122Z",
+    "title": "코드 구조와 분석 근거 수집",
+    "stats": {
+      "analysis_status": "complete",
+      "files_parsed": 2,
+      "files_failed": 0,
+      "files_recovered": 0,
+      "functions": 3,
+      "calls": 19,
+      "entry_points": 6,
+      "data_flows": 24,
+      "taint_paths": 4,
+      "semgrep_findings": 0,
+      "truncation": {
+        "files": false,
+        "data_flows": false,
+        "taint_paths": false,
+        "semgrep_findings": false,
+        "security_flows": false,
+        "traversal": false,
+        "depth": false,
+        "arguments": false
+      },
+      "truncated": false
+    },
+    "artifact": "/Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/runs/2026-10-04T00-02-26-016Z-code/ast-result.json",
+    "note": "code-pentester의 실제 AST 전처리 결과입니다. 최종 취약점 판단은 Codex/Claude Code에서 독립 분석·검증 역할을 실행합니다.",
+    "nativePrompt": "$ch015-va /Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/fixture\n로컬 합성 송장 서비스의 인증·소유권 검사를 진단하고 파일·줄 근거와 보완책을 제시해줘. 외부 대상 요청은 수행하지 마.",
+    "contextAvailable": true,
+    "recordedAt": "2026-10-04T00:03:04.885Z",
+    "artifactSha256": "a3ef6bd7cdd9917479fb6971c60e775f3c1fe2cd2ea0d2e5a69a36add1521548"
+  },
+  "web": {
+    "kind": "web",
+    "source": "recording",
+    "status": "completed",
+    "started": "2026-10-04T00:03:04.383Z",
+    "directory": "/Users/philip/workdir/security-philip/security-project/agent/secops-agent-offsec/examples/security-automation/runs/2026-10-04T00-03-04-383Z-web",
+    "finished": "2026-10-04T00:03:04.392Z",
+    "title": "타인 송장 조회와 수정 후 차단 재현",
+    "requests": [
+      {
+        "url": "http://127.0.0.1:8766/api/invoices/INV-A",
+        "principal": "alice",
+        "status": 200,
+        "body": {
+          "id": "INV-A",
+          "owner": "alice",
+          "customer": "김고객",
+          "amount": 120000,
+          "item": "클라우드 이용료"
+        }
+      },
+      {
+        "url": "http://127.0.0.1:8766/api/invoices/INV-B",
+        "principal": "alice",
+        "status": 200,
+        "body": {
+          "id": "INV-B",
+          "owner": "bob",
+          "customer": "이고객",
+          "amount": 240000,
+          "item": "보안 서비스 이용료"
+        }
+      },
+      {
+        "url": "http://127.0.0.1:8766/fixed/invoices/INV-B",
+        "principal": "alice",
+        "status": 403,
+        "body": {
+          "error": "본인 송장만 조회할 수 있습니다"
+        }
+      }
+    ],
+    "note": "로컬 샘플 서비스에 실제 HTTP 요청 3회를 보낸 결과입니다. Web Pentester 앱에서 Traffic·Repeater·보안 헤더 검사를 이어서 보여줍니다.",
+    "recordedAt": "2026-10-04T00:03:04.886Z"
+  },
+  "offsec": {
+    "kind": "offsec",
+    "source": "recording",
+    "status": "completed",
+    "started": "2026-10-03T23:48:42.377Z",
+    "directory": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-42-377Z-offsec",
+    "finished": "2026-10-03T23:52:14.462Z",
+    "title": "소스 분석 → 독립 검토 → 평가 → 보고서",
+    "publicationStatus": "published",
+    "phases": [
+      "analyze:unit-cdb4ee2aea69cc6a",
+      "review",
+      "evaluate",
+      "report"
+    ],
+    "phaseMetrics": [
+      {
+        "runId": "fixture_20261003T234842486Z",
+        "domain": "offsec",
+        "phase": "analyze",
+        "agent": "analyzer",
+        "attempt": 1,
+        "inputTokens": 10,
+        "outputTokens": 5541,
+        "cacheReadTokens": 121027,
+        "totalTokens": 126578,
+        "estimatedContextUsagePercent": 63.29,
+        "duration": 51208,
+        "validationPassed": true,
+        "qualityIssueCount": 0,
+        "costUsd": 0.2561181
+      },
+      {
+        "runId": "fixture_20261003T234842486Z",
+        "domain": "offsec",
+        "phase": "review",
+        "agent": "reviewer",
+        "attempt": 1,
+        "inputTokens": 66,
+        "outputTokens": 6917,
+        "cacheReadTokens": 148335,
+        "totalTokens": 155318,
+        "estimatedContextUsagePercent": 77.66,
+        "duration": 69880,
+        "validationPassed": true,
+        "qualityIssueCount": 0,
+        "costUsd": 0.08406325
+      },
+      {
+        "runId": "fixture_20261003T234842486Z",
+        "domain": "offsec",
+        "phase": "evaluate",
+        "agent": "evaluator",
+        "attempt": 1,
+        "inputTokens": 14,
+        "outputTokens": 5703,
+        "cacheReadTokens": 109285,
+        "totalTokens": 115002,
+        "estimatedContextUsagePercent": 57.5,
+        "duration": 53416,
+        "validationPassed": true,
+        "qualityIssueCount": 0,
+        "costUsd": 0.21021
+      },
+      {
+        "runId": "fixture_20261003T234842486Z",
+        "domain": "offsec",
+        "phase": "report",
+        "agent": "reporter",
+        "attempt": 1,
+        "inputTokens": 10,
+        "outputTokens": 4501,
+        "cacheReadTokens": 55947,
+        "totalTokens": 60458,
+        "estimatedContextUsagePercent": 30.23,
+        "duration": 36762,
+        "validationPassed": true,
+        "qualityIssueCount": 0,
+        "costUsd": 0.16585035
+      }
+    ],
+    "toolCalls": 34,
+    "findings": [
+      {
+        "id": "F-319533042986",
+        "title": "/api 송장 조회 경로의 소유권 검사 누락으로 인한 IDOR (BOLA)",
+        "severity": "HIGH",
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "path": "server.mjs",
+            "lineStart": 8,
+            "lineEnd": 16,
+            "quote": "const url = new URL(req.url, 'http://127.0.0.1');\n  const invoice = lookupInvoice(url.pathname.split('/').pop());\n  if (!invoice) { res.writeHead(404); res.end('{\"error\":\"송장이 없습니다\"}'); return; }\n  // The /fixed path demonstrates the corrected ownership check.\n  if (url.pathname.startsWith('/fixed/') && invoice.owner !== user.id) {\n    res.writeHead(403); res.end('{\"error\":\"본인 송장만 조회할 수 있습니다\"}'); return;\n  }\n  // Deliberate demonstration defect: /api returns another customer's invoice.\n  res.end(JSON.stringify(invoice));"
+          }
+        ],
+        "remediation": "소유권 검사(invoice.owner !== user.id)를 /fixed/ 조건부가 아닌 모든 송장 조회 경로에 공통으로 적용한다. 특정 경로 접두사에 의존하지 말고 핸들러 전체에서 단일 인가 체크를 강제하도록 리팩터링한다."
+      }
+    ],
+    "report": "# 보안 진단 보고서 (초안)\n\n## 1. 범위 및 방법\n\n로컬 합성 송장 서비스(`server.mjs`, `invoices.mjs`)의 인증·소유권 검사를 정적으로만 진단했다. 모든 계정(demo-alice, demo-bob)과 금액은 시연용 데이터다. 외부 네트워크 요청이나 런타임 공격(PENTEST)은 수행하지 않았다.\n\n## 2. 요약\n\n- 식별된 Finding: **1건**\n- 심각도 분포: CRITICAL 0 / HIGH 1 / MEDIUM 0 / LOW 0 / INFO 0\n- 종합 보안 수준(평가자 판정): **High** — CRITICAL=0, HIGH≥1 조건에 따른 rubric 결과\n- 등재된 Finding은 리뷰어가 증거 대조 후 `retained` 처리(판정: supported, 중복/상충 없음)\n\n## 3. `/api` vs `/fixed` 경로 차이\n\n평가 산출물에 기록된 설명(`pathDifferenceExplanation`)을 그대로 보존한다:\n\n> `/api`와 `/fixed` 경로는 동일한 `handleInvoice` 로직을 공유하지만, 소유권 검사(`invoice.owner !== user.id`)가 `url.pathname.startsWith('/fixed/')` 조건에 의해서만 활성화된다(server.mjs 12줄). 따라서 `/fixed/invoices/*` 요청은 소유자가 아닌 경우 403을 반환하지만, `/api/invoices/*` 요청은 이 검사를 건너뛰고 16줄에서 조회된 invoice 전체를 그대로 반환한다. 이는 동일 코드베이스 내에서 결함(사전)과 수정(사후) 버전을 나란히 시연하기 위한 의도적 구조이다.\n\n## 4. Finding 상세\n\n### F-319533042986 — `/api` 송장 조회 경로의 소유권 검사 누락으로 인한 IDOR (BOLA)\n\n| 항목 | 내용 |\n|---|---|\n| 판정(verdict) | supported |\n| 심각도 | HIGH |\n| confidence | 0.95 |\n| evidenceClass | access-control |\n| reachability | confirmed |\n| 검토 상태 | CONFIRMED (리뷰어 action=retained) |\n\n**전제조건**\n- 공격자가 유효한 자신의 Bearer 세션 토큰(예: demo-alice 또는 demo-bob)을 보유\n- 요청 경로가 `/fixed/`로 시작하지 않는 `/api` 류 경로를 사용\n\n**심각도 근거**\n인증(A1)은 세션 맵 조회로 존재하지만, 인가(A2) 단계에서 리소스 소유자와 요청자 신원을 비교하는 검사가 `/fixed/` 접두 경로에만 조건부로 적용된다. 그 외 경로(예: `/api/invoices/INV-B`)는 이 검사를 전혀 거치지 않고 바로 invoice 전체를 응답하므로, 인증된 임의 사용자가 ID만 바꿔 타인의 송장(금액 등 민감 정보 포함)을 열람할 수 있다. 데모 데이터이나 패턴 자체는 실제 멀티테넌트 서비스에 그대로 이식 시 고객 데이터 전반 노출로 이어지는 전형적 BOLA/IDOR이다.\n\n**영향**\n인증된 임의 사용자가 다른 사용자 소유의 송장 레코드(고객명, 금액, 품목 등)를 조회 가능. 소유권 경계가 깨져 수평 권한 상승(horizontal privilege escalation)에 해당.\n\n**증거**\n\n`server.mjs:8-16`\n```\nconst url = new URL(req.url, 'http://127.0.0.1');\n  const invoice = lookupInvoice(url.pathname.split('/').pop());\n  if (!invoice) { res.writeHead(404); res.end('{\"error\":\"송장이 없습니다\"}'); return; }\n  // The /fixed path demonstrates the corrected ownership check.\n  if (url.pathname.startsWith('/fixed/') && invoice.owner !== user.id) {\n    res.writeHead(403); res.end('{\"error\":\"본인 송장만 조회할 수 있습니다\"}'); return;\n  }\n  // Deliberate demonstration defect: /api returns another customer's invoice.\n  res.end(JSON.stringify(invoice));\n```\n\n**Exploit 경로(정적 분석 기준)**\n요청 진입(server.mjs:5-6 세션 조회) → invoice 조회(server.mjs:9 lookupInvoice) → `/fixed` 접두사 아닌 경로이므로 소유권 검사(server.mjs:12-14) 미실행 → invoice 전체 응답(server.mjs:16)\n\n**보완책**\n소유권 검사(`invoice.owner !== user.id`)를 `/fixed/` 조건부가 아닌 모든 송장 조회 경로에 공통으로 적용한다. 특정 경로 접두사에 의존하지 말고 핸들러 전체에서 단일 인가 체크를 강제하도록 리팩터링한다.\n\n**표준 매핑**\nOWASP API1:2023 Broken Object Level Authorization, CWE-639\n\n**미해결 사항(원장 기준)**: 없음\n\n## 5. 커버리지 매트릭스 요약 (A1–A8)\n\n| 차원 | 대상 파일 | 분석 파일 | Finding 수 | 비고 |\n|---|---|---|---|---|\n| A1 인증 | 2 | 2 | 0 | 세션 조회 로직만 확인, 토큰 발급/검증 강도 심층분석 미수행 |\n| A2 인가 | 2 | 2 | 1 | F-319533042986 확인 |\n| A3 데이터흐름 | 2 | 2 | 0 | source-to-sink 경로는 F-319533042986 검증 과정에서 함께 확인(추가 취약점 없음은 미확정) |\n| A4 입출력 | 0 | 0 | 0 | 대상 없음(injection 표면 부재) |\n| A5 비밀관리 | 2 | 2 | 0 | demo-alice/demo-bob 하드코딩 토큰 존재하나 시연용으로 간주, 별도 finding 미제출 |\n| A6 의존성 | 0 | 0 | 0 | 패키지 매니페스트 없어 분석 대상 자체 부재 |\n| A7 에러처리 | 2 | 2 | 0 | 404/403 응답 확인, 스택 트레이스 누출 관찰 안 됨(심층 분석 아님) |\n| A8 리소스 | 0 | 0 | 0 | DoS/레이스컨디션 표면 식별 안 됨 |\n\n## 6. 한계(Limitations) — 평가 산출물 원문 보존\n\n- `00_recon.json`의 authSurface/dataSurface/networkSurface/configSurface가 모두 공란으로, recon 단계가 표면 분류 세부 정보를 제공하지 않았다. 본 평가의 커버리지 매트릭스는 dependency graph(2개 파일)만을 근거로 수작업 구성한 것이다.\n- 동적 검증(PENTEST)은 scope상 수행되지 않음(정적 분석만 허용). F-319533042986의 실제 HTTP 요청을 통한 런타임 재현은 보류 상태이며, 리뷰어의 소스 코드 대조 검증으로만 확인됨.\n- demo-alice/demo-bob 하드코딩 인증 토큰(A5)에 대한 별도 finding은 제출되지 않았음. 시연용 데이터로 간주되었으나, 동일 패턴이 실제 서비스에 이식될 경우 비밀 관리 관점의 재평가가 필요함.\n- inconclusive 상태의 finding 없음(review summary: retained=1, corrected=0, rejected=0, inconclusive=0, new=0).\n- 의존성 그래프에 패키지 매니페스트가 없어 A6(의존성) 차원은 분석 대상 자체가 식별되지 않음(no-relevant-files).\n\n## 7. 결론\n\n본 진단은 작업 실행이 완료되었음을 의미할 뿐, 2개 파일을 벗어난 범위에 대한 전수 보안 검증을 주장하지 않는다. 등재된 유일한 Finding(F-319533042986, HIGH, supported/confirmed)은 리뷰어 검토를 통과했으며, 추가 미해결(abstain/escalate) 항목은 없다. 다만 A5(비밀관리)의 하드코딩 토큰 패턴과 동적 검증 미수행은 향후 재평가가 필요한 잔여 위험으로 남아 있다.\n",
+    "artifact": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-42-377Z-offsec/engagement/07_security_report.md",
+    "coverage": {
+      "complete": true,
+      "requiredPreanalysisComplete": true,
+      "sourceErrors": [],
+      "completedUnits": 1,
+      "totalUnits": 1,
+      "uncoveredFiles": [],
+      "semanticCoverage": "not-proven",
+      "ownedFilesRead": 2,
+      "ownedFileCount": 2,
+      "preanalysisAvailable": true,
+      "followupQuestions": 0,
+      "deferredFollowupQuestions": 0
+    },
+    "attempts": [
+      {
+        "phase": "analyze",
+        "attempt": 1,
+        "status": "completed"
+      },
+      {
+        "phase": "review",
+        "attempt": 1,
+        "status": "completed"
+      },
+      {
+        "phase": "evaluate",
+        "attempt": 1,
+        "status": "completed"
+      },
+      {
+        "phase": "report",
+        "attempt": 1,
+        "status": "completed"
+      }
+    ],
+    "note": "실제 Anthropic 모델·OffSec 공개 API·발행 게이트를 사용했습니다. 입력은 합성 코드이며 Semgrep과 동적 공격은 실행하지 않습니다.",
+    "recordedAt": "2026-10-04T00:03:04.886Z",
+    "artifactSha256": "7ebf7dbfcd0eb0d4d3ea226e78f432ef89b0f1e9935ccae431c2500ab7c1990b"
+  },
+  "soc": {
+    "kind": "soc",
+    "source": "recording",
+    "status": "completed",
+    "started": "2026-10-03T23:48:02.389Z",
+    "directory": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-02-389Z-soc",
+    "finished": "2026-10-03T23:48:30.643Z",
+    "title": "접근 경보 → 관련 로그·계정 조회 → 판단 근거",
+    "assessment": {
+      "decision": "escalate",
+      "threatLevel": "suspicious",
+      "confidence": 0.85,
+      "title": "타인 송장에 대한 권한 없는 접근 성공",
+      "summary": "확인한 요청은 총 3건으로, 본인 송장 1건과 타인 송장 2건(성공 1건, 차단 1건)입니다. alice 사용자가 bob 소유의 송장(INV-B)을 /api/invoices 엔드포인트를 통해 성공적으로 조회했습니다(HTTP 200). 이는 권한 없는 접근이며, 같은 리소스에 대해 /fixed/invoices 엔드포인트는 올바르게 403으로 차단되었습니다. 엔드포인트 간 접근 제어 불일치가 존재합니다.",
+      "findings": [
+        {
+          "type": "observation",
+          "description": "alice 사용자가 bob 소유의 송장 INV-B를 /api/invoices 엔드포인트를 통해 조회에 성공(HTTP 200 반환)",
+          "evidence": [
+            "E1"
+          ],
+          "confidence": 1
+        },
+        {
+          "type": "observation",
+          "description": "동일한 리소스(INV-B)에 대해 /fixed/invoices 엔드포인트는 alice의 요청을 거부(HTTP 403 반환)",
+          "evidence": [
+            "E1"
+          ],
+          "confidence": 1
+        },
+        {
+          "type": "correlation",
+          "description": "cross-owner-invoice 규칙의 탐지 조건 충족: 인증된 사용자(alice)가 자신이 아닌 리소스 소유자(bob)의 데이터에 성공적으로 접근",
+          "evidence": [
+            "E1",
+            "E2"
+          ],
+          "confidence": 1
+        },
+        {
+          "type": "hypothesis",
+          "description": "API 엔드포인트(/api/invoices)와 레거시 엔드포인트(/fixed/invoices) 간 접근 제어 구현의 불일치가 존재하여, 한 경로는 권한 검증에 실패하는 상태",
+          "evidence": [
+            "E1"
+          ],
+          "confidence": 0.75
+        },
+        {
+          "type": "observation",
+          "description": "모든 요청이 로컬 루프백 주소(127.0.0.1)에서 발생하며, loopback-demo-probe 소스로 표기됨",
+          "evidence": [
+            "E1"
+          ],
+          "confidence": 1
+        }
+      ],
+      "affectedEntities": [
+        {
+          "type": "user",
+          "value": "alice",
+          "role": "접근을 시도한 고객"
+        },
+        {
+          "type": "user",
+          "value": "bob",
+          "role": "권한 없이 접근된 리소스의 소유자"
+        },
+        {
+          "type": "resource",
+          "value": "INV-B",
+          "role": "권한 없이 조회된 송장"
+        },
+        {
+          "type": "resource",
+          "value": "/api/invoices",
+          "role": "취약한 엔드포인트(접근 제어 실패)"
+        },
+        {
+          "type": "resource",
+          "value": "/fixed/invoices",
+          "role": "보호된 엔드포인트(접근 제어 작동)"
+        }
+      ],
+      "recommendation": {
+        "immediate": "alice의 계정 활동 검토 필요: (1) /api/invoices 엔드포인트를 통한 bob의 송장 조회가 의도된 접근인지 확인, (2) alice 계정의 최근 활동 및 접근 패턴 점검, (3) 비정상 조회 시 리소스 노출 범위 평가",
+        "shortTerm": "/api/invoices와 /fixed/invoices 엔드포인트 간 접근 제어 불일치 원인 파악 및 /api 경로의 권한 검증 로직 재검토. 모든 송장 조회 엔드포인트에서 일관된 소유자 기반 접근 제어 구현 확인",
+        "monitoring": "일정 기간 동안 alice 사용자의 모든 크로스-오너 리소스 접근 시도를 모니터링하고, 다른 사용자의 유사한 패턴 탐색. 접근 제어 우회 시도의 빈도와 패턴 추적"
+      },
+      "mitreTactics": [],
+      "evidenceIds": [
+        "E1",
+        "E2"
+      ],
+      "unresolved": [
+        "alice의 계정이 실제로 손상되었는지, 또는 정당한 관리 작업 또는 테스트인지 여부",
+        "/api/invoices 엔드포인트가 의도적으로 권한 검증 없이 설계되었는지, 아니면 버그인지 여부"
+      ],
+      "stopReason": "sufficient-evidence"
+    },
+    "modelCalls": 3,
+    "calls": [
+      {
+        "name": "get_signal",
+        "parameters": {
+          "signalId": "demo-access-1791071282444"
+        }
+      },
+      {
+        "name": "get_rule",
+        "parameters": {
+          "ruleId": "cross-owner-invoice"
+        }
+      }
+    ],
+    "observations": [
+      {
+        "evidenceId": "E1",
+        "tool": "get_signal",
+        "input": {
+          "signalId": "demo-access-1791071282444"
+        },
+        "ok": true,
+        "data": {
+          "complete": true,
+          "synthetic": true,
+          "dataScope": "Only the three local HTTP requests in this exercise; no external telemetry or credential-theft evidence.",
+          "exerciseCounts": {
+            "total": 3,
+            "own": 1,
+            "other": 2,
+            "otherSuccess": 1,
+            "otherDenied": 1
+          },
+          "signalId": "demo-access-1791071282444",
+          "signalType": "alert",
+          "source": "local-demo-access-log",
+          "severity": "high",
+          "timestamp": "2026-10-03T23:48:02.444Z",
+          "subject": {
+            "type": "user",
+            "value": "alice"
+          },
+          "tenantId": "synthetic-demo",
+          "rule": {
+            "id": "cross-owner-invoice",
+            "name": "타인 소유 송장 조회 성공",
+            "category": "access-control"
+          },
+          "tags": [
+            "synthetic-demo",
+            "observed-local-http"
+          ],
+          "events": [
+            {
+              "eventId": "demo-request-1",
+              "timestamp": "2026-10-03T23:48:02.443Z",
+              "actor": "alice",
+              "resourceOwner": "alice",
+              "resource": "/api/invoices/INV-A",
+              "status": 200,
+              "sourceIp": "127.0.0.1",
+              "type": "api_access",
+              "requestSource": "loopback-demo-probe"
+            },
+            {
+              "eventId": "demo-request-2",
+              "timestamp": "2026-10-03T23:48:02.443Z",
+              "actor": "alice",
+              "resourceOwner": "bob",
+              "resource": "/api/invoices/INV-B",
+              "status": 200,
+              "sourceIp": "127.0.0.1",
+              "type": "api_access",
+              "requestSource": "loopback-demo-probe"
+            },
+            {
+              "eventId": "demo-request-3",
+              "timestamp": "2026-10-03T23:48:02.443Z",
+              "actor": "alice",
+              "resourceOwner": "bob",
+              "resource": "/fixed/invoices/INV-B",
+              "status": 403,
+              "sourceIp": "127.0.0.1",
+              "type": "api_access",
+              "requestSource": "loopback-demo-probe"
+            }
+          ]
+        },
+        "truncated": false
+      },
+      {
+        "evidenceId": "E2",
+        "tool": "get_rule",
+        "input": {
+          "ruleId": "cross-owner-invoice"
+        },
+        "ok": true,
+        "data": {
+          "complete": true,
+          "synthetic": true,
+          "dataScope": "Only the three local HTTP requests in this exercise; no external telemetry or credential-theft evidence.",
+          "exerciseCounts": {
+            "total": 3,
+            "own": 1,
+            "other": 2,
+            "otherSuccess": 1,
+            "otherDenied": 1
+          },
+          "id": "cross-owner-invoice",
+          "logic": "Authenticated actor differs from resource owner and HTTP status is 200.",
+          "enabled": true
+        },
+        "truncated": false
+      }
+    ],
+    "actions": [
+      {
+        "tool": "get_signal",
+        "reason": "신호의 세부 사항 확인: alice 사용자가 타인 송장을 조회한 정확한 시간, 어떤 송장들에 접근했는지, 그리고 성공/차단된 요청의 구체적 내용을 파악하기 위해 필요",
+        "evidenceId": "E1"
+      },
+      {
+        "tool": "get_rule",
+        "reason": "탐지 규칙의 논리 이해: cross-owner-invoice 규칙이 어떤 조건으로 경고를 발생시키는지, 그리고 정상적인 접근 통제와 실제 위반의 구분 기준을 파악하기 위해",
+        "evidenceId": "E2"
+      }
+    ],
+    "usage": {
+      "inputTokens": 17006,
+      "outputTokens": 3941,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "signal": {
+      "signalId": "demo-access-1791071282444",
+      "signalType": "alert",
+      "source": "local-demo-access-log",
+      "severity": "high",
+      "timestamp": "2026-10-03T23:48:02.444Z",
+      "subject": {
+        "type": "user",
+        "value": "alice"
+      },
+      "tenantId": "synthetic-demo",
+      "rule": {
+        "id": "cross-owner-invoice",
+        "name": "타인 소유 송장 조회 성공",
+        "category": "access-control"
+      },
+      "tags": [
+        "synthetic-demo",
+        "observed-local-http"
+      ]
+    },
+    "sourceRun": "/Users/philip/workdir/security-philip/security-project/demo/security-automation/runs/2026-10-03T23-48-02-435Z-web",
+    "counts": {
+      "total": 3,
+      "own": 1,
+      "other": 2,
+      "otherSuccess": 1,
+      "otherDenied": 1
+    },
+    "countSentence": "확인한 요청은 총 3건으로, 본인 송장 1건과 타인 송장 2건(성공 1건, 차단 1건)입니다.",
+    "note": "실제 모델과 SOC 조사 루프를 사용했습니다. 데이터 어댑터는 로컬 시연 요청과 합성 계정 정보를 제공하며, SIEM 차단·메시지 전송은 수행하지 않습니다.",
+    "recordedAt": "2026-10-04T00:03:04.886Z"
+  }
+}
