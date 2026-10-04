@@ -724,6 +724,11 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
       rootAllowedReadFiles.push(...readStandardFindingRecordReceipts(engagementDir).map((receipt) =>
         join(engagementDir, 'standard-findings', receipt.recordName)));
     };
+    const findingRecordInputs = () => readStandardFindingRecordReceipts(engagementDir).map(receipt => ({
+      findingId: receipt.findingId,
+      path: join(engagementDir, 'standard-findings', receipt.recordName),
+      sha256: receipt.sha256,
+    }));
 
     // --- root host: review -> evaluate -> report -------------------------
     const host = new WorkflowHost({
@@ -838,6 +843,9 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
         completedUnitKeys,
         analysisCoverage: analysisCoveragePath,
         followupPlan: followupPlanPath,
+        findingRecords: findingRecordInputs(),
+        sourceFiles: workPlan.units.flatMap(unit => unit.ownedFiles.map(file => resolve(target, file.path))),
+        instruction: 'Read the exact absolute sourceFiles paths to verify each finding. evidence.path is relative to the target, NOT the engagement directory. A finding quotation or analyzer report alone does not constitute source verification.',
         ...(uncoveredFiles.length > 0 ? { uncoveredFiles } : {}),
       },
     });
@@ -845,7 +853,8 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
     const evaluate = await executePhase({
       id: 'evaluate',
       priorArtifactPaths: review.result.artifacts.map((name) => join(engagementDir, name)),
-      inputs: { reviewArtifacts: review.result.artifacts },
+      inputs: { reviewArtifacts: review.result.artifacts, findingRecords: findingRecordInputs(),
+        instruction: 'Read each exact findingRecords.path. These filenames are hashes, not finding IDs. Preserve canonical severities; do not infer replacements from review prose. Follow the classification schema in methods/evaluate.md.' },
     });
     refreshCanonicalFindingReadSet();
     await executePhase({
@@ -854,7 +863,7 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
         ...evaluate.result.artifacts.map((name) => join(engagementDir, name)),
         ...phases.flatMap((p) => p.result.artifacts.map((name) => join(engagementDir, name))),
       ])],
-      inputs: { evaluationArtifacts: evaluate.result.artifacts,
+      inputs: { evaluationArtifacts: evaluate.result.artifacts, findingRecords: findingRecordInputs(),
         ...(!analysisCoverage.complete ? { publicationNotice: '분석 범위 미완료', uncoveredFiles } : {}) },
     });
 

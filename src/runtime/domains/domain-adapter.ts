@@ -1,6 +1,7 @@
 import type { AgentDefinition, OutputFormat } from '@anthropic-ai/claude-agent-sdk';
 
 import type { WorkflowContract, WorkflowPhase } from '../contracts/workflow-contract.js';
+import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
 
 /**
  * Phase transition input state — summarizes the run's completed phases and domain-specific context
@@ -71,6 +72,8 @@ export interface DomainAdapter<TLegacyContract = unknown, TLegacyPhase = unknown
     phase: TLegacyPhase;
     engagementDir: string;
     round?: string;
+    target?: string;
+    events?: readonly ProviderRuntimeEvent[];
   }): void;
   renderArtifacts(phase: TLegacyPhase, round?: string): { required: string[]; optional: string[] };
   /** Artifact names materialized by the host after validating structured output. */

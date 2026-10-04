@@ -14,6 +14,8 @@ import {
 } from '../offsec-contract.js';
 import { countStandardFindings, readStandardFindings } from '../finding-contract.js';
 import { validateObjectionCount } from '../objection-contract.js';
+import { validateV2Evaluation, validateV2ReviewSourceReads } from '../v2-evaluation.js';
+import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
 import { getWorkflowPhase, parseWorkflowContract, type WorkflowContract } from '../contracts/workflow-contract.js';
 import { resolveKnowledgeFiles as resolveKnowledgeFilesForPhase } from '../knowledge/loader.js';
 import type { DomainAdapter, PhaseTransitionState, TransitionDecision } from './domain-adapter.js';
@@ -152,6 +154,8 @@ export class OffsecDomainAdapter
     phase: OffsecPhase;
     engagementDir: string;
     round?: string;
+    target?: string;
+    events?: readonly ProviderRuntimeEvent[];
   }): void {
     const isV2 = this.legacyContract.version.startsWith('2.');
     const accepted = countStandardFindings(
@@ -166,7 +170,8 @@ export class OffsecDomainAdapter
     }
 
     if (isV2) {
-      // v2: objection 시스템 없음. findingCount 보정만 수행.
+      if (input.phase.id === 'review' && input.target) validateV2ReviewSourceReads(input.engagementDir, input.target, input.events ?? []);
+      if (input.phase.id === 'evaluate') validateV2Evaluation(input.engagementDir);
       return;
     }
 

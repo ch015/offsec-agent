@@ -64,3 +64,48 @@ review에서 retained + corrected된 finding의 최고 severity 기준:
 - `04_evaluation.json`: 커버리지 매트릭스, 심각도 분포, 보안 수준 판정, 한계 기록
 - `04_evaluation_classification.yaml`: 각 finding의 최종 분류 (채택·사유)
 - `metrics.findingCount`는 0 (evaluator는 새 finding을 만들지 않는다)
+
+## 원장 조회와 발행 형식
+
+입력의 `findingRecords`는 호스트가 제공한 ID·실제 경로·해시 색인이다. 모든 `path`를
+정확히 Read한다. 파일명은 finding ID가 아닌 해시다. 디렉터리 Glob이나 ID로 만든
+경로로 대체하지 않는다. 원본 severity를 추정하거나 변경하지 않는다. reviewer가
+`submit_finding`으로 보정한 동일 ID의 기록이 있으면 reviewer 기록을 채택한다.
+
+`04_evaluation.json.severityDistribution`에는 CRITICAL/HIGH/MEDIUM/LOW/INFO의 정수
+건수를 모두 기입한다. CONFIRMED/DOWNGRADED만 집계하고 원장과 일치시킨다.
+
+`04_evaluation_classification.yaml`은 다음 **발행 게이트 호환 형식**을 사용한다.
+키를 `findings`, `findingId`, `classification: adopted`로 바꾸지 않는다.
+
+```yaml
+candidates:
+  - id: F-실제ID
+    final_status: CONFIRMED
+    severity: MEDIUM  # 원장의 실제 값 그대로
+    confidence: 0.8   # 원장의 실제 값 그대로
+    title: 실제 제목
+    evidence:
+      locations: ["server.js:3"] # 원장의 실제 증거
+    validity:
+      reachable: 실제 도달 경로
+      business_relevance: 실제 영향
+      exploit_path: 검토된 source에서 sink까지 경로
+equivalence_review:
+  status: COMPLETE
+  reviewed_candidate_count: 1
+  unresolved: []
+  groups:
+    - group_id: G-1
+      members: [F-실제ID]
+      decision: KEEP
+      reason: 검토 결과에 근거한 독립 원인·영향 설명
+```
+
+모든 원장 ID를 정확히 한 번 포함한다. retained/corrected는 증거에 따라 CONFIRMED,
+rejected는 FALSE_POSITIVE와 `counter_evidence`, inconclusive는 BACKLOG와 `backlog_reason`으로
+기록한다. 증거가 불충분한 finding을 CONFIRMED로 승격하지 않는다. 중복은 검토된 관계를
+보존해 FOLDED_INTO와 `folded_into`를 명시하고 대표 finding에만 집계한다.
+등가성 검토의 사유·구성원·건수를 실제 검토와 일치시킨다. 미해결 중복 판단을 숨기거나
+완료로 꾸미지 않는다. 수치 보안 점수는 요구하지 않으며 임의로 만들지 않는다.
+finding이 없으면 `candidates: []`, reviewed_candidate_count: 0, groups: []로 명시한다.

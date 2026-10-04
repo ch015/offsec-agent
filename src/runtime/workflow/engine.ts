@@ -432,7 +432,7 @@ export class WorkflowHost<
         }, lease);
       }
       let result: TResult;
-      try { result = this.validatePhaseResult(resultValue, legacy, options.round, attemptNum, maxRetryAttempts); }
+      try { result = this.validatePhaseResult(resultValue, legacy, options.round, attemptNum, maxRetryAttempts, outcome.events); }
       catch (error) {
         if (error instanceof ValidationSafetyError) throw error;
         throw new PhaseResultFailure(error instanceof Error ? error.message : String(error), { cause: error });
@@ -682,6 +682,7 @@ export class WorkflowHost<
     round: string | undefined,
     attemptNum: number,
     maxRetryAttempts: number,
+    events: readonly ProviderRuntimeEvent[],
   ): TResult {
     if (this.input.adapter.validateResultV2) {
       const outcome: ValidationOutcome<TResult> = this.input.adapter.validateResultV2({
@@ -728,6 +729,8 @@ export class WorkflowHost<
       phase: legacy,
       engagementDir: this.input.engagementDir,
       round,
+      target: this.input.target,
+      events,
     });
     return result;
   }

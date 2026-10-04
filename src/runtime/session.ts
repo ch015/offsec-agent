@@ -186,6 +186,22 @@ export function buildOptions(spec: SessionSpec): Options {
     throw new Error(`entryAgent가 ${workflowContract.id} roles에 없다: ${entryAgent}`);
   }
   const phaseArtifacts = adapter.renderArtifacts(phase, spec.phaseRound);
+  const phaseOutput = adapter.outputFormat(phase);
+  // Bind provider output to the same artifact names that the host accepts.
+  // Keep filesystem Write paths separate from the returned artifact identifiers.
+  const outputProperties = phaseOutput.schema.properties;
+  if (isRecord(outputProperties) && isRecord(outputProperties.artifacts)) {
+    phaseOutput.schema = {
+      ...phaseOutput.schema,
+      properties: {
+        ...outputProperties,
+        artifacts: {
+          ...outputProperties.artifacts,
+          items: { type: 'string', enum: [...phaseArtifacts.required, ...phaseArtifacts.optional] },
+        },
+      },
+    };
+  }
   const allowedPhaseArtifacts = new Set([...phaseArtifacts.required, ...phaseArtifacts.optional]);
   const allowedMethodFiles = new Set(
     adapter.resolveMethodFiles(phase),
@@ -346,8 +362,8 @@ export function buildOptions(spec: SessionSpec): Options {
     ...(spec.onStderr ? { stderr: spec.onStderr } : {}),
     ...(spec.onProgress ? { forwardSubagentText: true } : {}),
     outputFormat: spec.workUnit
-      ? bindWorkUnitOutputFormat(adapter.outputFormat(phase), spec.workUnit)
-      : adapter.outputFormat(phase),
+      ? bindWorkUnitOutputFormat(phaseOutput, spec.workUnit)
+      : phaseOutput,
     tools: [...effectiveTools],
     allowedTools: [...effectiveTools],
     disallowedTools: [...workflowContract.forbiddenModelTools],
