@@ -101,6 +101,29 @@ test('source manifest captures git_branch and git_head for a git repo', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('collects executable templates and does not discard JSX/TSX after a long comment prefix', () => {
+  const root = mkProject();
+  const templates = ['component.html', 'view.pug', 'view.hbs', 'view.ejs', 'view.erb', 'view.twig', 'App.vue', 'App.svelte', 'View.cshtml', 'page.jsp'];
+  for (const name of templates) fs.writeFileSync(path.join(root, 'src', name), '<div>{{ user }}</div>');
+  for (const extension of ['jsx', 'tsx']) fs.writeFileSync(path.join(root, 'src', `banner.${extension}`), `/*${'license '.repeat(400)}*/\nexport default () => <div dangerouslySetInnerHTML={{ __html: value }} />;`);
+  const manifest = createSourceManifest(root);
+  for (const name of [...templates, 'banner.jsx', 'banner.tsx']) assert.ok(manifest.source_files.includes(`src/${name}`), name);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('collects named build/deployment/security configuration without promoting arbitrary JSON or documents', () => {
+  const root = mkProject();
+  const resources = ['.npmrc', '.devcontainer.json', 'tsconfig.json', 'tsconfig.server.json', 'angular.json', 'app.json', '.env.production', 'nginx.conf', 'jwt.pub', 'private.key', 'web.xml'];
+  for (const name of [...resources, 'translation.json', 'SOLUTIONS.md']) fs.writeFileSync(path.join(root, name), '{}\n');
+  const manifest = createSourceManifest(root);
+  for (const name of resources) assert.ok(manifest.security_resource_files.includes(name), name);
+  for (const name of ['translation.json', 'SOLUTIONS.md']) {
+    assert.ok(!manifest.source_files.includes(name)); assert.ok(!manifest.security_resource_files.includes(name));
+    assert.equal(manifest.scope_inventory.find(entry => entry.path === name).disposition, 'inventory-only');
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('source manifest records detached HEAD as detached@<short> (P2, not null)', () => {
   const root = mkProject();
   const git = (...a) => execFileSync('git', ['-C', root, ...a], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -124,6 +147,25 @@ test('source manifest git fields are null outside a git repo', () => {
   const manifest = createSourceManifest(root);
   assert.equal(manifest.git_branch, null);
   assert.equal(manifest.git_head, null);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('nested snapshots do not inherit parent provenance; tracked subprojects do', () => {
+  const root = mkProject();
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  git('init', '-q'); git('config', 'user.email', 't@t.test'); git('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(root, '.gitignore'), 'ignored/\n');
+  git('add', '-A'); git('commit', '-q', '-m', 'fixture');
+  const head = git('rev-parse', 'HEAD');
+  for (const folder of ['ignored', 'untracked']) {
+    const snapshot = path.join(root, folder);
+    fs.mkdirSync(snapshot); fs.writeFileSync(path.join(snapshot, 'app.js'), 'export const snapshot = true;\n');
+    const manifest = createSourceManifest(snapshot);
+    assert.equal(manifest.git_head, null, folder);
+    assert.equal(manifest.git_branch, null, folder);
+    assert.equal(manifest.source_file_count, 1);
+  }
+  assert.equal(createSourceManifest(path.join(root, 'src')).git_head, head);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

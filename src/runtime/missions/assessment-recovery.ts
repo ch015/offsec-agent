@@ -1,3 +1,4 @@
+import { TerminationUnknownError, AdmissionDeferredError } from '../workflow/task-scheduler.js';
 import { MissionBudgetExhaustedError } from '../providers/budgeted-runtime.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, readdirSync } from 'node:fs';
@@ -5,10 +6,11 @@ import { join, relative, resolve, sep } from 'node:path';
 import { PhaseResultFailure, ProviderRuntimeFailure } from '../providers/provider-runtime.js';
 import { atomicPrivateWrite, readManagedFile } from '../workflow/storage-files.js';
 import { reportDirectory } from '../workflow/run-location.js';
+import { SourceReadCoverageSchema } from '../workflow/scope-assurance.js';
 
 export class AnalysisInterruption extends Error {}
 export function recoverableFailure(error: unknown): boolean {
-  if (error instanceof PhaseResultFailure || error instanceof ProviderRuntimeFailure || error instanceof AnalysisInterruption || error instanceof MissionBudgetExhaustedError) return true;
+  if (error instanceof TerminationUnknownError || error instanceof AdmissionDeferredError || error instanceof PhaseResultFailure || error instanceof ProviderRuntimeFailure || error instanceof AnalysisInterruption || error instanceof MissionBudgetExhaustedError) return true;
   const code = (error as NodeJS.ErrnoException | null)?.code ?? '';
   return /^(EIO|ENOSPC|EDQUOT|EBUSY|EMFILE|ENFILE|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|08\w{3}|57P0[123]|53300|55P03)$/.test(code);
 }
@@ -62,7 +64,9 @@ export function partialCoverage(engagementDir: string) {
   const units: Array<{ ownedFiles?: Array<{ path?: string }> }> = Array.isArray(plan?.units) ? plan.units : [];
   const files = strings(manifest?.source_files).length ? strings(manifest?.source_files) : units.flatMap(unit => strings(unit?.ownedFiles?.map(file => file?.path)));
   const count = (value: unknown, fallback = 0) => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : fallback;
+  const sourceReadCoverage = SourceReadCoverageSchema.safeParse(existing?.sourceReadCoverage);
   return { complete: false, completedUnits: count(existing?.completedUnits), totalUnits: count(existing?.totalUnits, units.length),
+    ...(sourceReadCoverage.success ? { sourceReadCoverage: sourceReadCoverage.data } : {}),
     uncoveredFiles: existing && Array.isArray(existing.uncoveredFiles) ? strings(existing.uncoveredFiles) : files,
     semanticCoverage: 'not-proven' as const, ownedFilesRead: count(existing?.ownedFilesRead), ownedFileCount: count(existing?.ownedFileCount, files.length),
     preanalysisAvailable: existing?.preanalysisAvailable === true, followupQuestions: count(existing?.followupQuestions),

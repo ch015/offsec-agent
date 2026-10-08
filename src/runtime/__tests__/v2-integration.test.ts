@@ -29,14 +29,14 @@ describe('v2 full integration', () => {
   const contract = loadOffsecContract(V2_PATH);
 
   it('v2 contract loads with correct structure', () => {
-    expect(contract.version).toBe('2.0.0');
-    expect(Object.keys(contract.roles)).toEqual(['analyzer', 'reviewer', 'evaluator', 'reporter']);
+    expect(contract.version).toBe('2.1.0');
+    expect(Object.keys(contract.roles)).toEqual(['scanner', 'analyzer', 'reviewer', 'evaluator', 'reporter']);
     expect(contract.phases.map(p => p.id)).toEqual(['recon', 'plan', 'analyze', 'review', 'evaluate', 'report']);
   });
 
   it('v2 workflow contract adapts correctly', () => {
     const wf = createOffsecWorkflowContract(contract);
-    expect(wf.phases.map(p => p.id)).toEqual(['analyze', 'review', 'evaluate', 'report']);
+    expect(wf.phases.map(p => p.id)).toEqual(['recon', 'analyze', 'review', 'evaluate', 'report']);
     expect(wf.hostExecution?.workerPhases).toEqual(['analyze']);
     expect(wf.phases[0]?.requires).toEqual([]);
     expect(wf.phases[0]?.resultSchemaId).toBe('nunchi.offsec.phase-result.v2');
@@ -46,12 +46,12 @@ describe('v2 full integration', () => {
     const adapter = new OffsecDomainAdapter(contract);
     expect(adapter.domain).toBe('offsec');
     expect(adapter.mission).toBe('assessment');
-    expect(adapter.contract.version).toBe('2.0.0');
+    expect(adapter.contract.version).toBe('2.1.0');
   });
 
   it('v2 finding contract has no runtimeEvidence', () => {
     const fc = buildFindingContract(contract);
-    expect(fc.contractVersion).toBe('2.0.0');
+    expect(fc.contractVersion).toBe('2.1.0');
     // v2 schema should parse a finding without runtimeEvidence
     const validFinding = {
       id: 'AUTH-001', contractVersion: '2.0.0', phase: 'analyze', role: 'analyzer',
@@ -65,13 +65,11 @@ describe('v2 full integration', () => {
     expect(() => fc.StandardFindingSchema.parse(validFinding)).not.toThrow();
   });
 
-  it('v1 still works (regression)', () => {
-    const v1 = loadOffsecContract();
-    expect(v1.version).toBe('1.10.0');
-    const fc1 = buildFindingContract(v1);
-    expect(fc1.contractVersion).toBe('1.10.0');
-    const wf1 = createOffsecWorkflowContract(v1);
-    expect(wf1.hostExecution?.workerPhases).toEqual(['va', 'verify']);
+  it('defaults to the single supported contract and rejects retired phases', () => {
+    const current = loadOffsecContract();
+    expect(current.version).toBe(contract.version);
+    expect(() => new OffsecDomainAdapter().getPhase('verify')).toThrow();
+    expect(current.workUnitPolicy.maximumConcurrency).toBeNull();
   });
 
   // --- M7: v2 canTransition (domain adapter guard) ---

@@ -17,6 +17,7 @@ const { withFileLock } = require('../lib/core/io.js');
 const DEFAULTS = {
   max_session_tokens: null,
   cost_limit_usd: null,
+  cost_policy: 'record-only',
   max_agent_depth: 5,
   // F1: feedbackLoop.max_iterations(agent-plan fanout 게이트)와 단일 값으로 동기화 유지.
   // 두 게이트가 같은 feedback 루프를 통제하므로 값이 어긋나면 라운드 차단 기준이 모순된다.
@@ -77,7 +78,7 @@ function checkLimits(state, limits) {
   }
 
   evalRatio('tokens', state.tokens, limits.max_session_tokens);
-  evalRatio('cost_usd', state.cost_usd, limits.cost_limit_usd);
+  if (limits.cost_policy === 'enforce') evalRatio('cost_usd', state.cost_usd, limits.cost_limit_usd);
   evalRatio('agent_depth', state.agent_depth, limits.max_agent_depth);
   evalRatio('feedback_iterations', state.feedback_iterations, limits.max_feedback_iterations);
   evalRatio('objection_cycles', state.objection_cycles, limits.max_objection_cycles);
@@ -102,7 +103,8 @@ function track(update, env = process.env) {
   fs.mkdirSync(engagementDir, { recursive: true });
 
   const root = env.CH015_ROOT || path.resolve(__dirname, '..');
-  const limits = loadConfig(root);
+  const limits = { ...loadConfig(root) };
+  if (env.CH015_COST_POLICY) limits.cost_policy = env.CH015_COST_POLICY;
 
   return withFileLock(path.join(engagementDir, 'budget.json'), () => {
     const state = loadState(engagementDir) || {

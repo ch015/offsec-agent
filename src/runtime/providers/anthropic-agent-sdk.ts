@@ -1,5 +1,6 @@
 import type { ProviderCapability } from '../contracts/workflow-contract.js';
 import { DOMAINS, runSession, type LedgerRow, type SessionOutcome, type SessionSpec } from '../session-runner.js';
+import { SessionExecutionError } from '../session-types.js';
 import {
   assertProviderCapabilities,
   ProviderRuntimeFailure,
@@ -24,7 +25,8 @@ export type AnthropicPhaseOptions = {
   readScope?: SessionSpec['readScope'];
   disabledTools?: readonly string[];
   workUnit?: SessionSpec['workUnit'];
-  /** v2 계약 경로. 생략하면 session이 v1 기본 계약을 사용한다. */
+  sharedKnowledge?: SessionSpec['sharedKnowledge'];
+  /** Current assessment contract path; omission selects the bundled contract. */
   contractPath?: string;
   /** #9: verify-feedback에서 초기 verify의 tool ledger carry-forward */
   priorToolLedger?: SessionSpec['priorToolLedger'];
@@ -66,8 +68,10 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         verifyRound: request.options?.verifyRound,
         target: request.target,
         prompt: request.prompt,
+        taskData: request.taskData,
         engagementDir: request.engagementDir,
         engagementId: request.runId,
+        attemptId: request.attempt,
         model: request.options?.model,
         effort: request.options?.effort,
         maxTurns: request.options?.maxTurns,
@@ -82,7 +86,10 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         readScope: request.options?.readScope,
         disabledTools: request.options?.disabledTools,
         workUnit: request.options?.workUnit,
+        sharedKnowledge: request.options?.sharedKnowledge,
         priorToolLedger: request.options?.priorToolLedger,
+        onProgress: event => request.onEvent?.({ at: new Date().toISOString(), event: 'ProviderProgress',
+          ...(event.kind === 'tool' ? { tool: event.detail } : {}) }),
         onLedger: (row) => {
           const event = normalizeLedgerRow(row);
           events.push(event);
@@ -90,17 +97,25 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         },
       });
     } catch (cause) {
+      const received = cause instanceof SessionExecutionError ? cause.outcome : undefined;
+      const complete = received?.subtype !== undefined && typeof received.totalCostUsd === 'number'
+        && Number.isFinite(received.totalCostUsd) && received.totalCostUsd >= 0;
       throw new ProviderRuntimeFailure(
-        'Anthropic session이 완전한 usage receipt 전에 실패했다',
+        `${complete ? 'Anthropic session이 usage receipt 수신 후 실패했다' : 'Anthropic session이 완전한 usage receipt 전에 실패했다'}: subtype=${received?.subtype ?? 'unknown'}, terminal=${received?.terminalReason ?? 'unknown'}; ${cause instanceof Error ? cause.message : String(cause)}`,
         {
           provider: this.name,
           ...(request.options?.model ? { model: request.options.model } : {}),
-          costUsd: 0,
-          accountingComplete: false,
-          raw: { reason: cause instanceof Error ? cause.message : String(cause) },
+          costUsd: complete ? received!.totalCostUsd! : 0,
+          turns: received?.numTurns,
+          accountingComplete: complete,
+          raw: {
+            ...(received?.modelUsage && typeof received.modelUsage === 'object' ? received.modelUsage : {}),
+            reason: cause instanceof Error ? cause.message : String(cause),
+          },
         },
         { cause },
         events,
+        { subtype: received?.subtype, reason: received?.terminalReason },
       );
     }
     for (let index = events.length; index < outcome.ledger.length; index += 1) {
@@ -129,7 +144,7 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
       ...(actualModel ? { model: actualModel, modelIdentityVerified: true } : {}),
       turns: outcome.numTurns,
       costUsd: outcome.totalCostUsd ?? 0,
-      accountingComplete: true,
+      accountingComplete: typeof outcome.totalCostUsd === 'number' && Number.isFinite(outcome.totalCostUsd) && outcome.totalCostUsd >= 0 && outcome.costAccountingComplete !== false,
       raw: outcome.modelUsage,
     };
     if (outcome.subtype !== undefined && outcome.subtype !== 'success') {
@@ -138,6 +153,7 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         usage,
         { cause: new Error(outcome.terminalReason ?? outcome.errors?.join('; ') ?? outcome.subtype) },
         events,
+        { subtype: outcome.subtype, reason: outcome.terminalReason },
       );
     }
     if (
@@ -208,5 +224,7 @@ function normalizeLedgerRow(row: LedgerRow): ProviderRuntimeEvent {
     decision: row.decision,
     reason: row.reason,
     ...(row.compaction ? { compaction: row.compaction } : {}),
+    ...(row.delivery ? { delivery: row.delivery } : {}),
+    ...(row.retryAfterMs !== undefined ? { retryAfterMs: row.retryAfterMs } : {}),
   };
 }

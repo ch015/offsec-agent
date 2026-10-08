@@ -238,7 +238,10 @@ function validateEquivalenceReview(review, candidates, { requireEquivalenceRevie
     if (!['MERGE', 'SPLIT', 'KEEP'].includes(decision)) {
       errors.push({
         code: 'EQUIVALENCE_GROUP_DECISION_INVALID',
-        message: `Equivalence group ${groupId} has invalid decision "${decision || 'MISSING'}".`,
+        message: `Equivalence group ${groupId} has invalid decision "${decision || 'MISSING'}". Allowed decisions: MERGE, SPLIT, KEEP. FOLDED_INTO is a candidate final_status, not a group decision.`,
+        group_id: groupId,
+        expected: ['MERGE', 'SPLIT', 'KEEP'],
+        actual: decision || null,
       });
       continue;
     }

@@ -159,31 +159,6 @@ function hasCodeExtension(filePath, extensions) {
   return extensions.has(path.extname(filePath).toLowerCase());
 }
 
-/**
- * #12A: Inert file heuristic — 실행 가능한 로직이 없는 파일을 식별.
- * 첫 1KB를 읽어서 logic keyword가 하나도 없으면 inert로 판정.
- * 주 대상: Figma 직렬화 JSX (Frame/Text/Rectangle만 있고 logic 없음).
- * 보수적: keyword가 하나라도 있으면 포함 (false negative 방지).
- */
-const LOGIC_KEYWORDS = /\b(import|require|export\s+(default\s+)?function|export\s+(default\s+)?class|useState|useEffect|useCallback|useMemo|useRef|fetch|axios|addEventListener|onClick|onChange|onSubmit|async|await|Promise|setTimeout|setInterval|new\s+\w+|try\s*\{|if\s*\(|switch\s*\(|for\s*\(|while\s*\(|throw\s+|process\.|window\.|document\.|crypto\.|fs\.|require\(|module\.exports)\b|dangerouslySetInnerHTML|innerHTML|eval\s*\(|Function\s*\(/;
-
-function isInertFile(fullPath, fileName) {
-  const ext = path.extname(fileName).toLowerCase();
-  // .jsx/.tsx만 검사 (다른 확장자는 대부분 실행 코드)
-  if (ext !== '.jsx' && ext !== '.tsx') return false;
-  try {
-    const fd = fs.openSync(fullPath, 'r');
-    const buf = Buffer.alloc(1024);
-    const bytesRead = fs.readSync(fd, buf, 0, 1024, 0);
-    fs.closeSync(fd);
-    if (bytesRead < 50) return false; // 너무 작은 파일은 판단 불가 — 보수적으로 포함
-    const head = buf.toString('utf8', 0, bytesRead);
-    return !LOGIC_KEYWORDS.test(head);
-  } catch {
-    return false; // 읽기 실패 시 보수적으로 포함
-  }
-}
-
 function safeReadLineCount(filePath) {
   try {
     const text = fs.readFileSync(filePath, 'utf8');
@@ -226,8 +201,8 @@ function walkSourceFiles(root, policy, errors = []) {
       }
       if (!entry.isFile()) continue;
       if (!hasCodeExtension(entry.name, extensions)) continue;
-      // #12A: Content-based inert file filter — 실행 가능한 로직이 없는 파일 제외
-      if (isInertFile(fullPath, entry.name)) continue;
+      // A short prefix cannot establish that a JSX/TSX file is inert. Inventory
+      // every configured source, including code after license/comment banners.
       files.push(toPosix(path.relative(root, fullPath)));
     }
   }
@@ -283,7 +258,9 @@ function markerMatches(fileName, marker) {
 // ── eligible-file inventory + security-resource classification (P0-B) ──────
 // 대상 실행/코드가 아닌 배포·플랫폼 설정 자원 — "모든 JSON"이 아니라 아래 좁은 패턴만 분류한다.
 const SHELL_SCRIPT_EXTENSIONS = new Set(['.sh', '.bash', '.zsh']);
-const SECURITY_CONFIG_EXTENSIONS = new Set(['.toml', '.hcl', '.tf', '.tfvars']);
+const SECURITY_CONFIG_EXTENSIONS = new Set(['.toml', '.hcl', '.tf', '.tfvars', '.conf', '.ini', '.properties', '.key', '.pem', '.pub']);
+const SECURITY_CONFIG_NAMES = new Set(['.npmrc', '.yarnrc', '.env', '.htaccess', 'web.config', 'web.xml', 'context.xml', 'androidmanifest.xml']);
+const SECURITY_JSON_NAME_RE = /^(?:tsconfig(?:\.[\w-]+)?|jsconfig|angular|app|appsettings(?:\.[\w-]+)?|firebase|\.devcontainer|devcontainer)\.json$/i;
 const DOC_EXTENSIONS = new Set(['.md', '.mdx', '.rst', '.adoc', '.txt']);
 const ASSET_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.avif',
@@ -331,7 +308,9 @@ function classifySecurityResource(relPath) {
   if (DOCKER_NAME_RE.test(base) || COMPOSE_NAME_RE.test(baseLower)) return 'security-resource';
   if (SHELL_SCRIPT_EXTENSIONS.has(ext)) return 'security-resource';
   if (SECURITY_CONFIG_EXTENSIONS.has(ext) || ENV_EXAMPLE_RE.test(baseLower)) return 'security-resource';
+  if (SECURITY_CONFIG_NAMES.has(baseLower) || /^\.env\.[\w.-]+$/.test(baseLower)) return 'security-resource';
   if (ext === '.json') {
+    if (SECURITY_JSON_NAME_RE.test(baseLower)) return 'security-resource';
     if (baseLower === 'tauri.conf.json') return 'security-resource';
     if (hasDirSegment(relPath, 'src-tauri') && hasDirSegment(relPath, 'capabilities')) return 'security-resource';
     if (classifySupabaseSecurityJson(relPath)) return 'security-resource';
@@ -511,6 +490,17 @@ function buildUnitBreakdown(sourceFiles, locByFile, subprojectRoots, limits = {}
     .sort((a, b) => b.loc - a.loc || a.id.localeCompare(b.id));
 }
 
+// An ignored/untracked snapshot nested under another repository must not inherit
+// that repository's commit. Tracked monorepo subdirectories remain valid targets.
+function belongsToGitSource(root) {
+  try {
+    const opts = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 };
+    const top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], opts).trim();
+    if (fs.realpathSync(top) === fs.realpathSync(root)) return true;
+    return execFileSync('git', ['-C', root, 'ls-files', '--', '.'], opts).trim().length > 0;
+  } catch { return false; }
+}
+
 function getGitHead(root) {
   try {
     return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
@@ -549,6 +539,7 @@ function getGitBranch(root) {
 
 function createSourceManifest(targetRoot, opts = {}) {
   const root = normalizeRoot(targetRoot);
+  const gitSource = belongsToGitSource(root);
   const config = opts.config || loadConfig();
   const basePolicy = opts.policy || loadSourcePolicy(config);
   const excludedPaths = [...new Set([
@@ -630,8 +621,8 @@ function createSourceManifest(targetRoot, opts = {}) {
     subproject_roots: subprojectRoots,
     // 유닛별 file-list + LOC — coverage-gate(분해/완결성/커버리지 비율)의 결정론 입력.
     units: units.map((u) => ({ id: u.id, path: u.path, file_count: u.file_count, loc: u.loc, files: u.files })),
-    git_head: getGitHead(root),
-    git_branch: getGitBranch(root),
+    git_head: gitSource ? getGitHead(root) : null,
+    git_branch: gitSource ? getGitBranch(root) : null,
     policy,
     source_files: sourceFiles,
     source_receipts: sourceReceipts,

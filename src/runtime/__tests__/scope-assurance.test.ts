@@ -1,15 +1,17 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
+import { observeSourceDelivery } from '../source-delivery.js';
 import { createOffsecWorkPlan, type OffsecWorkPlan } from '../workflow/offsec-work-plan.js';
 import {
   assertScopeAssuranceComplete,
   assertScopeAssuranceIntact,
   createScopeAssurance,
+  createSourceReadCoverage,
   SCOPE_ASSURANCE_DISCLOSURE,
 } from '../workflow/scope-assurance.js';
 
@@ -42,6 +44,54 @@ function readEvent(resource: string, overrides: Partial<ProviderRuntimeEvent> = 
 }
 
 describe('OffSec host-owned scope assurance', () => {
+  it('aggregates mixed line and byte delivery from completed owners without hiding a byte gap', () => {
+    const fixtureData = fixture();
+    const target = realpathSync(fixtureData.target), workPlan = fixtureData.workPlan;
+    const observations = new Map(workPlan.units.map(unit => {
+      const file = unit.ownedFiles[0]!, absolute = join(target, file.path), raw = readFileSync(absolute);
+      const firstEnd = raw.indexOf(10) + 1;
+      const observe = (content: string) => readEvent(absolute, { event: 'SourceDelivery', delivery: observeSourceDelivery({
+        target, file: absolute, allowedFiles: [absolute], toolCallId: 'mixed-coverage', content,
+      })!.delivery });
+      const events = [observe(`1\t${raw.subarray(0, firstEnd - 1).toString()}`)];
+      if (firstEnd < raw.length) events.push(observe(JSON.stringify({ sourceRead: 1, path: absolute, sha256: file.sha256,
+        byteStart: firstEnd, byteEnd: raw.length, content: raw.subarray(firstEnd).toString() })));
+      return [unit.unitKey, { vaEvents: events }] as const;
+    }));
+    expect(createSourceReadCoverage({ target, workPlan, observations })).toMatchObject({
+      allAssignedFilesDelivered: true, allAssignedFilesSatisfied: true, filesWithDeliveryGaps: [],
+    });
+    const byteReceipt = [...observations.values()].flatMap(value => value.vaEvents).find(event => event.delivery?.byteRanges?.length)!;
+    byteReceipt.delivery!.byteRanges![0]!.start++;
+    expect(createSourceReadCoverage({ target, workPlan, observations })).toMatchObject({
+      allAssignedFilesDelivered: false, allAssignedFilesSatisfied: false, filesWithDeliveryGaps: ['packages/api/app.ts'],
+    });
+  });
+
+  it('lists missing owner requests without counting context, denied reads, searches or failed workers', () => {
+    const { target, workPlan } = fixture();
+    const api = workPlan.units.find(unit => unit.sourceUnitId === 'packages/api')!;
+    const observations = new Map([[api.unitKey, { vaEvents: [
+      readEvent('packages/api/app.ts'), readEvent(join(target, 'packages/api/app.ts')),
+      readEvent('packages/common/auth.ts'), // Read as context does not establish an owner audit.
+      readEvent('/etc/hosts'),
+    ] }]]);
+    const coverage = createSourceReadCoverage({ target, workPlan, observations });
+    expect(coverage.filesWithReadRequest).toEqual(['packages/api/app.ts']);
+    expect(coverage.filesWithoutReadRequest).toEqual(['packages/common/auth.ts']);
+    expect(coverage.allAssignedFilesRequested).toBe(false);
+    expect(coverage.fullContentCoverage).toBe('not-proven');
+    const absent = createSourceReadCoverage({ target, workPlan, observations: new Map(workPlan.units.map(unit => [unit.unitKey, {
+      vaEvents: [readEvent(unit.ownedFiles[0]!.path, { decision: 'deny' }), readEvent(unit.ownedFiles[0]!.path, { tool: 'Grep' })],
+    }])) });
+    expect(absent.filesWithReadRequest).toEqual([]);
+    expect(absent.filesWithoutReadRequest).toHaveLength(2);
+    const requested = createSourceReadCoverage({ target, workPlan, observations: new Map(workPlan.units.map(unit => [unit.unitKey, {
+      vaEvents: [readEvent(unit.ownedFiles[0]!.path)],
+    }])) });
+    expect(requested.allAssignedFilesRequested).toBe(true);
+    expect(requested.fullContentCoverage).toBe('not-proven');
+  });
   it('binds to the sealed work plan and records VA/Verifier read observations separately', () => {
     const { target, workPlan } = fixture();
     const api = workPlan.units.find((unit) => unit.sourceUnitId === 'packages/api')!;

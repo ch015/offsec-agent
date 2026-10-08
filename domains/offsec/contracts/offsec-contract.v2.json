@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "id": "nunchi.offsec.assessment",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "executionMode": "host-bounded-workers",
   "leadRole": "reporter",
   "forbiddenModelTools": [
@@ -14,7 +14,7 @@
   "workUnitPolicy": {
     "minimumSourceFiles": 50,
     "maximumWorkUnits": 128,
-    "maximumConcurrency": 16,
+    "maximumConcurrency": null,
     "maxContextFilesPerUnit": 75
   },
   "isolation": {
@@ -28,6 +28,22 @@
     "reportGate": "on"
   },
   "roles": {
+    "scanner": {
+      "agentFile": "contracts/roles/scanner.md",
+      "description": "Neutral source structure and ownership planning",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Write",
+        "mcp__nunchi__read_source"
+      ],
+      "elevatedTools": [],
+      "skills": [
+        "nunchi-offsec:offsec-contract"
+      ],
+      "allowedDelegates": []
+    },
     "analyzer": {
       "agentFile": "contracts/roles/analyzer.md",
       "description": "8차원 보안 아키텍처 진단과 증거 기반 취약점 후보 생성을 담당하는 분석 역할",
@@ -35,9 +51,12 @@
         "Read",
         "Grep",
         "Glob",
-        "Bash",
         "Write",
-        "mcp__nunchi__submit_finding"
+        "mcp__nunchi__submit_finding",
+        "mcp__nunchi__lookup_shared_knowledge",
+        "mcp__nunchi__get_shared_knowledge",
+        "mcp__nunchi__publish_shared_observation",
+        "mcp__nunchi__read_source"
       ],
       "elevatedTools": [],
       "skills": [
@@ -53,7 +72,10 @@
         "Grep",
         "Glob",
         "Write",
-        "mcp__nunchi__submit_finding"
+        "mcp__nunchi__submit_finding",
+        "mcp__nunchi__lookup_shared_knowledge",
+        "mcp__nunchi__get_shared_knowledge",
+        "mcp__nunchi__read_source"
       ],
       "elevatedTools": [],
       "skills": [
@@ -68,7 +90,10 @@
         "Read",
         "Grep",
         "Glob",
-        "Write"
+        "Write",
+        "mcp__nunchi__lookup_shared_knowledge",
+        "mcp__nunchi__get_shared_knowledge",
+        "mcp__nunchi__read_source"
       ],
       "elevatedTools": [],
       "skills": [
@@ -83,7 +108,10 @@
         "Read",
         "Grep",
         "Glob",
-        "Write"
+        "Write",
+        "mcp__nunchi__lookup_shared_knowledge",
+        "mcp__nunchi__get_shared_knowledge",
+        "mcp__nunchi__read_source"
       ],
       "elevatedTools": [],
       "skills": [
@@ -95,17 +123,16 @@
   "phases": [
     {
       "id": "recon",
-      "role": "host",
+      "role": "scanner",
       "requires": [],
       "controller": "host",
-      "requiredMethodFiles": [],
-      "requiredArtifacts": [
-        "00_recon.json",
-        "00_dependency_graph.json"
+      "requiredMethodFiles": [
+        "methods/scanner.md"
       ],
-      "optionalArtifacts": [
-        "00_host_recon.json"
-      ]
+      "requiredArtifacts": [
+        "00_scanner_plan.json"
+      ],
+      "optionalArtifacts": []
     },
     {
       "id": "plan",
@@ -124,6 +151,7 @@
       "id": "analyze",
       "role": "analyzer",
       "requires": [
+        "recon",
         "plan"
       ],
       "requiredMethodFiles": [
@@ -131,10 +159,12 @@
       ],
       "requiredArtifacts": [
         "02_analysis_result.md",
-        "02_findings_index.yaml"
+        "02_findings_index.yaml",
+        "02_file_assessments.json"
       ],
       "optionalArtifacts": [
-        "02_analysis_handoff.yaml"
+        "02_analysis_handoff.yaml",
+        "02_followup_answers.json"
       ]
     },
     {
@@ -189,7 +219,7 @@
       "analyze"
     ],
     "maximumWorkUnits": 128,
-    "maximumConcurrency": 16,
+    "maximumConcurrency": null,
     "completionBarrier": "all-settled-all-required",
     "directPhaseExecution": "forbidden",
     "workUnitArtifacts": {
@@ -508,32 +538,40 @@
   },
   "resources": [
     {
-      "path": "contracts/roles/analyzer.md",
-      "sha256": "ddce6f5ffed3433fb07b0bf7fd82f768e3a8ac2a9fb8c78c436dc018ea67ab21"
+      "path": "contracts/roles/scanner.md",
+      "sha256": "7074feaa8b02bffce9e4edb209ce78e350bda9aa0dd639c0d45fc80fa3e1267c"
     },
     {
       "path": "skills/offsec-contract/SKILL.md",
       "sha256": "76dfc0d329c55e38a3412fd4c375fdf8a3a88e474f5d4d9f519332ed506d1f72"
     },
     {
+      "path": "contracts/roles/analyzer.md",
+      "sha256": "ddce6f5ffed3433fb07b0bf7fd82f768e3a8ac2a9fb8c78c436dc018ea67ab21"
+    },
+    {
       "path": "contracts/roles/reviewer.md",
-      "sha256": "ed2b82cb61767dcdb75ee12d79a2860cf5da0df9e16136ae796045af9ef087fe"
+      "sha256": "37f7b0786f9e08d364f5fe43fa8ea7a75c1790773128830e9f66d9ead1ef52b7"
     },
     {
       "path": "contracts/roles/evaluator.md",
-      "sha256": "7407512d8d9c46b89167d2ba354656fba1b65c9fc7679f87ad8715bda1fcab5c"
+      "sha256": "f535d334c8d6324fbfe494eeb9101bd1c7524890f2f12623d078588a357ffcfb"
     },
     {
       "path": "contracts/roles/reporter.md",
       "sha256": "9cec3ddac0a63286086c04d62e892e7c81613c0cb5e1b06e8327491a12909061"
     },
     {
+      "path": "methods/scanner.md",
+      "sha256": "53ea7977ad03552f8e42e1eba8ad7612d7665721a6706f46e4adf1ebcb54bb44"
+    },
+    {
       "path": "methods/analyze.md",
-      "sha256": "a292b60264d2c56737ca3b9f2c19782abd50a1af5c95c700026916d044a468ad"
+      "sha256": "6738b5732d2b7081953639c21fe208aa9beb9e065b811c80275a4880f37d2720"
     },
     {
       "path": "methods/review.md",
-      "sha256": "29f59aa537a392ddd0d4c4637a1e9bbb44c709336342fdee8330a2f697da11de"
+      "sha256": "9538f45e25c9ccb7e4661fd4da4ce7e185ee76ea401e2fec8fe705d992b0b4e9"
     },
     {
       "path": "skills/ch015/common/evidence-verification.md",
@@ -541,11 +579,11 @@
     },
     {
       "path": "methods/evaluate.md",
-      "sha256": "19dd4f07ce4344f02394e9011d83e1adf59dfeac3ab587bc3a06aa0d1624b687"
+      "sha256": "f5d9daa66b808deb45d1c1dfff7ecee52300aac1fc7bfbcefb5473c8e86f30d6"
     },
     {
       "path": "methods/report.v2.md",
-      "sha256": "5f1351cc09999739192763afe76ff7c151a8366f76545a2f642e2dda28a21e56"
+      "sha256": "bbbf937ea68cdf0ed15cc0f2ae7c22a1160a7e1a66458675db3e2e24c561cae2"
     },
     {
       "path": "skills/ch015/common/compensating-control.md",
@@ -746,6 +784,30 @@
     {
       "path": "rules/semgrep/iac.yml",
       "sha256": "f385eb3f30e87cf072302f23505da2d1d3bcc2fd83b1a489b2b10762f6f411ae"
+    },
+    {
+      "path": "lib/ch015/ast/parser.js",
+      "sha256": "b25d60e7ccc5da228d21c9299a366fc7da4f563e2cd573c0a97bbaac03a1335c"
+    },
+    {
+      "path": "lib/ch015/ast/context-builder.js",
+      "sha256": "861f1a2d1facb98211ac744ff8b43d4ab990ba5c5e522a6c58975661b8bf055c"
+    },
+    {
+      "path": "lib/ch015/ast/semgrep.js",
+      "sha256": "947ae3ca59c05b921bfafef37a41f646af3b9ec3168ce2d289b2f995ae9961bc"
+    },
+    {
+      "path": "lib/ch015/ast/call-graph.js",
+      "sha256": "e3ad857f714cc865559872a4cf5ef60842c0bc84aaf32943e099260a4ef5b1ec"
+    },
+    {
+      "path": "lib/ch015/ast/data-flow.js",
+      "sha256": "8b5cca98dd51f8e60c006cd430ba6e069aa937870268d2b027a19525e886dd0a"
+    },
+    {
+      "path": "lib/ch015/ast/taint.js",
+      "sha256": "bb85af2a70f51273274bbdb90e5111b5ac8abff0af78bc7a9dd5147a346bed73"
     },
     {
       "path": "contracts/offsec-phase-result-schema.v2.json",

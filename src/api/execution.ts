@@ -1,4 +1,4 @@
-import { acquireRunLock } from '../runtime/workflow/run-lock.js';
+import { SessionExecutionError } from '../runtime/session-types.js';
 import { mkdirSync, realpathSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { runSession, type SessionSpec } from '../runtime/session-runner.js';
@@ -35,23 +35,21 @@ export function sessionFor(options: AgentSessionOptions, execution: AgentExecuti
         ...(options.apiKey !== undefined ? { apiKey: options.apiKey, authMode: 'api_key' as const } : {}),
         abortController: controller,
         onStderr: options.onStderr ?? spec.onStderr,
-        onProgress: options.onProgress ?? spec.onProgress,
+        onProgress: event => { spec.onProgress?.(event); options.onProgress?.(event); },
         onLedger: row => { spec.onLedger?.(row); options.onLedger?.(row); },
       });
-      signal?.throwIfAborted();
+      if (signal?.aborted) throw new SessionExecutionError(result, signal.reason);
       return result;
     } finally { signal?.removeEventListener('abort', cancel); }
   };
 }
-/** A sibling lock works before the mission creates its empty output directory. */
+/** Session configuration and metrics are scoped to this API invocation. The mission owns its lock. */
 export async function executeInDirectory<T>(directory: string, options: AgentSessionOptions,
   execution: AgentExecutionOptions, run: (directory: string) => Promise<T>): Promise<T> {
   execution.signal?.throwIfAborted();
   absolutePath(directory, 'engagementDir');
   mkdirSync(dirname(directory), { recursive: true });
   const canonical = existsSync(directory) ? realpathSync(directory) : join(realpathSync(dirname(directory)), basename(directory));
-  const lock = join(dirname(canonical), `.${basename(canonical)}.agent.lock`);
-  const release = acquireRunLock(lock);
   try {
     const result = await withPhaseMetrics(options.onMetrics ?? null, () => run(canonical));
     execution.signal?.throwIfAborted();
@@ -59,5 +57,5 @@ export async function executeInDirectory<T>(directory: string, options: AgentSes
   } catch (error) {
     execution.signal?.throwIfAborted();
     throw error;
-  } finally { release(); }
+  }
 }

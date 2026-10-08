@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
 import { assertOffsecWorkPlanComplete, type OffsecWorkPlanAny } from './offsec-work-plan.js';
+import { sourceRangeDelivered } from '../source-delivery.js';
 
 // 발행 시 신뢰 경계를 명확히 하기 위한 고정 문구 — Read 카운트는 최소 검토 신호일 뿐 의미론적
 // 보안 분석의 증명이 아니다(coordinator/reviewer가 "얼마나 읽었는가"를 "얼마나 분석했는가"로
@@ -61,6 +62,59 @@ export type UnitScopeObservationInput = {
   verifierEvents?: readonly ProviderRuntimeEvent[];
   autonomousVerifierSealed?: boolean;
 };
+
+export const SourceReadCoverageSchema = z.object({
+  measurement: z.literal('allowed-read-requests-in-completed-owner-analysis'),
+  filesWithReadRequest: z.array(z.string()),
+  filesWithoutReadRequest: z.array(z.string()),
+  allAssignedFilesRequested: z.boolean(),
+  fullContentCoverage: z.literal('not-proven'),
+  filesDelivered: z.array(z.string()).optional(),
+  filesValidatedReuse: z.array(z.string()).optional(),
+  allAssignedFilesSatisfied: z.boolean().optional(),
+  filesWithDeliveryGaps: z.array(z.string()).optional(),
+  allAssignedFilesDelivered: z.boolean().optional(),
+  deliveryBasis: z.literal('verified-model-facing-text-lines').optional(),
+}).strict();
+export type SourceReadCoverage = z.infer<typeof SourceReadCoverageSchema>;
+
+/** PreToolUse records establish requests, not successful or full-content reads. */
+export function createSourceReadCoverage(input: {
+  target: string;
+  workPlan: OffsecWorkPlanAny;
+  observations: ReadonlyMap<string, UnitScopeObservationInput>;
+}): SourceReadCoverage {
+  const filesWithReadRequest: string[] = [], filesWithoutReadRequest: string[] = [];
+  const filesDelivered: string[] = [], filesWithDeliveryGaps: string[] = [], filesValidatedReuse: string[] = [];
+  for (const unit of input.workPlan.units) {
+    const events = input.observations.get(unit.unitKey)?.vaEvents ?? [];
+    const requests = new Set(events
+      .filter(event => event.tool === 'Read' && event.decision === 'allow' && typeof event.resource === 'string')
+      .map(event => resolve(input.target, event.resource!)));
+    for (const file of unit.ownedFiles) {
+      (requests.has(resolve(input.target, file.path)) ? filesWithReadRequest : filesWithoutReadRequest).push(file.path);
+      const absolute = resolve(input.target, file.path);
+      const receipts = events.filter(event => event.event === 'SourceDelivery' && event.resource === absolute
+        && event.delivery?.sourceHash === file.sha256 && event.delivery.status === 'verified').map(event => event.delivery!);
+      const delivered = sourceRangeDelivered(absolute, receipts);
+      const reuse = events.filter(event => event.event === 'ValidatedSourceReuse' && event.resource === absolute && event.delivery?.sourceHash === file.sha256).map(event => event.delivery!);
+      const reused = sourceRangeDelivered(absolute, reuse);
+      if (reused && !delivered) filesValidatedReuse.push(file.path);
+      (delivered ? filesDelivered : filesWithDeliveryGaps).push(file.path);
+    }
+  }
+  return {
+    measurement: 'allowed-read-requests-in-completed-owner-analysis',
+    filesWithReadRequest: filesWithReadRequest.sort(),
+    filesWithoutReadRequest: filesWithoutReadRequest.sort(),
+    allAssignedFilesRequested: filesWithoutReadRequest.length === 0,
+    fullContentCoverage: 'not-proven',
+    filesValidatedReuse: filesValidatedReuse.sort(), allAssignedFilesSatisfied: filesWithDeliveryGaps.every(file => filesValidatedReuse.includes(file)),
+    filesDelivered: filesDelivered.sort(), filesWithDeliveryGaps: filesWithDeliveryGaps.sort(),
+    allAssignedFilesDelivered: filesWithDeliveryGaps.length === 0,
+    deliveryBasis: 'verified-model-facing-text-lines',
+  };
+}
 
 export function createScopeAssurance(input: {
   target: string;

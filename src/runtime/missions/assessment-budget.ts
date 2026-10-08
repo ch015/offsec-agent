@@ -1,4 +1,4 @@
-import { resolveRunBudget } from './assessment-support.js';
+import { resolveAssessmentBudget, type CostPolicy } from './assessment-support.js';
 import type { BudgetAccounting } from '../providers/budgeted-runtime.js';
 import type { MissionRuntime } from '../workflow/mission-runtime.js';
 import type { RunSnapshot } from '../workflow/state-store.js';
@@ -50,13 +50,12 @@ export async function recoverLegacyBudget(runtime: MissionRuntime, snapshot: Rea
 }
 
 /** Only budget settings may change on resume; sealed source inputs stay unchanged. */
-export type ResumeBudgetOptions = { maxBudgetUsd?: number; noCostGuard?: boolean };
+export type ResumeBudgetOptions = { costPolicy?: CostPolicy; maxBudgetUsd?: number; noCostGuard?: boolean };
 
 export async function increaseResumeBudget(runtime: MissionRuntime, options: ResumeBudgetOptions,
   contractMaximum: number | null): Promise<Readonly<RunSnapshot>> {
   const snapshot = await runtime.read();
-  if (options.noCostGuard !== true && options.maxBudgetUsd === undefined) return snapshot;
-  const next = options.noCostGuard ? undefined : resolveRunBudget(options.maxBudgetUsd, contractMaximum);
+  const next = resolveAssessmentBudget({ ...options, maxBudgetUsd: options.maxBudgetUsd ?? snapshot.maxBudgetUsd }, contractMaximum);
   if (next === snapshot.maxBudgetUsd) return snapshot;
   if (next !== undefined && (snapshot.maxBudgetUsd === undefined || next < snapshot.maxBudgetUsd)) {
     throw new Error('resume budget must increase the current limit; use noCostGuard to remove it');

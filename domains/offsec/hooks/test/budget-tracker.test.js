@@ -59,6 +59,12 @@ test('track: records cost without a default cap', () => {
   assert.equal(alerts.filter((a) => a.name === 'cost_usd').length, 0);
 });
 
+test('cost: old numeric limits do not enforce without explicit policy', () => {
+  const state = { cost_usd: 100, tokens: 0, tool_calls: {} };
+  assert.equal(checkLimits(state, { ...DEFAULTS, cost_limit_usd: 1 }).filter(a => a.name === 'cost_usd').length, 0);
+  assert.equal(checkLimits(state, { ...DEFAULTS, cost_limit_usd: 1, cost_policy: 'enforce' }).filter(a => a.name === 'cost_usd').length, 1);
+});
+
 test('track: records tool calls without a default cap', () => {
   const d = mkDir('t6');
   let last;

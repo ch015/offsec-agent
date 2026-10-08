@@ -11,8 +11,7 @@
     "check:contracts": "tsx scripts/generate-contract-resources.ts --check",
     "typecheck": "tsc --noEmit",
     "assess": "tsx src/runtime/missions/assess.ts",
-    "assess:v2": "tsx src/runtime/missions/assess-v2.ts",
-    "assess:resume": "tsx src/runtime/missions/assess-resume.ts",
+    "assess:v2": "tsx src/runtime/missions/assess.ts",
     "run:admin": "tsx scripts/run-admin.ts",
     "generate:contract-resources": "tsx scripts/generate-contract-resources.ts",
     "db:local:start": "bash scripts/postgres/local-start.sh",
@@ -25,7 +24,8 @@
     "probe:plugin": "tsx scripts/probe-plugin-contract.ts",
     "probe:offsec": "tsx scripts/probe-offsec-load.ts",
     "probe:entry-agent": "tsx scripts/probe-entry-agent.ts",
-    "build:library": "node scripts/build-library.mjs"
+    "build:library": "node scripts/build-library.mjs",
+    "check:package": "pnpm build:library && node scripts/check-package.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.229",
@@ -47,7 +47,6 @@
     "tree-sitter-c": "^0.23.6",
     "tree-sitter-c-sharp": "^0.21.3",
     "tree-sitter-cpp": "^0.23.4",
-    "tree-sitter-dart": "^1.0.0",
     "tree-sitter-elixir": "^0.3.5",
     "tree-sitter-go": "^0.23.4",
     "tree-sitter-java": "^0.23.5",
@@ -56,7 +55,7 @@
     "tree-sitter-python": "^0.23.6",
     "tree-sitter-ruby": "^0.23.1",
     "tree-sitter-rust": "^0.23.3",
-    "tree-sitter-solidity": "^1.0.12",
+    "tree-sitter-solidity": "1.2.11",
     "tree-sitter-swift": "^0.7.1",
     "tsx": "^4.22.4"
   },
@@ -86,7 +85,6 @@
     "tree-sitter-c": "^0.23.6",
     "tree-sitter-c-sharp": "^0.21.3",
     "tree-sitter-cpp": "^0.23.4",
-    "tree-sitter-dart": "^1.0.0",
     "tree-sitter-elixir": "^0.3.5",
     "tree-sitter-go": "^0.23.4",
     "tree-sitter-java": "^0.23.5",
@@ -95,7 +93,7 @@
     "tree-sitter-python": "^0.23.6",
     "tree-sitter-ruby": "^0.23.1",
     "tree-sitter-rust": "^0.23.3",
-    "tree-sitter-solidity": "^1.0.12",
+    "tree-sitter-solidity": "1.2.11",
     "tree-sitter-swift": "^0.7.1"
   },
   "peerDependenciesMeta": {
@@ -109,9 +107,6 @@
       "optional": true
     },
     "tree-sitter-cpp": {
-      "optional": true
-    },
-    "tree-sitter-dart": {
       "optional": true
     },
     "tree-sitter-elixir": {

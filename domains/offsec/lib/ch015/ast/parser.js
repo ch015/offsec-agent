@@ -27,7 +27,9 @@ const LANGUAGE_MAP = {
   '.cs':   { pkg: 'tree-sitter-c-sharp', name: 'c_sharp' },
   '.rb':   { pkg: 'tree-sitter-ruby', name: 'ruby' },
   '.php':  { pkg: 'tree-sitter-php', name: 'php', sub: 'php' },
-  '.dart': { pkg: 'tree-sitter-dart', name: 'dart' },
+  // The published tree-sitter-dart@1.0.0 exposes a legacy NAN language object
+  // rejected by the pinned N-API runtime, even after a successful native build.
+  // Account for Dart as AST-unsupported; keep it in the direct source inventory.
   '.sol':  { pkg: 'tree-sitter-solidity', name: 'solidity' },
   '.ex':   { pkg: 'tree-sitter-elixir', name: 'elixir' },
   '.exs':  { pkg: 'tree-sitter-elixir', name: 'elixir' },
@@ -102,6 +104,7 @@ function parseFile(filePath) {
       filePath,
       language: langSpec.name,
       tree,
+      hasSyntaxErrors: tree.rootNode.hasError,
       source,
       lineCount: source.split('\n').length,
     };

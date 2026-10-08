@@ -9,9 +9,21 @@ const path = require('node:path');
 
 const {
   mergeCandidateClassifications,
+  validateEquivalenceReview,
   applyDeterministicGates,
   validateReportGate,
 } = require('../report-gate');
+
+test('invalid equivalence decisions include actionable expected values for all callers', () => {
+  for (const decision of ['REJECT', 'FOLD', 'FOLDED_INTO']) {
+    const result = validateEquivalenceReview(completeReview(1, [{ group_id: 'G1', members: ['F-001'], decision }]), [], { requireEquivalenceReview: true });
+    const error = result.errors.find(e => e.code === 'EQUIVALENCE_GROUP_DECISION_INVALID');
+    assert.deepEqual(error.expected, ['MERGE', 'SPLIT', 'KEEP']);
+    assert.equal(error.actual, decision);
+    assert.equal(error.group_id, 'G1');
+    assert.match(error.message, /Allowed decisions: MERGE, SPLIT, KEEP/);
+  }
+});
 
 function completeReview(reviewedCandidateCount = 1, groups = []) {
   return {

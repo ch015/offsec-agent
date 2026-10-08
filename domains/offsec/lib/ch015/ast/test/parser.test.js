@@ -3,6 +3,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { parseFile, parseFiles, detectLanguage, isSupported, getSupportedExtensions } = require('../parser');
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'simple-express');
@@ -55,6 +57,7 @@ describe('parser', () => {
     it('returns false for unsupported files', () => {
       assert.ok(!isSupported('readme.md'));
       assert.ok(!isSupported('config.yaml'));
+      assert.ok(!isSupported('screen.dart'), 'incompatible grammar must not be advertised as supported');
     });
   });
 
@@ -96,6 +99,25 @@ describe('parser', () => {
       const result = parseFile('test.txt');
       assert.ok(!result.ok);
       assert.ok(result.error.includes('unsupported extension'));
+    });
+
+    it('loads every advertised installed grammar with the pinned Tree-sitter ABI', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grammar-abi-'));
+      try {
+        for (const ext of getSupportedExtensions()) {
+          const file = path.join(root, `empty${ext}`); fs.writeFileSync(file, '');
+          const result = parseFile(file);
+          assert.ok(result.ok, `${ext}: ${result.error}`);
+          assert.ok(result.tree.rootNode);
+        }
+        const file = path.join(root, 'contract.sol');
+        fs.writeFileSync(file, 'pragma solidity ^0.8.0; contract Example { function value() public pure returns(uint) { return 1; } }');
+        const result = parseFile(file);
+        assert.ok(result.ok, result.error); assert.equal(result.hasSyntaxErrors, false);
+        assert.ok(result.tree.rootNode.toString().includes('function_definition'));
+        const invalid = path.join(root, 'fragment.ts'); fs.writeFileSync(invalid, 'export function incomplete(');
+        const fragment = parseFile(invalid); assert.ok(fragment.ok); assert.equal(fragment.hasSyntaxErrors, true);
+      } finally { fs.rmSync(root, { recursive: true, force: true }); }
     });
   });
 

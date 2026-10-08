@@ -1,3 +1,4 @@
+import { syntheticOutcome } from './resumption-fixture.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir, hostname } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -12,6 +13,8 @@ import { restoreRunArchive } from '../workflow/run-archive.js';
 import { ResilientArtifactStore } from '../workflow/resilient-artifacts.js';
 import { acquireRunLock } from '../workflow/run-lock.js';
 import { appendLedger } from '../workflow/file-ledger.js';
+// These integration cases create, fsync, archive and reopen multiple full runs.
+vi.setConfig({ testTimeout: 20000 });
 const roots: string[] = [];
 function temp() { const root = mkdtempSync(join(tmpdir(), 'offsec-recovery-test-')); roots.push(root); return root; }
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -20,14 +23,7 @@ function fixture() {
   return { root, target, engagementDir: join(root, 'run'), engagementId: 'test-run', semgrepMode: 'off' as const };
 }
 const contract = loadOffsecContract(resolve(import.meta.dirname, '../../../domains/offsec/contracts/offsec-contract.v2.json'));
-async function scripted(spec: SessionSpec): Promise<SessionOutcome> {
-  const phase = getOffsecPhase(spec.phase!, contract), artifacts = renderPhaseArtifacts(phase, spec.phaseRound);
-  for (const file of artifacts.required) writeFileSync(join(spec.engagementDir, file), phase.id === 'report' ? '# Fixture report\nNo confirmed findings.\n' : '{}\n');
-  return { texts: [], ledger: resolvePhaseMethodFiles(phase).map(resource => ({ at: new Date(0).toISOString(), event: 'PreToolUse', tool: 'Read', resource, decision: 'allow' })), totalCostUsd: 0.01, numTurns: 1, modelUsage: { [spec.model!]: { inputTokens: 1, outputTokens: 1 } }, structuredOutput: {
-    contractVersion: contract.version, phase: phase.id, role: phase.role, status: 'complete', artifacts: artifacts.required, summary: 'fixture', metrics: { findingCount: 0 }, unresolved: [],
-    ...(spec.workUnit ? { workUnit: { workUnitKey: spec.workUnit.unitKey, workPlanSha256: spec.workUnit.workPlanSha256, assignedSourceSha256: spec.workUnit.assignedSourceSha256 } } : {}),
-  } };
-}
+async function scripted(spec: SessionSpec): Promise<SessionOutcome> { return syntheticOutcome(spec); }
 describe('analysis durability and continuation', () => {
   it('uses an external UUID run, keeps target unchanged and disables unmanaged SDK session persistence', async () => {
     const input = fixture(), before = readdirSync(input.target);
@@ -89,7 +85,7 @@ describe('analysis durability and continuation', () => {
     const input = fixture(); let calls = 0;
     const agent = createOffsecAgent({ sessionRunner: async spec => { calls++; return scripted(spec); }, astBuilder: async () => ({ ok: false, semgrep: { status: 'unavailable', error: 'fixture' } }) });
     const result = await agent.run({ ...input, semgrepMode: undefined });
-    expect(result.status).toBe('published'); expect(calls).toBe(4); expect(result.coverage.preanalysisAvailable).toBe(false);
+    expect(result.status).toBe('published'); expect(calls).toBe(5); expect(result.coverage.preanalysisAvailable).toBe(false);
   });
   it('recovers a torn final ledger record while preserving the damaged original', () => {
     const root = temp(); const state = FileRunStateStore.create({ engagementDir: root, runId: 'r', contractId: 'c', contractVersion: '1', domain: 'test', mission: 'test' });
@@ -124,20 +120,21 @@ describe('analysis durability and continuation', () => {
     expect(existsSync(join(runRoot, 'run.json'))).toBe(true); expect(existsSync(result.finalReport)).toBe(true);
     calls = 0; const resumed = await agent.resume(result.engagementDir); expect(resumed.status).toBe('published'); expect(calls).toBe(0);
   });
-  it('refuses to attach resumed findings to changed source and retains the old report', async () => {
+  it('resumes the immutable snapshot after workspace changes and retains the old report', async () => {
     const input = fixture(), agent = createOffsecAgent({ sessionRunner: scripted });
     const result = await agent.run(input), original = readFileSync(result.finalReport, 'utf8');
     writeFileSync(join(input.target, 'app.ts'), 'export const app = 2;\n');
-    await expect(agent.resume(input.engagementDir)).rejects.toThrow('resume source changed');
+    expect((await agent.resume(input.engagementDir)).status).toBe('published');
+    expect(readFileSync(join(input.engagementDir, 'source-snapshot', 'app.ts'), 'utf8')).toBe('export const app = 1;\n');
     expect(readFileSync(result.finalReport, 'utf8')).toBe(original);
   });
   it('restarts failed units in new attempts and retains every old attempt', async () => {
     const input = fixture(); let unavailable = true;
-    const agent = createOffsecAgent({ sessionRunner: async spec => { if (unavailable) throw new Error('fixture unavailable'); return scripted(spec); } });
+    const agent = createOffsecAgent({ scheduler: { retryBaseMs: 1 }, sessionRunner: async spec => { if (unavailable && spec.workUnit) throw Object.assign(new Error('ECONNRESET fixture unavailable'), { code: 'ECONNRESET' }); return scripted(spec); } });
     const first = await agent.run(input); expect(first.publicationStatus).toBe('partial'); expect(first.coverage.uncoveredFiles).toEqual(['app.ts']);
     unavailable = false; const resumed = await agent.resume(input.engagementDir); expect(resumed.status).toBe('published');
     const dirs = readdirSync(join(input.engagementDir, 'work-units', readdirSync(join(input.engagementDir, 'work-units'))[0]!));
-    expect(dirs).toEqual(expect.arrayContaining(['attempt-1', 'attempt-2', 'attempt-3']));
+    expect(dirs).toEqual(expect.arrayContaining(['attempt-1', 'attempt-2', 'attempt-3', 'attempt-4']));
   });
 
   it('preserves subsequent events in write-ahead batches while the ledger is unwritable', () => {
@@ -167,7 +164,7 @@ describe('analysis durability and continuation', () => {
     expect(existsSync(join(root, '.recovery/replication/000-broken.json.invalid'))).toBe(true);
   });
 
-  it('keeps independent analysis running even when explicitly required Semgrep fails, without claiming completeness', async () => {
+  it('starts no model stages when required Semgrep fails, and retains the inventory', async () => {
     const input = fixture(); let calls = 0;
     const agent = createOffsecAgent({ astBuilder: async () => ({ ok: false, semgrep: { status: 'unavailable', error: 'fixture missing Semgrep' } }), sessionRunner: async spec => {
       calls++; const outcome = await scripted(spec);
@@ -175,7 +172,7 @@ describe('analysis durability and continuation', () => {
       return outcome;
     } });
     const result = await agent.run({ ...input, semgrepMode: 'required' });
-    expect(calls).toBe(4); expect(result.status).toBe('incomplete'); expect(result.coverage.requiredPreanalysisComplete).toBe(false);
+    expect(calls).toBe(0); expect(result.status).toBe('incomplete'); expect(result.coverage.requiredPreanalysisComplete).toBe(false);
     expect(readFileSync(result.finalReport, 'utf8')).toContain('분석 범위 미완료');
   });
 

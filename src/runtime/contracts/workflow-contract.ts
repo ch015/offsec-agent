@@ -78,7 +78,7 @@ export const WorkflowContractSchema = z.object({
     entrypoint: z.string().regex(/^[a-z0-9-]+$/),
     workerPhases: z.array(z.string().min(1)).min(1),
     maximumWorkUnits: z.number().int().positive(),
-    maximumConcurrency: z.number().int().positive(),
+    maximumConcurrency: z.number().int().positive().nullable(),
     completionBarrier: z.literal('all-settled-all-required'),
     directPhaseExecution: z.literal('forbidden'),
   }).strict().optional(),

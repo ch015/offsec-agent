@@ -3,7 +3,7 @@
   "name": "ch015",
   "description": "AI-powered source code security assessment multi-agent system",
   "sourceDirectories": ["src", "lib", "app", "components", "pages", "features", "services", "api", "server", "backend", "hooks", "mcp-server", "harness", "Source", "Plugins", "Packages"],
-  "codeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java", ".rb", ".php", ".dart", ".sol", ".ex", ".exs", ".sql", ".yaml", ".yml", ".cpp", ".h", ".hpp", ".c", ".cc", ".mm", ".m", ".kt", ".kts", ".swift", ".cs"],
+  "codeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java", ".rb", ".php", ".dart", ".sol", ".ex", ".exs", ".sql", ".yaml", ".yml", ".cpp", ".h", ".hpp", ".c", ".cc", ".mm", ".m", ".kt", ".kts", ".swift", ".cs", ".html", ".htm", ".xhtml", ".vue", ".svelte", ".astro", ".pug", ".jade", ".hbs", ".handlebars", ".ejs", ".erb", ".haml", ".slim", ".mustache", ".twig", ".liquid", ".jinja", ".jinja2", ".j2", ".njk", ".nunjucks", ".tpl", ".jsp", ".jspx", ".cshtml", ".razor", ".aspx", ".ascx"],
 
   "ch015": {
     "securityScoreThreshold": 85,

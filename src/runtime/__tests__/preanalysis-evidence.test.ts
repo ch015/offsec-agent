@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dump, load } from 'js-yaml';
 import { computeGraphRag, serializeGraphContextForUnit } from '../workflow/graph-rag.js';
 import { loadPreanalysisEvidence, writeUnitEvidence } from '../workflow/preanalysis-evidence.js';
+import { coverageAppendix } from '../missions/analysis-checkpoint.js';
 
 const { buildAstContext } = createRequire(import.meta.url)('../../../domains/offsec/lib/ch015/ast/context-builder.js');
 const dirs: string[] = [];
@@ -17,6 +18,21 @@ function fixture() {
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 describe('native preanalysis → AI evidence', () => {
+  it('retains partial parser/tool evidence per unit and discloses it even in a completed report', async () => {
+    const f = fixture(), source = f.put('fragment.ts', 'export function incomplete('), unsupported = f.put('contract.sol', 'contract Example {}');
+    const semgrepExecFile = (_command: string, args: string[], _options: unknown, callback: (error: unknown, stdout: string, stderr: string) => void) => {
+      callback(null, args[0] === '--version' ? '1.157.0\n' : JSON.stringify({ results: [], paths: { scanned: [source] }, errors: [{ path: source, code: 3, level: 'warn', type: 'Syntax error', message: 'incomplete fragment' }] }), '');
+    };
+    const result = await buildAstContext(f.target, { outputPath: f.outputPath, sourceFiles: [source, unsupported], runSemgrep: true, semgrepExecFile, logger() {} });
+    expect(result.semgrep.status).toBe('complete');
+    const evidence = loadPreanalysisEvidence(f.outputPath, f.target, [source, unsupported]);
+    const refs = writeUnitEvidence(f.target, ['fragment.ts'], evidence), details = JSON.parse(readFileSync(refs.detailPath, 'utf8'));
+    expect(details.parseWarnings).toHaveLength(1); expect(details.semgrepDiagnostics).toHaveLength(1);
+    expect(details.semgrepFileCoverage).toEqual([expect.objectContaining({ file: 'fragment.ts', status: 'partial' })]);
+    const appendix = coverageAppendix({ complete: true, uncoveredFiles: [], preanalysisLimitations: evidence.limitations });
+    expect(appendix).toContain('Semgrep reported 1'); expect(appendix).toContain('no applicable pinned rules for 1');
+    expect(appendix).toContain('AST syntax warnings');
+  });
   it('scans exactly the manifest with Semgrep even when AST caps or legacy hints differ', async () => {
     const f = fixture();
     const a = f.put('src/a.js', 'function a() { return 1; }'), b = f.put('packages/b.js', 'function b() { return 2; }');

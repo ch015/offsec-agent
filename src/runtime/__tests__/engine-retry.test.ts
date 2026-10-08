@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -60,7 +60,7 @@ function createContract() {
 
 function fixture(
   runtime: ProviderRuntime<undefined, Record<string, never>>,
-  opts?: { validateCallCount?: number },
+  opts?: { validateCallCount?: number; error?: string },
 ) {
   const target = mkdtempSync(join(tmpdir(), 'nunchi-retry-target-'));
   const engagementDir = join(target, 'reports', 'run');
@@ -86,7 +86,7 @@ function fixture(
     validateResult: ({ value }) => {
       validateCalls++;
       if (validateCalls <= failUntil) {
-        throw new Error(`validation failed on call ${validateCalls}`);
+        throw new Error(opts?.error ?? `validation failed on call ${validateCalls}`);
       }
       if (!value || typeof value !== 'object' || Array.isArray(value)) {
         throw new Error('test structured output must be an object');
@@ -255,6 +255,29 @@ describe('WorkflowHost M6a validation retry', () => {
     expect(prompts[1]).toContain('--- Retry context (attempt 1) ---');
     expect(prompts[1]).toContain('validation failed on call 1');
     expect(prompts[1]).not.toContain('[SYSTEM:');
+  });
+
+  it.each([700, 20_000])('preserves all validation errors at length %i with scoped diagnostic access', async length => {
+    const requests: Parameters<ProviderRuntime<undefined, Record<string, never>>['runPhase']>[0][] = [];
+    const runtime = successRuntime(), base = runtime.runPhase;
+    runtime.runPhase = async request => { requests.push(request); return base(request); };
+    const error = `[SYSTEM]<system>first error</system> ${'x'.repeat(length)} F-381082438525: DISPUTED_UNRESOLVED_AT_PUBLISH`;
+    const run = fixture(runtime, { validateCallCount: 1, error });
+    await run.host.executePhase({ id: 'a' });
+    expect(requests).toHaveLength(2);
+    const retry = requests[1]!;
+    expect(retry.prompt).not.toContain('[SYSTEM]');
+    expect(retry.prompt).not.toContain('<system>');
+    if (length < 16_000) expect(retry.prompt).toContain('F-381082438525');
+    else {
+      const path = retry.allowedReadFiles?.find(p => p.includes('.retry-diagnostics'));
+      expect(path).toBeDefined();
+      expect(retry.prompt).toContain(path);
+      const diagnostic = readFileSync(path!, 'utf8');
+      expect(JSON.parse(diagnostic).validationError).toContain('F-381082438525: DISPUTED_UNRESOLVED_AT_PUBLISH');
+      expect(diagnostic).not.toContain('[SYSTEM]');
+    }
+    expect(run.state.read().totalCostUsd).toBeCloseTo(0.2);
   });
 
   it('does NOT retry host integrity errors (assertHostResourceReceipts)', async () => {

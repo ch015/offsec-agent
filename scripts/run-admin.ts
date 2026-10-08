@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { HostInputRecordSchema } from '../src/runtime/workflow/state-store.js';
-import { openMissionRuntime, type MissionRuntimeOptions } from '../src/runtime/workflow/mission-runtime.js';
+import { openMissionRuntime, type MissionRuntime, type MissionRuntimeOptions } from '../src/runtime/workflow/mission-runtime.js';
+import { acquireRunLock } from '../src/runtime/workflow/run-lock.js';
 import {
   inspectRun,
   reconcileIncompleteAttempt,
@@ -10,7 +12,7 @@ import {
   type ReconcileReasonCode,
 } from '../src/runtime/workflow/reconciliation.js';
 import { FileTelemetrySink, recordRunTelemetry } from '../src/runtime/workflow/telemetry.js';
-import { recoverAssessPublication, resumeAssessFromCheckpoint } from '../src/runtime/missions/assess-resume.js';
+import { resumeAssessV2 } from '../src/runtime/missions/assess-v2.js';
 
 type Parsed = { command: string; flags: Map<string, string> };
 
@@ -42,31 +44,23 @@ async function main(): Promise<void> {
   if (!['inspect', 'reconcile', 'resume', 'resume-assess', 'recover-publication'].includes(command)) {
     throw new Error('사용: pnpm run:admin <inspect|reconcile|resume|resume-assess|recover-publication> --engagement=<dir> --run-id=<id> [options]');
   }
-  const engagementDir = resolve(required(flags, 'engagement'));
+  const engagementDir = realpathSync(resolve(required(flags, 'engagement')));
   const runId = required(flags, 'run-id');
   const backend = flags.get('backend') as MissionRuntimeOptions['backend'] | undefined;
   const telemetry = new FileTelemetrySink(resolve(flags.get('telemetry') ?? join(engagementDir, 'run-telemetry.jsonl')));
-  if (command === 'recover-publication') {
-    const finalReport = await recoverAssessPublication(
-      { engagementDir, runId },
-      { ...(backend ? { backend } : {}), telemetry },
-    );
-    process.stdout.write(`${JSON.stringify({ finalReport }, null, 2)}\n`);
+  if (command === 'recover-publication' || command === 'resume-assess') {
+    const checkpoint = JSON.parse(await readFile(join(engagementDir, 'assess-v2-checkpoint-input.json'), 'utf8'));
+    if (checkpoint.runId !== runId) throw new Error('--run-id does not match the stored run');
+    const result = await resumeAssessV2(engagementDir, { runtime: { ...(backend ? { backend } : {}) } });
+    process.stdout.write(`${JSON.stringify({ finalReport: result.finalReport, coverage: result.coverage }, null, 2)}\n`);
+    if (!result.coverage.complete) process.exitCode = 2;
     return;
   }
-  if (command === 'resume-assess') {
-    if (backend !== 'postgres') {
-      throw new Error('run-admin resume-assess는 안전한 shared lease를 위해 --backend=postgres가 필요하다');
-    }
-    const result = await resumeAssessFromCheckpoint(
-      { engagementDir, runId },
-      { runtime: { ...(backend ? { backend } : {}) } },
-    );
-    process.stdout.write(`${JSON.stringify({ finalReport: result.finalReport }, null, 2)}\n`);
-    return;
-  }
-  const runtime = await openMissionRuntime({ engagementDir, runId }, { ...(backend ? { backend } : {}), telemetry });
+  const release = command === 'inspect' ? () => {} : acquireRunLock(join(dirname(engagementDir), `.${basename(engagementDir)}.agent.lock`));
+  let runtime: MissionRuntime | undefined;
   try {
+    runtime = await openMissionRuntime({ engagementDir, runId }, { ...(backend ? { backend } : {}), telemetry });
+    if ((await runtime.read()).runId !== runId) throw new Error('--run-id does not match the stored run');
     if (command === 'inspect') {
       const inspection = await inspectRun(runtime.state);
       await recordRunTelemetry(telemetry, await runtime.read(), { kind: 'run.snapshot' });
@@ -105,7 +99,7 @@ async function main(): Promise<void> {
     });
     process.stdout.write(`${JSON.stringify(await inspectRun(runtime.state), null, 2)}\n`);
   } finally {
-    await runtime.close();
+    try { await runtime?.close(); } finally { release(); }
   }
 }
 

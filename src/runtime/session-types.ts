@@ -5,13 +5,21 @@ import type { LiveDastContext } from './live-dast-tools.js';
 export const DOMAINS = ['offsec'] as const;
 export type Domain = (typeof DOMAINS)[number];
 
+/** A transport failure must not discard a result receipt already delivered by the SDK. */
+export class SessionExecutionError extends Error {
+  constructor(readonly outcome: import('./session.js').SessionOutcome, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'SessionExecutionError';
+  }
+}
+
 export type SessionSpec = {
   /** Per-session credentials; never written to mission artifacts or process.env. */
   apiKey?: string;
   authMode?: 'api_key' | 'oauth';
   domain: Domain;
   mission?: string;
-  /** v2 계약 경로. 생략하면 v1 기본 계약. */
+  /** Current assessment contract path; omission selects the bundled contract. */
   contractPath?: string;
   entryAgent?: string;
   agentRole?: string;
@@ -22,12 +30,17 @@ export type SessionSpec = {
   requirePocBinding?: boolean;
   target: string;
   prompt: string;
+  /** Host-owned phase input; never accepted from model tool arguments. */
+  taskData?: Record<string, unknown>;
   engagementDir: string;
   engagementId: string;
+  /** Host attempt identity used to reconcile durable usage receipts. */
+  attemptId?: string;
   model?: string;
   effort?: NonNullable<Options['effort']>;
   maxTurns?: number;
   maxBudgetUsd?: number;
+  sharedKnowledge?: import('./shared-knowledge.js').SharedKnowledgeContext;
   networkAllowedDomains?: readonly string[];
   liveTestTarget?: string;
   liveTestPlan?: { path: string; sha256: string };
@@ -40,6 +53,8 @@ export type SessionSpec = {
     workPlanSha256: string;
     assignedSourceSha256: string;
     ownedSourceFiles: readonly string[];
+    /** Explicit cross-unit flow ownership may cite both endpoints. */
+    findingSourceFiles?: readonly string[];
     contextSourceFiles: readonly string[];
     sourceFiles: readonly string[];
   };
@@ -47,7 +62,7 @@ export type SessionSpec = {
   /** #9: verify-feedback에서 초기 verify의 tool ledger를 carry-forward (autonomous seal coverage용) */
   priorToolLedger?: readonly Readonly<{ tool?: string; resource?: string; query?: string; decision?: 'allow' | 'deny' }>[];
   onStderr?: (chunk: string) => void;
-  onProgress?: (event: { kind: 'text' | 'tool'; from: string; detail: string }) => void;
+  onProgress?: (event: { kind: 'text' | 'tool' | 'heartbeat'; from: string; detail: string }) => void;
   abortController?: AbortController;
 };
 
@@ -70,4 +85,6 @@ export type LedgerRow = {
   reason?: string;
   query?: string;
   compaction?: CompactBoundaryMetadata;
+  delivery?: import('./source-delivery.js').SourceDeliveryReceipt;
+  retryAfterMs?: number;
 };

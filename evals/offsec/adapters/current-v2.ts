@@ -1,4 +1,8 @@
 import { readStandardFindings } from '../../../src/runtime/finding-contract.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { canonicalV2Findings, resolveV2Review } from '../../../src/runtime/v2-review-resolution.js';
+import { assertEvaluationProjection } from '../../../src/runtime/evaluation-projection.js';
 import {
   NormalizedBenchmarkFindingSchema,
   type BenchmarkRunRecord,
@@ -12,13 +16,32 @@ import {
  * pentest/redteam/feedback/verifier/objection 시스템이 없다. 따라서 phase 순위는
  * recon -> plan -> analyze -> review -> evaluate -> report 만 인식한다.
  *
- * standard-findings 원장(readStandardFindings)은 v1과 공유하되, 동일 finding id에 대해
- * 가장 나중(높은 순위) phase의 레코드를 lineage 대표로 채택하는 로직만 v2 phase에 맞춘다.
+ * countingSchemaVersion 1 결과는 봉인된 최종 검토의 독립 원인당 한 예측으로 정규화한다.
+ * 원인 분류가 없는 과거 자료는 기존 ID/phase 기준을 유지한다. 두 집계 기준을 같은
+ * 독립 취약점 성능으로 해석해서는 안 된다.
  */
 export function normalizeCurrentV2OffsecFindings(input: {
   engagementDir: string;
   run: BenchmarkRunRecord;
 }): NormalizedBenchmarkFinding[] {
+  const reviewPath = join(input.engagementDir, '03_review_result.json');
+  if (existsSync(reviewPath) && JSON.parse(readFileSync(reviewPath, 'utf8')).countingSchemaVersion === 1) {
+    // New runs expose one packet per reviewed cause. An observation or a
+    // superseded assertion is not another positive prediction. Independent
+    // adjudicators still decide whether the claimed cause is actually valid.
+    assertEvaluationProjection(input.engagementDir);
+    const resolved = resolveV2Review(input.engagementDir), canonical = canonicalV2Findings(input.engagementDir);
+    return resolved.vulnerabilityInventory.causes.map(cause => {
+      const members = [...cause.findingIds,...cause.corroboratingFindingIds].map(id => canonical.get(id)!);
+      return NormalizedBenchmarkFindingSchema.parse({schemaVersion:'1.0.0',runId:input.run.runId,runSha256:input.run.runSha256,
+        caseId:input.run.caseId,arm:input.run.arm,findingId:cause.causeId,title:cause.rootCause.slice(0,512),
+        verdict:'supported',severity:cause.severity,cwes:[...new Set(members.flatMap(f=>f.standards).filter(s=>/^CWE-\d+$/.test(s)))],
+        evidence:cause.evidence.map(ref=>({...ref,origin:'reported'})),
+      });
+    });
+  }
+  // Historical normalization remains readable; it is record-based, not a
+  // retrospectively invented count of independent security defects.
   const phaseOrder = new Map([
     ['recon', 1], ['plan', 2], ['analyze', 3], ['review', 4], ['evaluate', 5], ['report', 6],
   ]);

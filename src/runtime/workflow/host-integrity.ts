@@ -7,6 +7,13 @@ import type { HostResourceReceipt, RunSnapshot } from './state-store.js';
 
 export type LoadedHostResource = HostResourceReceipt & { content: string };
 
+function semanticJsonDigest(path: string, content: string): string | undefined {
+  if (!path.endsWith('.json')) return undefined;
+  const stable = (value: unknown): string => Array.isArray(value) ? `[${value.map(stable).join(',')}]`
+    : value !== null && typeof value === 'object' ? `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`).join(',')}}` : JSON.stringify(value);
+  try { return createHash('sha256').update(stable(JSON.parse(content))).digest('hex'); } catch { return undefined; }
+}
+
 export function loadHostResources(paths: readonly string[]): LoadedHostResource[] {
   return paths.map((path) => {
     const content = readFileSync(path, 'utf8');
@@ -14,6 +21,7 @@ export function loadHostResources(paths: readonly string[]): LoadedHostResource[
       path,
       bytes: Buffer.byteLength(content),
       sha256: createHash('sha256').update(content).digest('hex'),
+      ...(semanticJsonDigest(path, content) ? { semanticSha256: semanticJsonDigest(path, content) } : {}),
       content,
     };
   });
@@ -21,12 +29,14 @@ export function loadHostResources(paths: readonly string[]): LoadedHostResource[
 
 export function assertRunInputsIntact(snapshot: RunSnapshot, runRoot: string): void {
   for (const attempt of Object.values(snapshot.attempts)) {
-    if (attempt.status === 'completed') {
+    if (attempt.status === 'completed' && !attempt.superseded) {
       for (const artifact of attempt.artifacts ?? []) verifyRunArtifactRef(artifact, runRoot);
     }
     assertHostResourceReceipts(attempt.hostResources ?? []);
   }
   for (const artifact of snapshot.analysisCheckpoint?.artifacts ?? []) verifyRunArtifactRef(artifact, runRoot);
+  for (const revision of [...snapshot.revisions ?? [], ...snapshot.evaluationRevisions ?? []]) for (const artifact of revision.artifacts) verifyRunArtifactRef(artifact, runRoot);
+  if (snapshot.completionCoverage) verifyRunArtifactRef(snapshot.completionCoverage, runRoot);
   const input = snapshot.inputManifest;
   if (!input) return;
   verifyRunArtifactRef(input.manifest, runRoot);
@@ -48,13 +58,14 @@ export function assertHostResourceReceipts(resources: readonly HostResourceRecei
     const content = readFileSync(resource.path);
     const observed = createHash('sha256').update(content).digest('hex');
     if (content.byteLength !== resource.bytes || observed !== resource.sha256) {
+      if (resource.semanticSha256 && semanticJsonDigest(resource.path, content.toString('utf8')) === resource.semanticSha256) continue;
       throw new Error(`host contract resource hash가 다르다: ${resource.path}`);
     }
   }
 }
 
 export function receiptsOnly(resources: readonly LoadedHostResource[]): HostResourceReceipt[] {
-  return resources.map(({ path, sha256, bytes }) => ({ path, sha256, bytes }));
+  return resources.map(({ path, sha256, bytes, semanticSha256 }) => ({ path, sha256, bytes, ...(semanticSha256 ? { semanticSha256 } : {}) }));
 }
 
 export function renderHostResources(resources: readonly LoadedHostResource[]): string {

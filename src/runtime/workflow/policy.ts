@@ -128,9 +128,12 @@ export function authorizeToolCall(policy: ToolPolicy, call: ToolCall): PolicyDec
       typeof readPath === 'string' &&
       policy.allowedMethodFiles.has(canonicalPotentialPath(readPath, policy.targetDir));
     if (!exactRead && !allowedRootRead && !allowedMethodRead) {
+      const recovery = !policy.allowImplicitRootRead && (call.tool === 'Grep' || call.tool === 'Glob')
+        ? ' Directory search is not granted by an exact file allow-list. Use exact file paths supplied in the phase inputs or input manifest with Read or file-scoped Grep; do not repeat a root Glob/Grep.'
+        : '';
       return {
         decision: 'deny',
-        reason: `읽기는 계약의 root, exact allow-list, 현재 phase method만 허용된다: ${String(readPath)}`,
+        reason: `읽기는 계약의 root, exact allow-list, 현재 phase method만 허용된다: ${String(readPath)}${recovery}`,
       };
     }
   }

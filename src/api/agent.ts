@@ -3,9 +3,11 @@ import { resumeAssessV2, assessV2, type AssessV2Input, type AssessV2Dependencies
 import { absolutePath, assertSessionConfigured, executeInDirectory, sessionFor, type AgentSessionOptions, type AgentExecutionOptions } from './execution.js';
 
 export type OffsecAgentOptions = AgentSessionOptions & {
-  defaults?: Pick<AssessV2Input, 'model' | 'reviewModel' | 'effort' | 'maxTurns' | 'maxBudgetUsd' | 'noCostGuard' | 'maxConcurrency' | 'maxFollowupHypotheses' | 'semgrepMode' | 'scope'>;
+  defaults?: Pick<AssessV2Input, 'mode' | 'tools' | 'model' | 'reviewModel' | 'effort' | 'maxTurns' | 'costPolicy' | 'maxBudgetUsd' | 'noCostGuard' | 'maxConcurrency' | 'maxFilesPerAgent' | 'maxSourceTokensPerAgent' | 'maxFollowupHypotheses' | 'semgrepMode' | 'scope'>;
   runtime?: AssessV2Dependencies['runtime'];
   astBuilder?: AssessV2Dependencies['astBuilder'];
+  scheduler?: AssessV2Dependencies['scheduler'];
+  onEvent?: AssessV2Dependencies['onEvent'];
 };
 export type OffsecRunInput = AssessV2Input;
 export type OffsecResumeOptions = AgentExecutionOptions & AssessV2ResumeOptions;
@@ -24,14 +26,14 @@ export function createOffsecAgent(options: OffsecAgentOptions) {
       if (!input.engagementDir) input = { ...input, ...allocateRunLocation(input) };
       return executeInDirectory(input.engagementDir!, settings, execution, async engagementDir => {
         const result = await assessV2({ ...settings.defaults, ...input, engagementDir }, {
-          runtime: settings.runtime, astBuilder: settings.astBuilder, sessionRunner: sessionFor(settings, execution),
+          runtime: settings.runtime, astBuilder: settings.astBuilder, scheduler: settings.scheduler, onEvent: settings.onEvent, signal: execution.signal, sessionRunner: sessionFor(settings, execution),
         });
         return { ...result, status: result.publicationStatus === 'published' && result.coverage.complete ? 'published' : 'incomplete' };
       });
     },
     async resume(engagementDir: string, execution: OffsecResumeOptions = {}): Promise<OffsecRunResult> {
       return executeInDirectory(engagementDir, settings, execution, async directory => {
-        const result = await resumeAssessV2(directory, { runtime: settings.runtime, astBuilder: settings.astBuilder, sessionRunner: sessionFor(settings, execution) }, execution);
+        const result = await resumeAssessV2(directory, { runtime: settings.runtime, astBuilder: settings.astBuilder, scheduler: settings.scheduler, onEvent: settings.onEvent, signal: execution.signal, sessionRunner: sessionFor(settings, execution) }, execution);
         return { ...result, status: result.publicationStatus === 'published' && result.coverage.complete ? 'published' : 'incomplete' };
       });
     },

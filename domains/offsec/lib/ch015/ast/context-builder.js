@@ -14,7 +14,7 @@ const DEFAULT_SOURCE_DIRS = [
   'routes', 'controllers', 'middleware', 'handlers', 'frontend', 'views', 'endpoints',
   'functions', 'lambdas', 'workers', 'jobs', 'contracts', 'hooks', 'mcp-server', 'harness',
 ];
-const MAX_FILES = 500;
+const MAX_FILES = Number.MAX_SAFE_INTEGER;
 const MAX_DATA_FLOWS = 200;
 const MAX_TAINT_PATHS = 50;
 const MAX_SEMGREP_FINDINGS = 100;
@@ -42,7 +42,14 @@ async function buildAstContext(targetPath, options = {}) {
   }
 
   // Step 2: Parse with tree-sitter
-  const parseResult = parseFiles(files);
+  // Parse every selected file. Batch traversal bounds scheduling work, not source scope.
+  const parseResult = { parsed: [], failed: [] };
+  for (let start = 0; start < files.length; start += 64) {
+    const batch = parseFiles(files.slice(start, start + 64));
+    parseResult.parsed.push(...batch.parsed);
+    parseResult.failed.push(...batch.failed);
+    log(`[AST] File batch ${Math.min(start + 64, files.length)}/${files.length}`);
+  }
   log(`[AST] Parsed: ${parseResult.parsed.length} ok, ${parseResult.failed.length} failed`);
 
   // Step 3: Extract call graph
@@ -258,6 +265,7 @@ function assembleContext(data) {
     stats: {
       files_parsed: parseResult.parsed.length,
       files_failed: parseResult.failed.length,
+      files_with_syntax_errors: parseResult.parsed.filter(file => file.hasSyntaxErrors).length,
       functions: callGraph.stats.total_functions,
       calls: callGraph.stats.total_calls,
       entry_points: callGraph.stats.total_entry_points,
@@ -268,6 +276,10 @@ function assembleContext(data) {
       semgrep_raw_findings: semgrepResult.stats?.raw_total_findings || 0,
       semgrep_files_requested: semgrepResult.stats?.files_requested || 0,
       semgrep_files_scanned: semgrepResult.stats?.files_scanned || 0,
+      semgrep_diagnostics: semgrepResult.diagnostics?.length || 0,
+      semgrep_files_partial: semgrepResult.fileCoverage?.filter(file => file.status === 'partial').length || 0,
+      semgrep_files_without_rules: semgrepResult.fileCoverage?.filter(file => file.status === 'no-applicable-rule').length || 0,
+      semgrep_files_unaccounted: semgrepResult.fileCoverage?.filter(file => file.status === 'unaccounted').length || 0,
       truncation,
       truncated: Object.values(truncation).some(Boolean),
     },
@@ -305,6 +317,9 @@ function assembleContext(data) {
       cwe: f.cwe,
     })),
     semgrep_receipt: semgrepResult.receipt || null,
+    semgrep_diagnostics: semgrepResult.diagnostics || [],
+    semgrep_file_coverage: semgrepResult.fileCoverage || [],
+    parse_warnings: parseResult.parsed.filter(file => file.hasSyntaxErrors).map(file => ({ file: file.filePath, error: 'Syntax errors are present; this AST is partial evidence. Inspect the original source directly.' })),
     parse_failures: parseResult.failed.map(f => ({
       file: f.filePath,
       error: f.error,

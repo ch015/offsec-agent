@@ -1,92 +1,37 @@
-# OffSec를 애플리케이션 코드에서 사용하기
+# 앱 내장 API
 
-문서 기준: 2026-09-23. [현재 기능과 한계](README.md) · [저장·복구·재개](analysis-storage-recovery.md)
-
-`src/index.ts`가 공개 진입점입니다. Node.js 22.18 이상 ESM 환경에서 기존 앱의 코드 의존성으로 연결합니다. Kit CLI·통합 tgz·프로젝트 YAML은 필요하지 않습니다.
-
-```sh
-pnpm install --frozen-lockfile
-pnpm build:library
-```
-
-앱의 workspace 또는 pnpm `link:` 의존성으로 이 디렉터리를 연결합니다. 기본 package export는 컴파일한 `dist/src/index.js`와 타입 선언을 사용합니다. TypeScript 실행기를 쓰는 앱은 `secops-offsec-agent/source` export도 사용할 수 있습니다. `dist`의 도메인/템플릿 리소스를 함께 유지하세요. 배포 archive는 `dist`, `src`, `domains`, `templates`를
-명시적 포함 목록으로 사용하므로 로컬 실행 산출물을 패키지에 포함하지 않습니다.
-
-## 앱 연결 예제
+기준: 2026-10-07. Node.js 22.18 이상 ESM 환경에서 `pnpm build:library`로 빌드한 패키지를 연결합니다. import는 서버나 worker를 시작하지 않습니다. `dist`의 도메인/템플릿 리소스를 함께 배포합니다.
 
 ```js
 import { createOffsecAgent } from 'secops-offsec-agent';
+
 const controller = new AbortController();
 const agent = createOffsecAgent({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  defaults: { maxConcurrency: 2, maxFollowupHypotheses: 3 }, // 금액 예산 기본값: 무제한
+  onEvent: event => console.log(event),
+  // maxConcurrency 생략: 진행·자원을 관측해 동적으로 증감
+  defaults: { costPolicy: 'record-only' },
 });
 const result = await agent.run({
-  target: '/srv/project', scope: '인증 경계 검토',
+  target: '/srv/project', mode: 'ast', tools: ['semgrep'],
 }, { signal: controller.signal });
-// result.status: published | incomplete; result.coverage와 finalReport 확인
+console.log(result.status, result.coverage, result.finalReport);
+// 취소: controller.abort()
+// 재개: await agent.resume(result.engagementDir)
 ```
 
-앱은 실제 대상 절대경로와 인증을 제공하고, 취소 시 `controller.abort()`를 호출합니다.
-import는 서버나 worker를 시작하지 않습니다. 모델 키는 인스턴스에 주입하며 process.env나 cwd를 바꾸지 않습니다.
-`engagementDir` 생략 시 `~/.ch015/<레포>/<UTC시간>_<커밋 또는 nogit>_<UUID>/` 아래
-`engagement/`와 `report/`를 분리합니다. 저장 루트는 `CH015_STATE_HOME`으로 지정합니다.
-기존 배치가 필요할 때만 `engagementDir: '/srv/results/job-123'`처럼 새/빈 절대경로를 지정합니다.
-재개에는 추측한 최신 폴더가 아닌 결과의 `engagementDir`를 보관해 사용하세요.
+`apiKey` 대신 `sessionRunner(SessionSpec): Promise<SessionOutcome>`를 주입할 수 있습니다. 테스트용 runner도 실제 전달 영수증과 파일별 분석 계약을 충족해야 완료 처리됩니다. 키·cwd·환경을 실행 인스턴스 사이에 공유하거나 변경하지 않습니다. `onProgress`, `onLedger`, `onStderr`, `onMetrics`, `onEvent`를 제공하며 callback 예외가 진단을 중단시키지 않도록 앱에서 처리합니다.
 
-`semgrepMode`는 `required`/`best-effort`/`off`, `maxTurns`는 양의 안전한 정수,
-`effort`는 `low`/`medium`/`high`/`xhigh`/`max`만 허용합니다. 잘못된 값은
-스캔·모델 실행·결과 디렉터리 생성 전에 거부합니다. CLI 숫자도 소수·부분 숫자를 정수로 잘라 받지 않습니다.
+`status`는 필수 범위 완료와 발행을 모두 충족하면 `published`, 나머지는 `incomplete`입니다. `publicationStatus: published`인 부분 보고서도 있을 수 있으므로 반드시 `status`와 `coverage`를 함께 확인합니다. `filesDelivered`는 검증된 도구 반환 내용, `filesValidatedReuse`는 이전 분석을 검증해 재사용한 파일입니다. `semanticCoverage: not-proven`은 모델의 이해도나 취약점 부재를 증명하지 않는다는 의미입니다.
 
-`maxConcurrency` 기본값은 2입니다. `maxFollowupHypotheses`는 기본 3, 0..8 범위이며 0은 후속 분석을 끕니다.
-유효한 교차 단위 질문이 있을 때만 최대 32턴의 추가 분석 세션 한 라운드를 실행합니다.
-`maxBudgetUsd`를 생략하면 기본 금액 상한은 없습니다. `defaults.noCostGuard: true`로 호출자가 전달한 금액 상한도 명시적으로 해제할 수 있습니다.
-`maxBudgetUsd`를 설정하면 분석 이후 단계를 위해 30%를 남기고 review 이후 10%, evaluate 이후 5%를 남깁니다.
-이 예약은 SDK 사용량 회계 기준이며 절대 결제 한도는 아닙니다.
+기본 금액 정책은 record-only입니다. 제한은 `costPolicy: 'enforce', maxBudgetUsd: 100`처럼 명시합니다. `maxBudgetUsd` 숫자만으로 제한이 켜지지 않습니다. 재개에도 명시적 enforce가 없으면 기록 전용입니다. 늦게 수신한 비용 영수증은 실패 결과와 분리해 멱등 반영하고, 영수증 없는 지출은 unknown으로 유지합니다.
 
-`coverage.complete`는 배정된 작업의 실행 완료입니다. `ownedFilesRead`는 초기 단위 분석에서 기록된
-담당 파일 읽기 수이며 내용 이해를 보증하지 않습니다. `semanticCoverage: 'not-proven'`,
-`deferredFollowupQuestions`, 결과 디렉터리의 `00_analysis_coverage.json`도 확인하세요.
+동시성 기본 상한은 없습니다. `maxConcurrency: 3`은 실제 점유 상한이며 취소 처리 중인 작업도 포함합니다. 작업 용량 기본값은 `maxFilesPerAgent: 24`, `maxSourceTokensPerAgent: 24000`입니다. 호스트가 큰 파일의 범위 작업과 연결 검토를 생성합니다. 프로세스 공유 admission과 provider backoff를 사용하며, 다중 호스트 quota는 별도 조정이 필요합니다.
 
-소비 앱의 기본 AST parser는 JavaScript/TypeScript입니다. Python 등 다른 언어는 대응하는
-선택형 peer를 앱 의존성에 추가합니다. 예: `pnpm add tree-sitter-python@^0.23.6`.
-parser 미설치·실패·상한 도달은 증거 공백으로 기록하며 소스 직접 분석을 대체하지 않습니다.
-SDK·pg·Playwright는 필요한 실행 경로에서 지연 로딩하지만 필수 설치 의존성으로 유지됩니다.
-TypeScript 소비 앱은 일반 Node.js 앱처럼 `@types/node`를 개발 의존성으로 설치합니다.
-전체 parser 목록과 검증 범위는 [탐지·경량화 상세](detection-improvements.md)에 있습니다.
+`mode: 'ast'`, `tools: ['semgrep']`이면 기본 required입니다. `semgrepMode: 'best-effort'`를 명시하면 도구 실패를 제한사항으로 기록합니다. `tools: []`는 Semgrep을 사용하지 않습니다. 필수 도구 실패는 Scanner를 포함한 모델 호출 전에 반환됩니다.
 
-`apiKey` 대신 기존 SessionSpec/SessionOutcome을 구현한 `sessionRunner`를 주입할 수 있습니다. `onProgress`, `onLedger`, `onStderr`, `onMetrics`로 앱의 관측 기능을 연결합니다. 출력·파일 입력은 절대경로를 사용합니다. 기본 state는 file이며 `runtime`으로 기존 PostgreSQL pool/artifact 설정을 주입할 수 있습니다. SDK sandbox·파일 시스템·분석 도구 설치 조건은 기존 실행과 같습니다.
+`engagementDir`를 생략하면 대상 밖의 독립 디렉터리를 할당합니다. 명시할 때는 새/빈 절대경로가 필요합니다. 같은 디렉터리의 동시 실행은 CLI/API/직접 mission 호출에서 공통 잠금으로 거부합니다. 취소·입력·무결성 오류는 예외, 복구 가능한 실행 실패는 부분 보고서와 incomplete로 전달됩니다.
 
-같은 결과 디렉터리의 동시 실행은 거부합니다. 취소와 입력·무결성 오류는 예외로 전달됩니다. 복구 가능한 실행 실패는 부분 보고서와 `incomplete`를 반환하며 이미 생성한 증거를 자동 삭제하지 않습니다. 이벤트 callback에서 예외를 던지지 않도록 앱에서 처리하세요.
+`agent.resume(dir)`는 기존 스냅샷으로 미완료 작업만 재개합니다. 원본 작업 트리를 바꿔도 기존 스냅샷은 바뀌지 않습니다. 변경 소스를 분석하려면 새 결과 디렉터리로 `agent.run({ target, reuseFrom: dir })`을 사용합니다. 동일 계약·범위·근거와 변경 영향이 검증된 작업만 재사용하고 검토 단계는 새로 수행합니다. 기존 결과는 덮어쓰지 않습니다.
 
-v2 중단 실행은 `agent.resume(engagementDir)`로 이어갑니다. 저장된 예산이 부족하면
-`agent.resume(engagementDir, { maxBudgetUsd: 1000 })`으로 증액하거나
-`agent.resume(engagementDir, { noCostGuard: true })`로 금액 상한을 해제합니다.
-변경은 원장에 기록되어 이후 옵션 없는 재개에도 유지됩니다. 기존 사용액·미정산 예약액과
-봉인된 입력은 보존합니다. 인스턴스 defaults 변경만으로 기존 실행 예산이 바뀌지는 않습니다.
-완료된 실행의 분석 범위를 늘리거나 증분 분석하는 기능과는 구분하세요.
-
-
-## v1 사용자 인증 후 재개
-
-이 고급 API는 v1의 사용자 인증 대기를 이어가는 경로다. v2의 `agent.resume()`과 구분한다.
-현재 `assess:resume` CLI는 필수 `--request-sha256`를 인수 파서가 거부하므로 API를 사용한다.
-
-```js
-import { resumeAssessOwnerAuth } from 'secops-offsec-agent';
-
-const resumed = await resumeAssessOwnerAuth({
-  engagementDir,
-  requestId,
-  requestSha256,
-  expectedVersion,
-  adapter,
-  waitForOwner,
-}, { runtime: { backend: 'postgres' } });
-```
-
-위 입력은 앱이 저장된 사용자 인증 요청과 현재 run 상태에서 가져와 전달한다. 해시나 version을
-임의로 생성하지 않는다. `adapter`는 앱이 제공하는 `AuthInteractionAdapter`, `waitForOwner`는
-사용자가 인증을 완료할 때까지 기다리는 함수다. 구현 계약과 로컬 headed-browser adapter는
-[auth-interaction.ts](../src/runtime/auth-interaction.ts)를 참조한다. 원래 실행의 PostgreSQL 설정과
-live-test profile·checkpoint가 필요하다. 이미 완료된 phase와 봉인된 입력은 재사용한다.
+기본 상태 저장소는 file입니다. `runtime: { backend: 'postgres', pool, artifactStore, sharedEngagementRoot }`로 PostgreSQL을 사용하며 재개 시 원래 backend를 유지합니다. [저장과 복구](analysis-storage-recovery.md)를 참고하세요. v1 실행과 `resumeAssessOwnerAuth`는 제거됐습니다. 과거 자료는 읽기 전용 역사 기록으로 유지합니다.

@@ -12,6 +12,8 @@ export type ProviderRuntimeEvent = {
   decision?: 'allow' | 'deny';
   reason?: string;
   compaction?: CompactBoundaryMetadata;
+  delivery?: import('../source-delivery.js').SourceDeliveryReceipt;
+  retryAfterMs?: number;
 };
 
 export type ProviderPhaseRequest<TOptions = unknown> = {
@@ -26,6 +28,8 @@ export type ProviderPhaseRequest<TOptions = unknown> = {
   target: string;
   engagementDir: string;
   prompt: string;
+  /** Host-owned phase input for tool-local artifact validation. */
+  taskData?: Record<string, unknown>;
   requiredCapabilities: ProviderCapability[];
   maxBudgetUsd?: number;
   allowedReadFiles?: readonly string[];
@@ -58,6 +62,7 @@ export class ProviderRuntimeFailure extends Error {
     readonly usage?: ProviderUsage,
     options?: ErrorOptions,
     readonly events: ProviderRuntimeEvent[] = [],
+    readonly terminal?: { subtype?: string; reason?: string },
   ) {
     super(message, options);
     this.name = 'ProviderRuntimeFailure';

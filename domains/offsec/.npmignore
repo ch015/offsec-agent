@@ -1,0 +1,13 @@
+node_modules/
+.nunchi/
+.ch015/
+.recon-cache/
+knowledge-base/engagements/
+harness/eval/reports/
+**/test/
+**/__tests__/
+**/*.log
+**/*.jsonl
+.env
+.env.*
+!.env.example

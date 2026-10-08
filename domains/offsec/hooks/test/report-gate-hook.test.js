@@ -33,6 +33,16 @@ test('runGate: not activated outside an engagement dir', () => {
   assert.equal(out.activated, false);
 });
 
+test('host draft can be written with zero findings while final publication remains gated', () => {
+  const d = mkEng('host-managed-draft');
+  const env = { AGENT_ENGAGEMENT_DIR: d, AGENT_CONTRACT_ID: 'nunchi.offsec.assessment', AGENT_CONTRACT_VERSION: '2.1.0', AGENT_PHASE: 'report', AGENT_REPORT_DRAFT_ARTIFACT: '07_security_report.draft.md' };
+  assert.equal(runGate({ filePath: path.join(d, env.AGENT_REPORT_DRAFT_ARTIFACT), env, content: '# No confirmed findings' }).hostDraft, true);
+  const final = runGate({ filePath: path.join(d, '07_security_report.md'), env, content: '# No confirmed findings' });
+  assert.equal(final.activated, true); assert.equal(final.noArtifacts, true);
+  const other = runGate({ filePath: path.join(d, 'other_security_report.draft.md'), env });
+  assert.equal(other.hostDraft, undefined); assert.equal(other.activated, true);
+});
+
 test('prospectiveContent reconstructs Edit and MultiEdit final content', () => {
   const d = mkEng('prospective-edit');
   const report = path.join(d, 'security-report.md');

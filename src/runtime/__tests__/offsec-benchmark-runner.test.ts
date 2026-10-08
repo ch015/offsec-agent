@@ -25,6 +25,7 @@ function options(overrides: Partial<BenchmarkRunnerOptions> = {}): BenchmarkRunn
     repetitions: 3,
     provider: 'anthropic',
     model: 'claude-opus-4-6',
+    reviewModel: 'claude-sonnet-4-6',
     effort: 'high',
     maxTurns: 120,
     randomizationSeed: 73,
@@ -42,12 +43,12 @@ describe('offsec benchmark runner', () => {
     const value = options({ workflowVersion: 'v2', reviewModel: 'claude-sonnet-4-6' });
     expect(planBenchmarkRuns(value)).toHaveLength(9);
     const command = buildArmCommand({ options: value, arm: 'current-sequential', target: '/opaque/source', engagementDir: '/opaque/output' });
-    expect(command.args).toContain('assess:v2');
+    expect(command.args).toContain('assess');
     expect(command.args).toContain('--work-units=force');
     expect(command.args).toContain('--max-concurrency=1');
     expect(command.args).toContain('--review-model=claude-sonnet-4-6');
     expect(command.args).not.toContain('--verification-mode=VA_ONLY');
-    expect(() => planBenchmarkRuns(options({ workflowVersion: 'v2' }))).toThrow('review model');
+    expect(() => planBenchmarkRuns(options({ workflowVersion: 'v2', reviewModel: undefined }))).toThrow('review model');
     expect(() => planBenchmarkRuns(options({ workflowVersion: 'v2', reviewModel: 'sonnet' }))).toThrow('고정 model');
   });
   it('produces stable randomized paired order without dropping or duplicating arms', () => {
@@ -97,7 +98,7 @@ describe('offsec benchmark runner', () => {
       target: '/opaque/source',
       engagementDir: '/opaque/output',
     });
-    expect(command.args).toContain('--work-units=off');
+    expect(command.args).toContain('--work-units=force');
     expect(command.args).toContain('--max-concurrency=1');
   });
 

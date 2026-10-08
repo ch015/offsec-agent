@@ -10,7 +10,7 @@ import { assertProviderCapabilities, ProviderRuntimeFailure } from '../providers
 import type { LedgerRow, SessionOutcome, SessionSpec } from '../session.js';
 
 describe('domain adapter registry', () => {
-  it('adapts the OffSec v1 contract to the common envelope', () => {
+  it('adapts the current OffSec contract to the common envelope', () => {
     const adapter = getDomainAdapter('offsec');
     expect(adapter.contract.id).toBe('nunchi.offsec.assessment');
     expect(adapter.contract.phases.every((phase) => phase.controller === 'host')).toBe(true);
@@ -31,7 +31,7 @@ describe('Anthropic provider adapter', () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-'));
     writeFileSync(join(target, 'source.ts'), 'export {};');
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runner = async (_spec: SessionSpec): Promise<SessionOutcome> => ({
       texts: ['ok'],
       ledger: [],
@@ -63,7 +63,7 @@ describe('Anthropic provider adapter', () => {
   it('normalizes compact boundary metadata and preserves it on provider failures', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-compact-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const compact: LedgerRow = {
       at: new Date(0).toISOString(),
       event: 'compact_boundary',
@@ -119,7 +119,7 @@ describe('Anthropic provider adapter', () => {
   it('rejects a provider model receipt that does not match the requested model', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-model-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: [], ledger: [], totalCostUsd: 0.1,
       modelUsage: { 'actual-reviewer-model': { inputTokens: 1 } },
@@ -145,7 +145,7 @@ describe('Anthropic provider adapter', () => {
   it('rejects model names that only contain the requested family as a substring', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-model-lookalike-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: [], ledger: [], totalCostUsd: 0.1,
       modelUsage: { 'not-sonnet-compatible': { inputTokens: 1 } },
@@ -171,7 +171,7 @@ describe('Anthropic provider adapter', () => {
   it('accepts a concrete Claude model receipt for a requested family alias', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-model-family-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: [], ledger: [], totalCostUsd: 0.1,
       modelUsage: { 'claude-sonnet-4-5-20250929': { inputTokens: 1 } },
@@ -201,7 +201,7 @@ describe('Anthropic provider adapter', () => {
   it('does not append another date to an already dated requested model id', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-model-double-date-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: [], ledger: [], totalCostUsd: 0.1,
       modelUsage: { 'claude-sonnet-4-5-20250929-20260101': { inputTokens: 1 } },
@@ -227,7 +227,7 @@ describe('Anthropic provider adapter', () => {
   it('marks Anthropic stream failures as accounting-incomplete usage failures', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-failure-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => {
       throw new Error('stream reset');
     });
@@ -261,7 +261,7 @@ describe('Anthropic provider adapter', () => {
   it('preserves SDK terminal errors as accounting-complete provider failures', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-terminal-failure-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: ['Unable to satisfy the requested schema.'],
       ledger: [],
@@ -304,7 +304,7 @@ describe('Anthropic provider adapter', () => {
   it('rejects a successful SDK result that omits required structured output', async () => {
     const target = mkdtempSync(join(tmpdir(), 'nunchi-provider-missing-structured-'));
     const adapter = getDomainAdapter('offsec');
-    const phase = adapter.getPhase('va');
+    const phase = adapter.getPhase('analyze');
     const runtime = new AnthropicAgentRuntime(async () => ({
       texts: ['analysis complete'],
       ledger: [],

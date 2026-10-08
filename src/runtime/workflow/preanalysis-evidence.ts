@@ -11,6 +11,9 @@ export type PreanalysisEvidence = {
   dataFlows: Evidence[];
   semgrepFindings: Evidence[];
   parseFailures: Evidence[];
+  parseWarnings: Evidence[];
+  semgrepDiagnostics: Evidence[];
+  semgrepFileCoverage: Evidence[];
   unsupportedFiles: string[];
   skippedFiles: string[];
   parsedFiles: string[];
@@ -18,7 +21,7 @@ export type PreanalysisEvidence = {
 
 /** Treat parser output as evidence, never as instructions or proof of a finding. */
 export function loadPreanalysisEvidence(path: string, target: string, sourceFiles: readonly string[]): PreanalysisEvidence {
-  const result: PreanalysisEvidence = { available: false, limitations: [], entryPoints: [], taintPaths: [], dataFlows: [], semgrepFindings: [], parseFailures: [], unsupportedFiles: [], skippedFiles: [], parsedFiles: [] };
+  const result: PreanalysisEvidence = { available: false, limitations: [], entryPoints: [], taintPaths: [], dataFlows: [], semgrepFindings: [], parseFailures: [], parseWarnings: [], semgrepDiagnostics: [], semgrepFileCoverage: [], unsupportedFiles: [], skippedFiles: [], parsedFiles: [] };
   target = realpathSync(target);
   const canonical = (file: string) => { try { return realpathSync(resolve(target, file)); } catch { return resolve(target, file); } };
   const allowed = new Set(sourceFiles.map(file => relative(target, canonical(file)).split('\\').join('/')));
@@ -56,6 +59,9 @@ export function loadPreanalysisEvidence(path: string, target: string, sourceFile
     result.dataFlows = records(raw.data_flows);
     result.semgrepFindings = records(raw.semgrep_findings);
     result.parseFailures = records(raw.parse_failures);
+    result.parseWarnings = records(raw.parse_warnings);
+    result.semgrepDiagnostics = records(raw.semgrep_diagnostics);
+    result.semgrepFileCoverage = records(raw.semgrep_file_coverage);
     const scope = raw.scope as Record<string, unknown> | undefined;
     const paths = (value: unknown): string[] => Array.isArray(value) ? value.flatMap(file => {
       try { return typeof file === 'string' ? [normalizeFile(file)] : []; } catch { discarded++; return []; }
@@ -67,6 +73,13 @@ export function loadPreanalysisEvidence(path: string, target: string, sourceFile
     const stats = raw.stats as Record<string, unknown> | undefined;
     if (stats?.truncated) result.limitations.push('Static analysis reached a cap; absent candidates do not imply safety.');
     if (stats?.semgrep_status !== 'complete') result.limitations.push(`Semgrep coverage: ${String(stats?.semgrep_status ?? 'unknown')}.`);
+    if (result.parseFailures.length) result.limitations.push(`AST parser failed for ${result.parseFailures.length} files; direct source analysis remains required.`);
+    if (result.parseWarnings.length) result.limitations.push(`AST syntax warnings affect ${result.parseWarnings.length} files; parser trees are partial evidence.`);
+    if (result.unsupportedFiles.length) result.limitations.push(`AST has no grammar for ${result.unsupportedFiles.length} files; these remain in the source analysis scope.`);
+    if (result.semgrepDiagnostics.length) result.limitations.push(`Semgrep reported ${result.semgrepDiagnostics.length} parser/tool diagnostics; no-match is not a clean result for those files.`);
+    const withoutRules = result.semgrepFileCoverage.filter(file => file.status === 'no-applicable-rule').length;
+    if (withoutRules) result.limitations.push(`Semgrep has no applicable pinned rules for ${withoutRules} files; direct source analysis remains required.`);
+    if (stats?.semgrep_status === 'complete' && !Array.isArray(raw.semgrep_file_coverage)) result.limitations.push('Semgrep did not provide per-file coverage; tool success does not establish full-file scanning.');
     if (discarded) result.limitations.push(`${discarded} malformed or out-of-scope evidence records were omitted.`);
     result.available = true;
   } catch {
@@ -93,6 +106,9 @@ export function writeUnitEvidence(dir: string, files: readonly string[], evidenc
     dataFlows: evidence.dataFlows.filter(item => touches(item, owned)),
     semgrepFindings: evidence.semgrepFindings.filter(item => touches(item, owned)),
     parseFailures: evidence.parseFailures.filter(item => touches(item, owned)),
+    parseWarnings: evidence.parseWarnings.filter(item => touches(item, owned)),
+    semgrepDiagnostics: evidence.semgrepDiagnostics.filter(item => touches(item, owned)),
+    semgrepFileCoverage: evidence.semgrepFileCoverage.filter(item => touches(item, owned)),
     unsupportedFiles: evidence.unsupportedFiles.filter(file => owned.has(file)),
     skippedFiles: evidence.skippedFiles.filter(file => owned.has(file)),
     parsedFiles: evidence.parsedFiles.filter(file => owned.has(file)),

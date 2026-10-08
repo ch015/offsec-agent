@@ -129,10 +129,12 @@ export function verifyRunArtifactRef(artifact: ArtifactRef, runRoot: string): vo
   const root = resolve(runRoot);
   const artifactDir = dirname(resolve(artifact.path));
   const revision = relative(join(root, 'revisions'), artifactDir);
+  const evaluationRevision = relative(join(root, 'evaluation-revisions'), artifactDir);
   const workUnit = relative(join(root, 'work-units'), artifactDir);
   if (
     artifactDir !== root &&
-    !/^r\d{4}$/.test(revision) &&
+    !/^(?:r\d{4}|0|[1-9]\d*)(?:[\\/]work-units[\\/]unit-[a-f0-9]{16}(?:[\\/]attempt-[1-9]\d*)?)?$/.test(revision) &&
+    !/^[1-9]\d*(?:[\\/](?:\.recovery|published))?$/.test(evaluationRevision) &&
     !/^unit-[a-f0-9]{16}(?:[\\/]attempt-[1-9]\d*)?$/.test(workUnit)
   ) {
     throw new Error(`artifact ref가 run의 봉인 디렉터리 밖을 가리킨다: ${artifact.path}`);

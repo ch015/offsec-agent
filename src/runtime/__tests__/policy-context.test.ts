@@ -127,6 +127,7 @@ describe('host tool policy', () => {
     expect(authorizeToolCall(policy, { tool: 'Read', input: { file_path: source } }).decision).toBe('allow');
     expect(authorizeToolCall(policy, { tool: 'Read', input: { file_path: secret } }).decision).toBe('deny');
     expect(authorizeToolCall(policy, { tool: 'Grep', input: { path: policy.targetDir, pattern: 'secret' } }).decision).toBe('deny');
+    expect(authorizeToolCall(policy, { tool: 'Grep', input: { path: policy.targetDir, pattern: 'secret' } }).reason).toContain('file-scoped Grep');
     expect(authorizeToolCall(policy, { tool: 'Grep', input: { pattern: 'secret' } }).decision).toBe('deny');
     expect(authorizeToolCall(policy, { tool: 'Grep', input: { path: source, pattern: 'design' } }).decision).toBe('allow');
   });

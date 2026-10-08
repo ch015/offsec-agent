@@ -253,7 +253,7 @@ describe('WorkflowHost integrity and recovery', () => {
     const eventTypes = readFileSync(join(run.engagementDir, 'run-events.jsonl'), 'utf8')
       .trim().split('\n').map((line) => JSON.parse(line) as { type: string });
     expect(eventTypes.map((event) => event.type)).toEqual([
-      'run.created', 'phase.started', 'phase.context-compacted',
+      'run.created', 'phase.started', 'usage.reconciled', 'phase.context-compacted',
       'attempt.received', 'phase.failed',
     ]);
   });

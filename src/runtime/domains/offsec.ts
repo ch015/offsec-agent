@@ -1,3 +1,8 @@
+import { FollowupAnswersSchema, validateFollowupAnswers, reviewRequests, type ReviewRequest } from '../planning/review-coordinator.js';
+import { ANALYSIS_ASSESSMENTS, readAnalysisAssessments, validateAnalysisAssessments, validateAssessmentDelivery, assessmentContextFiles, assessmentFindingIds, type AssessmentTask } from '../planning/analysis-assessments.js';
+import { ScannerPlanSchema, readScannerPlan, validateScannerPlan } from '../planning/scanner-contract.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   buildPhasePrompt,
   buildOffsecAgentDefinitions,
@@ -12,9 +17,10 @@ import {
   type OffsecPhase,
   type PhaseResult,
 } from '../offsec-contract.js';
-import { countStandardFindings, readStandardFindings } from '../finding-contract.js';
-import { validateObjectionCount } from '../objection-contract.js';
-import { validateV2Evaluation, validateV2ReviewSourceReads } from '../v2-evaluation.js';
+import { countStandardFindings } from '../finding-contract.js';
+import { validateOffsecClassificationSyntax, validateV2Evaluation, validateV2EvaluationArtifact, validateV2ReviewSourceReads } from '../v2-evaluation.js';
+import { prepareReviewPatch } from '../review-artifact-patch.js';
+import { canonicalV2Findings } from '../v2-review-resolution.js';
 import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
 import { getWorkflowPhase, parseWorkflowContract, type WorkflowContract } from '../contracts/workflow-contract.js';
 import { resolveKnowledgeFiles as resolveKnowledgeFilesForPhase } from '../knowledge/loader.js';
@@ -29,9 +35,8 @@ const REQUIRED_CAPABILITIES = [
 ] as const;
 
 export function createOffsecWorkflowContract(contract = loadOffsecContract()): WorkflowContract {
-  const isV2 = contract.version.startsWith('2.');
-  const resultSchemaId = isV2 ? 'nunchi.offsec.phase-result.v2' : 'nunchi.offsec.phase-result.v1';
-  const workerPhases = isV2 ? ['analyze'] : ['va', 'verify'];
+  const resultSchemaId = 'nunchi.offsec.phase-result.v2';
+  const workerPhases = ['analyze'];
   const hostPhaseIds = new Set(contract.phases.filter((p) => p.role === 'host').map((p) => p.id));
   return parseWorkflowContract({
     id: contract.id,
@@ -137,7 +142,12 @@ export class OffsecDomainAdapter
     round?: string;
     inputs?: Record<string, unknown>;
   }): string {
-    return buildPhasePrompt({ ...input, contract: this.legacyContract });
+    // Delivery receipts are host validation data. Keep them out of model
+    // context; the model needs the reusable IDs and pending work, not hashes
+    // and hundreds of historic tool events.
+    const reuse = input.inputs?.reviewReuse as { ids: string[]; events: unknown[] } | undefined;
+    return buildPhasePrompt({ ...input, ...(reuse ? { inputs: { ...input.inputs,
+      reviewReuse: { ids: reuse.ids, verifiedSourceObservations: reuse.events.length } } } : {}), contract: this.legacyContract });
   }
 
   validateResult(input: {
@@ -156,8 +166,14 @@ export class OffsecDomainAdapter
     round?: string;
     target?: string;
     events?: readonly ProviderRuntimeEvent[];
+    taskData?: Record<string, unknown>;
   }): void {
-    const isV2 = this.legacyContract.version.startsWith('2.');
+    if (input.phase.id === 'recon') {
+      const inventory = JSON.parse(readFileSync(join(input.engagementDir, 'source_manifest.json'), 'utf8'));
+      const graph = JSON.parse(readFileSync(join(input.engagementDir, '00_inventory_graph.json'), 'utf8'));
+      readScannerPlan(input.engagementDir, inventory.source_files.filter((file: string) => !(inventory.source_errors ?? []).some((error: { path: string }) => error.path === file)), graph);
+      return;
+    }
     const accepted = countStandardFindings(
       input.engagementDir,
       input.phase.id,
@@ -169,45 +185,59 @@ export class OffsecDomainAdapter
       input.result.metrics.findingCount = accepted;
     }
 
-    if (isV2) {
-      if (input.phase.id === 'review' && input.target) validateV2ReviewSourceReads(input.engagementDir, input.target, input.events ?? []);
-      if (input.phase.id === 'evaluate') validateV2Evaluation(input.engagementDir);
-      return;
+    if (input.phase.id === 'analyze' && input.target && input.taskData?.taskRequest) {
+      const request = input.taskData.taskRequest as AssessmentTask;
+      const assessments = readAnalysisAssessments({ directory: input.engagementDir, target: input.target, files: request.ownedSources.map(file => file.path),
+        ranges: request.ownedSources, flows: request.flowResponsibilities, flowIds: request.flowResponsibilities.map(flow => flow.id),
+        securityObligations:request.securityObligations,contextFiles:request.contextRanges.map(r=>r.path) });
+      validateAssessmentDelivery(request, assessments, input.target, input.events ?? []);
     }
+    if (input.phase.id === 'analyze' && input.target && input.taskData?.reviewRequests) validateFollowupAnswers(input.engagementDir, input.target, input.taskData.reviewRequests as ReviewRequest[]);
+    if (input.phase.id === 'review' && input.target) {
+      if (input.taskData?.independentCounting === true && JSON.parse(readFileSync(join(input.engagementDir, '03_review_result.json'), 'utf8')).countingSchemaVersion !== 1) {
+        throw new Error('Review requires countingSchemaVersion: 1 and explicit vulnerability/observation counting assessments before completion.');
+      }
+      validateV2ReviewSourceReads(input.engagementDir, input.target, input.events ?? [], input.taskData?.reviewReuse as Parameters<typeof validateV2ReviewSourceReads>[3]);
+      const path = join(input.engagementDir, 'source_manifest.json');
+      if (existsSync(path)) reviewRequests(input.engagementDir, JSON.parse(readFileSync(path, 'utf8')).source_files,
+        [...canonicalV2Findings(input.engagementDir).keys()], (input.taskData?.flowIds ?? []) as string[], new Set());
+    }
+    if (input.phase.id === 'evaluate') validateV2Evaluation(input.engagementDir);
+  }
 
-    // v1: verifier/objection 로직 (기존 유지)
-    if (input.phase.role === 'verifier') {
-      if (input.phase.id === 'verify' || input.phase.id === 'verify-feedback') {
-        // seal 시스템 제거 — autonomous artifact 존재/봉인 검증 불필요
+  validateArtifactWrite(input: { phase: OffsecPhase; engagementDir: string; target: string; name: string; content: string; taskData?: Record<string, unknown>; events?: readonly ProviderRuntimeEvent[] }): void | { content: string; additionalContext?: string } {
+    if (input.phase.id === 'recon' && input.name === '00_scanner_plan.json') {
+      const plan = ScannerPlanSchema.parse(JSON.parse(input.content));
+      const manifestPath = join(input.engagementDir, 'source_manifest.json'), graphPath = join(input.engagementDir, '00_inventory_graph.json');
+      if (existsSync(manifestPath)) {
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        const unreadable = new Set((manifest.source_errors ?? []).map((issue: { path: string }) => issue.path));
+        validateScannerPlan(plan, manifest.source_files.filter((path: string) => !unreadable.has(path)), existsSync(graphPath) ? JSON.parse(readFileSync(graphPath, 'utf8')) : undefined);
       }
-      const hostObjectionCount = validateObjectionCount({
-        engagementDir: input.engagementDir,
-        phase: input.phase.id,
-        round: input.round,
-        artifactNames: input.result.artifacts,
-        declaredCount: input.result.metrics.objectionCount ?? 0,
-      });
-      input.result.metrics.objectionCount = hostObjectionCount;
-      if (input.phase.id.startsWith('pentest-verify') && hostObjectionCount === 0) {
-        const findings = readStandardFindings(input.engagementDir);
-        const expected = new Set(findings.filter(
-          (finding) =>
-            (finding.phase === 'pentest' || finding.phase === 'pentest-feedback') &&
-            finding.verdict === 'supported' && finding.reachability === 'confirmed',
-        ).map((finding) => finding.id));
-        const reviewed = findings.filter(
-          (finding) =>
-            finding.phase === input.phase.id &&
-            finding.round === (input.round ?? null) &&
-            finding.verdict === 'supported',
-        );
-        const reviewedIds = new Set(reviewed.map((finding) => finding.id));
-        if (expected.size !== reviewedIds.size || [...expected].some((id) => !reviewedIds.has(id))) {
-          throw new Error('pentest 독립 검증이 모든 live-confirmed Finding을 재확인하지 않았다');
-        }
-      }
-    } else if (input.result.metrics.objectionCount !== undefined && input.result.metrics.objectionCount !== 0) {
-      input.result.metrics.objectionCount = 0;
+    }
+    if (input.phase.id === 'analyze' && input.name === ANALYSIS_ASSESSMENTS && input.taskData?.taskRequest) {
+      const request = input.taskData.taskRequest as AssessmentTask;
+      const assessments = validateAnalysisAssessments({ value: JSON.parse(input.content), target: input.target,
+        files: request.ownedSources.map(file => file.path), ranges: request.ownedSources,
+        flows: request.flowResponsibilities, flowIds: request.flowResponsibilities.map(flow => flow.id),
+        securityObligations:request.securityObligations,contextFiles:[...request.contextRanges.map(r=>r.path),...assessmentContextFiles(input.engagementDir,input.target)],findingIds:assessmentFindingIds(input.engagementDir) });
+      validateAssessmentDelivery(request, assessments, input.target, input.events ?? []);
+    }
+    if (input.name === '02_followup_answers.json') FollowupAnswersSchema.parse(JSON.parse(input.content));
+    if (input.name.endsWith('classification.yaml')) validateOffsecClassificationSyntax(input.content);
+    if (input.phase.id === 'review' && input.name === '03_review_result.json') {
+      const patch = prepareReviewPatch({ engagementDir: input.engagementDir, target: input.target, content: input.content,
+        requireIndependentCounting: input.taskData?.independentCounting === true,
+        events: input.events ?? [], reuse: input.taskData?.reviewReuse as Parameters<typeof validateV2ReviewSourceReads>[3] });
+      if (patch) return patch;
+      const proposedReview = JSON.parse(input.content);
+      if (input.taskData?.independentCounting === true) proposedReview.countingSchemaVersion = 1;
+      validateV2ReviewSourceReads(input.engagementDir, input.target, input.events ?? [],
+        input.taskData?.reviewReuse as Parameters<typeof validateV2ReviewSourceReads>[3], proposedReview);
+      if (input.taskData?.independentCounting === true) return { content: JSON.stringify(proposedReview, null, 2) + '\n' };
+    }
+    if (input.phase.id === 'evaluate') {
+      validateV2EvaluationArtifact(input.engagementDir, input.name, input.content, input.target);
     }
   }
 
@@ -232,74 +262,15 @@ export class OffsecDomainAdapter
     to: string,
     state: PhaseTransitionState,
   ): TransitionDecision {
+    if (!this.contract.phases.some(phase => phase.id === to)) return { allowed: false, reason: `Unsupported phase: ${to}` };
     // Budget exhaustion — universal guard
     if (state.maxBudgetUsd !== undefined && state.totalCostUsd >= state.maxBudgetUsd) {
       return { allowed: false, reason: `예산 소진: ${state.totalCostUsd.toFixed(2)} >= ${state.maxBudgetUsd.toFixed(2)} USD` };
     }
 
-    const isV2 = this.legacyContract.version.startsWith('2.');
 
-    if (isV2) {
-      // v2: 선형 파이프라인. DAG 선행 조건은 engine이 assertWorkflowPrerequisites로 검사.
-      // 도메인 가드는 evaluate가 review 완료 후에만 가능한지 확인.
-      if (to === 'evaluate' && !state.completedPhases.has('review')) {
-        return { allowed: false, reason: 'evaluate는 review 완료 후에만 전이할 수 있다' };
-      }
-      if (to === 'report' && !state.completedPhases.has('evaluate')) {
-        return { allowed: false, reason: 'report는 evaluate 완료 후에만 전이할 수 있다' };
-      }
-      return { allowed: true };
-    }
-
-    // v1: Feedback iteration cap
-    const FEEDBACK_PHASES = ['va-feedback', 'verify-feedback', 'pentest-feedback', 'pentest-verify-feedback'] as const;
-    const maxIterations = this.legacyContract.limits.maxFeedbackIterations ?? 2;
-    if (FEEDBACK_PHASES.includes(to as typeof FEEDBACK_PHASES[number])) {
-      const completedFeedbackRounds = state.completedAttemptsByPhase[to] ?? 0;
-      if (completedFeedbackRounds >= maxIterations) {
-        return { allowed: false, reason: `${to} 반복 상한 초과: ${completedFeedbackRounds} >= ${maxIterations}` };
-      }
-    }
-
-    if (to === 'converge' && !state.completedPhases.has('verify')) {
-      return { allowed: false, reason: 'converge는 verify 완료 후에만 전이할 수 있다' };
-    }
-
+    if (to === 'evaluate' && !state.completedPhases.has('review')) return { allowed: false, reason: 'evaluate는 review 완료 후에만 전이할 수 있다' };
+    if (to === 'report' && !state.completedPhases.has('evaluate')) return { allowed: false, reason: 'report는 evaluate 완료 후에만 전이할 수 있다' };
     return { allowed: true };
-  }
-}
-
-export function assertOffsecConvergenceReady(
-  executions: ReadonlyArray<{ phase: string; result: PhaseResult }>,
-  verificationMode: 'VA_ONLY' | 'VA_PENTEST' | 'VA_PENTEST_REDTEAM',
-): void {
-  const latestVerifier = [...executions]
-    .reverse()
-    .find((execution) => execution.phase === 'verify' || execution.phase === 'verify-feedback');
-  if (!latestVerifier) throw new Error('converge 전에 verifier 결과가 없다');
-  // A fix: objection 미해결이어도 converge 진행 허용 — converge가 DISPUTED/PENDING으로 분류
-  const lastFeedback = executions.findLastIndex((execution) => execution.phase === 'va-feedback');
-  const lastVerifier = executions.findLastIndex(
-    (execution) => execution.phase === 'verify' || execution.phase === 'verify-feedback',
-  );
-  if (lastFeedback > lastVerifier) throw new Error('최신 feedback 뒤 verifier 재검증이 없다');
-  if (verificationMode.includes('PENTEST') && !executions.some((execution) => execution.phase === 'pentest')) {
-    throw new Error('configured pentest phase가 완료되지 않았다');
-  }
-  if (verificationMode.includes('PENTEST')) {
-    const lastPentestFeedback = executions.findLastIndex(
-      (execution) => execution.phase === 'pentest-feedback',
-    );
-    const lastPentestVerifier = executions.findLastIndex(
-      (execution) => execution.phase === 'pentest-verify' || execution.phase === 'pentest-verify-feedback',
-    );
-    if (lastPentestVerifier < 0) throw new Error('configured pentest 독립 검증이 완료되지 않았다');
-    if (lastPentestFeedback > lastPentestVerifier) {
-      throw new Error('최신 pentest feedback 뒤 독립 재검증이 없다');
-    }
-    // A fix: pentest objection 미해결이어도 converge 진행 허용
-  }
-  if (verificationMode.includes('REDTEAM') && !executions.some((execution) => execution.phase === 'redteam')) {
-    throw new Error('configured redteam phase가 완료되지 않았다');
   }
 }

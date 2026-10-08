@@ -74,7 +74,18 @@ export interface DomainAdapter<TLegacyContract = unknown, TLegacyPhase = unknown
     round?: string;
     target?: string;
     events?: readonly ProviderRuntimeEvent[];
+    taskData?: Record<string, unknown>;
   }): void;
+  /** Validate proposed artifact content before Write; errors are tool-local repair feedback. */
+  validateArtifactWrite?(input: {
+    phase: TLegacyPhase;
+    engagementDir: string;
+    target: string;
+    name: string;
+    content: string;
+    taskData?: Record<string, unknown>;
+    events?: readonly ProviderRuntimeEvent[];
+  }): void | { content: string; additionalContext?: string };
   renderArtifacts(phase: TLegacyPhase, round?: string): { required: string[]; optional: string[] };
   /** Artifact names materialized by the host after validating structured output. */
   hostOwnedArtifacts?(phase: TLegacyPhase, round?: string): readonly string[];

@@ -10,7 +10,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { createPostgresPool } from '../workflow/database.js';
 import { InMemoryArtifactStore } from '../workflow/artifact-store.js';
-import { createMissionRuntime } from '../workflow/mission-runtime.js';
+import { createMissionRuntime, openMissionRuntime } from '../workflow/mission-runtime.js';
+import { reopenEvaluation } from '../missions/evaluation-recovery.js';
 import { PostgresOutboxStore } from '../workflow/postgres-outbox-store.js';
 import { PostgresRunLeaseBackend } from '../workflow/run-lease.js';
 import { PostgresRunStateStore } from '../workflow/postgres-run-state-store.js';
@@ -43,7 +44,7 @@ suite('PostgresRunStateStore', () => {
       backend: 'postgres', pool: database, artifactStore: artifacts, workerId: 'itest-mission', sharedEngagementRoot: '/tmp',
     });
     try {
-      await increaseResumeBudget(runtime, { maxBudgetUsd: 1000000 }, null);
+      await increaseResumeBudget(runtime, { costPolicy: 'enforce', maxBudgetUsd: 1000000 }, null);
       expect((await database.query('SELECT max_budget_usd FROM nunchi_runs WHERE run_id = $1', [runId])).rows[0]?.max_budget_usd).toBe('1000000');
       await increaseResumeBudget(runtime, { noCostGuard: true }, null);
       expect((await runtime.read()).maxBudgetUsd).toBeUndefined();
@@ -96,13 +97,20 @@ suite('PostgresRunStateStore', () => {
     const agent = createOffsecAgent({ sessionRunner: async spec => { calls++; return syntheticOutcome(spec); },
       runtime: { backend: 'postgres', pool: pool!, artifactStore: new InMemoryArtifactStore(), sharedEngagementRoot: root } });
     try {
-      const result = await agent.run({ target, engagementDir, engagementId: runId, maxBudgetUsd: 10, maxConcurrency: 2, semgrepMode: 'off' });
-      expect(result.status).toBe('published'); expect(calls).toBe(5);
+      const result = await agent.run({ target, engagementDir, engagementId: runId, costPolicy: 'enforce', maxBudgetUsd: 10, maxConcurrency: 2, semgrepMode: 'off' });
+      expect(result.status).toBe('published'); expect(calls).toBe(6);
       const snapshot = await new PostgresRunStateStore(pool!, runId).read();
-      expect(Object.values(snapshot.budgetReservations ?? {})).toHaveLength(5);
-      expect(committedBudget(snapshot)).toBeCloseTo(0.05);
+      expect(Object.values(snapshot.budgetReservations ?? {})).toHaveLength(6);
+      expect(committedBudget(snapshot)).toBeCloseTo(0.06);
       unlinkSync(join(engagementDir, '00_analysis_coverage.json')); calls = 0;
       expect((await agent.resume(engagementDir)).status).toBe('published'); expect(calls).toBe(0);
+      const recovery = await openMissionRuntime({ engagementDir, runId }, { backend: 'postgres', pool: pool!, artifactStore: new InMemoryArtifactStore(), sharedEngagementRoot: root });
+      try {
+        await reopenEvaluation(recovery, engagementDir, 'Integration: correct evaluation while retaining reviewed evidence');
+        expect((await recovery.read()).evaluationRevisions).toHaveLength(1);
+      } finally { await recovery.close(); }
+      expect((await agent.resume(engagementDir)).status).toBe('published'); expect(calls).toBe(2);
+      expect((await new PostgresRunStateStore(pool!, runId).read()).totalCostUsd).toBeCloseTo(0.08);
     } finally {
       await pool!.query('DELETE FROM nunchi_outbox WHERE id LIKE $1', [`${runId}:%`]);
       await pool!.query('DELETE FROM nunchi_artifact_receipts WHERE uri LIKE $1', [`artifact://runs/${createHash('sha256').update(runId).digest('hex').slice(0, 32)}/%`]);

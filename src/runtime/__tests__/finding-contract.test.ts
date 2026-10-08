@@ -8,7 +8,6 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertPentestRuntimeEvidenceIntact,
   assertStandardFindingsRepresented,
   countStandardFindings,
   readStandardFindings,
@@ -99,172 +98,11 @@ describe('standard Finding contract', () => {
     })).toThrow(/owned source/);
   });
 
-  it('requires an untampered same-scenario host receipt for live-confirmed pentest findings', async () => {
-    const { target, engagementDir, source } = fixture();
-    const planPath = join(engagementDir, '05_pentest_plan.json');
-    writeFileSync(planPath, `${JSON.stringify({
-      schemaVersion: '1.0.0',
-      scenarios: [{
-        scenarioId: 'SC-1', path: 'health', method: 'GET', safety: 'ready', preconditions: [],
-        successCriteria: '200', failureCriteria: 'non-200',
-      }, {
-        scenarioId: 'SC-2', path: 'health?control=1', method: 'GET', safety: 'ready', preconditions: [],
-        successCriteria: '200', failureCriteria: 'non-200',
-      }],
-    })}\n`);
-    const planSha256 = createHash('sha256').update(readFileSync(planPath)).digest('hex');
-    const broker = createLiveTestBroker({
-      engagementDir,
-      allowedBaseUrl: 'https://test.example/app/',
-      planPath,
-      planSha256,
-      fetchImpl: async () => new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } }),
-    });
-    const receipt = await broker.probe({ scenarioId: 'SC-1' });
-    const controlReceipt = await broker.probe({ scenarioId: 'SC-2' });
-    const base = {
-      ...supportedFinding(source),
-      evidenceClass: 'runtime' as const,
-      runtimeEvidence: {
-        scenarioId: 'SC-1', receiptId: receipt.receiptId,
-        relatedReceiptIds: [controlReceipt.receiptId],
-        oracle: 'The primary and negative-control requests reach the expected handler.',
-        reproducibility: 'differential' as const,
-        observedImpact: 'The safe probe reached the expected handler.', inferredImpact: 'No state change tested.',
-      },
-    };
-    expect(() => submitStandardFinding({
-      target, engagementDir, phase: 'pentest', role: 'pentester', finding: base,
-    })).not.toThrow();
-    expect(assertPentestRuntimeEvidenceIntact(engagementDir, planSha256)).toBe(1);
-    expect(() => assertPentestRuntimeEvidenceIntact(engagementDir, '0'.repeat(64)))
-      .toThrow(/plan binding/);
-    expect(() => submitStandardFinding({
-      target,
-      engagementDir,
-      phase: 'pentest',
-      role: 'pentester',
-      finding: {
-        ...base,
-        title: 'Duplicate primary receipt',
-        runtimeEvidence: { ...base.runtimeEvidence, relatedReceiptIds: [receipt.receiptId] },
-      },
-    })).toThrow(/primary receipt/);
-    expect(() => submitStandardFinding({
-      target,
-      engagementDir: mkdtempSync(join(tmpdir(), 'nunchi-foreign-receipt-')),
-      phase: 'pentest',
-      role: 'pentester',
-      finding: { ...base, title: 'Foreign receipt' },
-    })).toThrow(/receipt/);
-  });
 
-  it('rejects confirmed pentester findings outside live execution phases', () => {
-    const { target, engagementDir, source } = fixture();
-    expect(() => submitStandardFinding({
-      target,
-      engagementDir,
-      phase: 'pentest-discovery',
-      role: 'pentester',
-      finding: supportedFinding(source),
-    })).toThrow(/live 실행 단계 밖/);
 
-    submitStandardFinding({
-      target,
-      engagementDir,
-      phase: 'va',
-      role: 'va-auditor',
-      finding: supportedFinding(source),
-    });
-    const recordsDir = join(engagementDir, 'standard-findings');
-    const recordPath = join(recordsDir, readdirSync(recordsDir)[0]!);
-    const record = JSON.parse(readFileSync(recordPath, 'utf8')) as Record<string, unknown>;
-    writeFileSync(recordPath, `${JSON.stringify({ ...record, phase: 'pentest-plan', role: 'pentester' })}\n`);
-    expect(() => assertPentestRuntimeEvidenceIntact(engagementDir, '0'.repeat(64)))
-      .toThrow(/live 실행 단계 밖/);
-  });
 
-  it('rejects live-confirmed publication when required cleanup failed', async () => {
-    const { target, engagementDir, source } = fixture();
-    const profile: LiveTestProfile = {
-      schemaVersion: '1.0.0',
-      environment: 'test',
-      authorization: {
-        nonProduction: true,
-        approvedBy: 'security-owner',
-        approvedAt: '2026-08-05T00:00:00.000Z',
-      },
-      targetBaseUrl: 'https://test.example/app/',
-      actors: [{ actorId: 'anonymous', role: 'anonymous', authKind: 'none' }],
-      policy: {
-        allowedMethods: ['POST', 'DELETE'],
-        maximumRiskClass: 'reversible-state-change',
-        allowedRequestHeaders: ['content-type'],
-        maxRequests: 2,
-        maxResponseBytes: 4096,
-        timeoutMs: 5000,
-        maxStateChanges: 1,
-        maxDurationMs: 60_000,
-      },
-    };
-    const profileSha256 = '6'.repeat(64);
-    const planSha256 = '7'.repeat(64);
-    const selection = sealAuthInteractionSelection({
-      engagementDir,
-      runId: 'run-failed-cleanup',
-      mode: 'remote-handoff',
-      profileSha256,
-    });
-    const journal = new LiveScenarioJournal({ engagementDir, profile, profileSha256 });
-    const scenario: LiveScenario = {
-      schemaVersion: '2.0.0',
-      scenarioId: 'SC-FAILED-CLEANUP',
-      actorId: 'anonymous',
-      sourceAnchors: [{ path: 'app.ts', lineStart: 2, lineEnd: 2 }],
-      standardIds: ['WSTG-BUSL-09'],
-      request: { method: 'POST', path: 'items/test-owned' },
-      riskClass: 'reversible-state-change',
-      preconditions: ['test-owned item'],
-      oracle: { kind: 'state', description: 'The item is created.' },
-      negativeControl: { required: true, description: 'A safe item remains unchanged.' },
-      cleanupRequired: true,
-      cleanup: {
-        request: { method: 'DELETE', path: 'items/test-owned' },
-        oracle: 'The item is absent.',
-      },
-      safety: 'ready',
-    };
-    expect(journal.propose(scenario, 'reversible state test').decision).toBe('approved');
-    const receipt = await createAdaptiveLiveTestBroker({
-      engagementDir,
-      profile,
-      profileSha256,
-      planSha256,
-      selection,
-      journal,
-      fetchImpl: async (_url, init) => new Response(
-        init?.method === 'DELETE' ? 'cleanup failed' : 'created',
-        { status: init?.method === 'DELETE' ? 500 : 201 },
-      ),
-    }).exchange({ scenarioId: scenario.scenarioId });
-    expect(receipt.cleanup.status).toBe('failed');
-    expect(() => submitStandardFinding({
-      target,
-      engagementDir,
-      phase: 'pentest',
-      role: 'pentester',
-      finding: {
-        ...supportedFinding(source),
-        evidenceClass: 'runtime',
-        runtimeEvidence: {
-          scenarioId: scenario.scenarioId,
-          receiptId: receipt.receiptId,
-          observedImpact: 'The state change request completed.',
-          inferredImpact: 'Impact is withheld because cleanup failed.',
-        },
-      },
-    })).toThrow(/cleanup/);
-  });
+
+
 
   it('rejects symlink evidence that escapes the assessment target', () => {
     const { target, engagementDir } = fixture();

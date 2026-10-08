@@ -11,13 +11,18 @@ import { FileRunStateStore } from '../workflow/state-store.js';
 import { InMemoryArtifactStore } from '../workflow/artifact-store.js';
 import { ResilientArtifactStore } from '../workflow/resilient-artifacts.js';
 import { committedBudget, recoverLegacyBudget } from '../missions/assessment-budget.js';
-import * as workExecutor from '../workflow/bounded-work-executor.js';
 import { legacyCompletedCoverage } from '../missions/analysis-checkpoint.js';
-import { createMissionRuntime } from '../workflow/mission-runtime.js';
+import { createMissionRuntime, openMissionRuntime } from '../workflow/mission-runtime.js';
+import { reopenEvaluation } from '../missions/evaluation-recovery.js';
 import { PostgresRunStateStore } from '../workflow/postgres-run-state-store.js';
 import { InMemoryRunLeaseBackend } from '../workflow/run-lease.js';
 import { syntheticOutcome } from './resumption-fixture.js';
+import { readStandardFindingRecordReceipts, submitStandardFinding } from '../finding-contract.js';
+import { loadOffsecContract } from '../offsec-contract.js';
 const require = createRequire(import.meta.url);
+// These cases fsync and archive multiple full runs. Keep provider deadlines in
+// the individual tests, independently of Vitest's wall-clock test deadline.
+vi.setConfig({ testTimeout: 20_000 });
 const roots: string[] = [];
 function fixture(packages: string[] = []) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'offsec-resumption-'))); roots.push(root);
@@ -33,7 +38,7 @@ function crash(input: OffsecRunInput, mode: 'followup' | 'first-call') {
   const file = join(dirname(input.engagementDir!), 'crash.mts');
   const api = pathToFileURL(resolve(import.meta.dirname, '../../index.ts')).href;
   const helper = pathToFileURL(resolve(import.meta.dirname, 'resumption-fixture.ts')).href;
-  writeFileSync(file, `import {createOffsecAgent} from ${JSON.stringify(api)};\nimport {syntheticOutcome} from ${JSON.stringify(helper)};\nawait createOffsecAgent({sessionRunner: async spec => { if (${JSON.stringify(mode)} === 'first-call' || spec.phaseRound === 'cross-unit-followup') process.exit(86); return syntheticOutcome(spec, {handoff:true}); }}).run(${JSON.stringify(input)});`);
+  writeFileSync(file, `import {createOffsecAgent} from ${JSON.stringify(api)};\nimport {syntheticOutcome} from ${JSON.stringify(helper)};\nawait createOffsecAgent({sessionRunner: async spec => { if ((${JSON.stringify(mode)} === 'first-call' && spec.workUnit) || spec.phaseRound === 'cross-unit-followup') process.exit(86); return syntheticOutcome(spec, {handoff:true, ...(spec.phase === 'recon' ? {cost:0} : {})}); }}).run(${JSON.stringify(input)});`);
   const result = spawnSync(process.execPath, ['--import', require.resolve('tsx'), file], { encoding: 'utf8', timeout: 30000 });
   expect(result.status, result.stderr).toBe(86);
 }
@@ -41,17 +46,16 @@ afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) rmSy
 
 describe('assessment crash and resumption boundaries', () => {
   it('restores spent budget before allocating parallel retries', async () => {
-    const input = { ...fixture(['a', 'b']), maxBudgetUsd: 10, maxConcurrency: 2 };
+    const input = { ...fixture(['a', 'b']), costPolicy: 'enforce' as const, maxBudgetUsd: 10, maxConcurrency: 2 };
     let initialCalls = 0;
-    const first = await createOffsecAgent({ sessionRunner: async spec => syntheticOutcome(spec, { subtype: 'error_max_turns', cost: ++initialCalls <= 2 ? 3.4 : 0 }) }).run(input);
+    const first = await createOffsecAgent({ scheduler: { controlIntervalMs: 1 }, sessionRunner: async spec => syntheticOutcome(spec, spec.phase === 'recon' ? { cost: 0 } : { subtype: 'error_max_turns', cost: ++initialCalls <= 2 ? 3.4 : 0 }) }).run(input);
     expect(first.status).toBe('incomplete');
     expect(FileRunStateStore.open(input.engagementDir).read().totalCostUsd).toBeCloseTo(6.8);
-    const allocations: number[] = []; let release!: () => void;
-    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const allocations: number[] = [];
     const resumed = await createOffsecAgent({ sessionRunner: async spec => {
-      if (spec.workUnit) { allocations.push(spec.maxBudgetUsd!); if (allocations.length === 2) release(); await barrier; }
+      if (spec.workUnit) allocations.push(spec.maxBudgetUsd!);
       return syntheticOutcome(spec, { cost: spec.workUnit ? spec.maxBudgetUsd! : 0 });
-    } }).resume(input.engagementDir);
+    } }).resume(input.engagementDir, { costPolicy: 'enforce' });
     expect(allocations).toHaveLength(2);
     expect(allocations.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(3.2);
     expect(resumed.status).toBe('published');
@@ -71,13 +75,13 @@ describe('assessment crash and resumption boundaries', () => {
   }, 40000);
 
   it('retains unknown spend across repeated resumes after a provider process exits', async () => {
-    const input = { ...fixture(), maxBudgetUsd: 10, maxConcurrency: 1 }; crash(input, 'first-call');
+    const input = { ...fixture(), costPolicy: 'enforce' as const, maxBudgetUsd: 10, maxConcurrency: 1 }; crash(input, 'first-call');
     const before = FileRunStateStore.open(input.engagementDir).read();
     expect(committedBudget(before)).toBe(7);
     let calls = 0;
     const agent = createOffsecAgent({ sessionRunner: async spec => { calls++; return syntheticOutcome(spec); } });
     for (let retry = 0; retry < 2; retry++) {
-      const result = await agent.resume(input.engagementDir);
+      const result = await agent.resume(input.engagementDir, { costPolicy: 'enforce' });
       expect(result.status).toBe('incomplete'); expect(existsSync(result.finalReport)).toBe(true);
       expect(committedBudget(FileRunStateStore.open(input.engagementDir).read())).toBe(7);
     }
@@ -85,10 +89,10 @@ describe('assessment crash and resumption boundaries', () => {
   }, 40000);
 
   it.each([
-    { label: 'increased', options: { maxBudgetUsd: 20 }, expected: 20 },
+    { label: 'increased', options: { costPolicy: 'enforce' as const, maxBudgetUsd: 20 }, expected: 20 },
     { label: 'unlimited', options: { noCostGuard: true }, expected: undefined },
   ])('persists an explicitly $label budget across repeated resumes without changing sealed input', async ({ options, expected }) => {
-    const input = { ...fixture(), maxBudgetUsd: 10, maxConcurrency: 1 }; crash(input, 'first-call');
+    const input = { ...fixture(), costPolicy: 'enforce' as const, maxBudgetUsd: 10, maxConcurrency: 1 }; crash(input, 'first-call');
     const checkpoint = readFileSync(join(input.engagementDir, 'assess-v2-checkpoint-input.json'));
     const before = FileRunStateStore.open(input.engagementDir).read();
     let failReview = true; const calls: string[] = [], allocations: Array<number | undefined> = [];
@@ -109,7 +113,7 @@ describe('assessment crash and resumption boundaries', () => {
     if (expected === undefined) expect(allocations.every(value => value === undefined)).toBe(true);
     else expect(allocations[0]).toBeCloseTo(7); // 20 limit - 7 uncertain spend - 6 future reserve.
     failReview = false; calls.length = 0;
-    expect((await agent.resume(input.engagementDir)).status).toBe('published');
+    expect((await agent.resume(input.engagementDir, { costPolicy: expected === undefined ? 'record-only' : 'enforce' })).status).toBe('published');
     expect(calls).toEqual(['review', 'evaluate', 'report']);
     expect(FileRunStateStore.open(input.engagementDir).read().maxBudgetUsd).toBe(expected);
   }, 40000);
@@ -119,12 +123,28 @@ describe('assessment crash and resumption boundaries', () => {
     const result = await createOffsecAgent({ defaults, sessionRunner: async spec => {
       allocations.push(spec.maxBudgetUsd); return syntheticOutcome(spec, { cost: 100 });
     } }).run(input);
-    expect(result.status).toBe('published'); expect(allocations).toEqual([undefined, undefined, undefined, undefined]);
+    expect(result.status).toBe('published'); expect(allocations).toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(FileRunStateStore.open(input.engagementDir).read().maxBudgetUsd).toBeUndefined();
   });
 
+  it('removes a saved cap by default on resume while preserving prior accounting and sealed inputs', async () => {
+    const input = { ...fixture(), costPolicy: 'enforce' as const, maxBudgetUsd: 10, maxConcurrency: 1 };
+    crash(input, 'first-call');
+    const before = FileRunStateStore.open(input.engagementDir).read();
+    const checkpoint = readFileSync(join(input.engagementDir, 'assess-v2-checkpoint-input.json'));
+    const allocations: Array<number | undefined> = [];
+    const result = await createOffsecAgent({ sessionRunner: async spec => {
+      allocations.push(spec.maxBudgetUsd); return syntheticOutcome(spec, { cost: 100 });
+    } }).resume(input.engagementDir);
+    expect(result.status).toBe('published'); expect(allocations).toEqual([undefined, undefined, undefined, undefined]);
+    const after = FileRunStateStore.open(input.engagementDir).read();
+    expect(after.maxBudgetUsd).toBeUndefined(); expect(after.totalCostUsd).toBe(400);
+    expect(after.budgetReservations).toEqual(before.budgetReservations);
+    expect(readFileSync(join(input.engagementDir, 'assess-v2-checkpoint-input.json'))).toEqual(checkpoint);
+  }, 40_000);
+
   it('honors budget removal when creation stopped before the run ledger existed', async () => {
-    const input = { ...fixture(), maxBudgetUsd: 1 };
+    const input = { ...fixture(), costPolicy: 'enforce' as const, maxBudgetUsd: 1 };
     const creation = vi.spyOn(FileRunStateStore, 'create').mockImplementationOnce(() => { throw Object.assign(new Error('synthetic create failure'), { code: 'EIO' }); });
     const allocations: Array<number | undefined> = [];
     const agent = createOffsecAgent({ sessionRunner: async spec => { allocations.push(spec.maxBudgetUsd); return syntheticOutcome(spec, { cost: 100 }); } });
@@ -132,13 +152,13 @@ describe('assessment crash and resumption boundaries', () => {
     expect(existsSync(join(input.engagementDir, 'run-events.jsonl'))).toBe(false);
     creation.mockRestore();
     expect((await agent.resume(input.engagementDir, { noCostGuard: true })).status).toBe('published');
-    expect(allocations).toEqual([undefined, undefined, undefined, undefined]);
+    expect(allocations).toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(FileRunStateStore.open(input.engagementDir).read().maxBudgetUsd).toBeUndefined();
   });
 
   it('preserves a partial report after invalid root output and resumes only the unfinished phases', async () => {
     const input = fixture(); let invalid = true; const calls: string[] = [];
-    const agent = createOffsecAgent({ sessionRunner: async spec => {
+    const agent = createOffsecAgent({ scheduler: { retryBaseMs: 1 }, sessionRunner: async spec => {
       calls.push(spec.phase!); const outcome = syntheticOutcome(spec);
       if (invalid && spec.phase === 'review') outcome.structuredOutput = { malformed: true };
       return outcome;
@@ -151,33 +171,117 @@ describe('assessment crash and resumption boundaries', () => {
     expect(calls).toEqual(['review', 'evaluate', 'report']);
   });
 
+  it('refreshes correction IDs and exact read paths for each reviewer retry', async () => {
+    const input = fixture(); let reviews = 0, correctionId = '';
+    const seen: string[] = [];
+    const result = await createOffsecAgent({ scheduler: { retryBaseMs: 1 }, sessionRunner: async spec => {
+      const outcome = syntheticOutcome(spec);
+      if (spec.phase !== 'review') return outcome;
+      reviews++;
+      if (reviews === 1) {
+        correctionId = submitStandardFinding({ target: spec.target, engagementDir: spec.engagementDir,
+          phase: 'review', role: 'reviewer', contract: loadOffsecContract(spec.contractPath), finding: {
+            title: 'Retained reviewer correction fixture', verdict: 'abstain', severity: 'LOW', evidenceClass: 'configuration', reachability: 'unconfirmed',
+            preconditions: ['Synthetic source fixture'], severityRationale: 'Unresolved fixture observation', confidence: 0.5,
+            impact: 'Unresolved fixture impact', remediation: 'Verify production use', standards: [], unresolved: ['No production evidence'],
+            evidence: [{ path: 'app.ts', lineStart: 1, lineEnd: 1, quote: 'export const app = 1;' }],
+          } }).id;
+      } else {
+        const receipt = readStandardFindingRecordReceipts(spec.engagementDir).find(receipt => receipt.findingId === correctionId)!;
+        const path = join(spec.engagementDir, 'standard-findings', receipt.recordName);
+        expect(spec.allowedReadFiles).toContain(path);
+        expect(spec.taskData?.findingRecords).toContainEqual(expect.objectContaining({ findingId: correctionId, path }));
+        seen.push(correctionId);
+      }
+      outcome.structuredOutput = { malformed: true }; return outcome;
+    } }).run(input);
+    expect(result.status).toBe('incomplete'); expect(reviews).toBe(3); expect(seen).toEqual([correctionId, correctionId]);
+  });
+
+  it('restores sealed evaluation inputs and exact read access when only the reporter resumes', async () => {
+    const input = fixture(); let failReport = true; const calls: string[] = [];
+    const agent = createOffsecAgent({ scheduler: { retryBaseMs: 1 }, sessionRunner: async spec => {
+      calls.push(spec.phase!);
+      if (spec.phase === 'report') {
+        const projection = spec.taskData?.evaluationProjection as { path: string; classificationPath: string };
+        expect(projection).toBeDefined();
+        expect(spec.allowedReadFiles).toContain(projection.path);
+        expect(spec.allowedReadFiles).toContain(projection.classificationPath);
+      }
+      const outcome = syntheticOutcome(spec);
+      if (failReport && spec.phase === 'report') outcome.structuredOutput = { malformed: true };
+      return outcome;
+    } });
+    expect((await agent.run(input)).status).toBe('incomplete');
+    const names = ['03_evaluation_input.json', '04_evaluation_classification.yaml', '.recovery/evaluation-projection.json'];
+    const original = names.map(name => readFileSync(join(input.engagementDir, name)));
+    calls.length = 0; failReport = false;
+    expect((await agent.resume(input.engagementDir)).status).toBe('published');
+    expect(calls).toEqual(['report']);
+    names.forEach((name, index) => expect(readFileSync(join(input.engagementDir, name))).toEqual(original[index]));
+  });
+
+  it('archives an incorrect evaluation and reruns only evaluation/report while preserving the finalized review and cost', async () => {
+    const input = fixture(), calls: string[] = [];
+    const agent = createOffsecAgent({ sessionRunner: async spec => { calls.push(spec.phase!); return syntheticOutcome(spec); } });
+    expect((await agent.run(input)).status).toBe('published');
+    const state = FileRunStateStore.open(input.engagementDir).read();
+    const review = readFileSync(join(input.engagementDir, '03_review_result.json'));
+    const evaluation = readFileSync(join(input.engagementDir, '04_evaluation.json'));
+    const runtime = await openMissionRuntime({ engagementDir: input.engagementDir, runId: state.runId });
+    try {
+      await reopenEvaluation(runtime, input.engagementDir, 'Acceptance found a stale tool statistic');
+      const reopened = await runtime.read();
+      expect(reopened.analysisRevision).toBe(state.analysisRevision);
+      expect(reopened.totalCostUsd).toBe(state.totalCostUsd);
+      expect(reopened.completedPhases).toContain('review');
+      expect(reopened.completedPhases).not.toContain('evaluate');
+      expect(reopened.publication).toBeUndefined();
+      expect(readFileSync(join(input.engagementDir, 'evaluation-revisions/1/04_evaluation.json'))).toEqual(evaluation);
+      expect(readFileSync(join(input.engagementDir, '03_review_result.json'))).toEqual(review);
+    } finally { await runtime.close(); }
+    calls.length = 0;
+    expect((await agent.resume(input.engagementDir)).status).toBe('published');
+    expect(calls).toEqual(['evaluate', 'report']);
+    expect(FileRunStateStore.open(input.engagementDir).read().totalCostUsd).toBeCloseTo(state.totalCostUsd + 0.02);
+  });
+
   it('restores sealed coverage instead of trusting changed, absent or torn projections', async () => {
     const input = fixture(); let calls = 0;
     const agent = createOffsecAgent({ astBuilder: async () => ({ ok: false, semgrep: { status: 'unavailable' } }),
       sessionRunner: async spec => { calls++; return syntheticOutcome(spec); } });
-    const first = await agent.run({ ...input, semgrepMode: 'required' });
-    expect(first.status).toBe('incomplete');
-    expect(readFileSync(first.finalReport, 'utf8')).toContain('분석 범위 미완료');
+    const first = await agent.run(input);
+    expect(first.status).toBe('published');
+    expect(readFileSync(first.finalReport, 'utf8')).not.toContain('분석 범위 미완료');
     expect(readFileSync(join(input.engagementDir, '07_security_report.draft.md'), 'utf8')).not.toContain('분석 범위 미완료');
     const path = join(input.engagementDir, '00_analysis_coverage.json'); const original = readFileSync(path, 'utf8');
     for (const damage of ['modified', 'missing', 'torn']) {
       if (damage === 'missing') unlinkSync(path);
-      else writeFileSync(path, damage === 'torn' ? '{' : JSON.stringify({ ...JSON.parse(original), complete: true, requiredPreanalysisComplete: true }));
+      else writeFileSync(path, damage === 'torn' ? '{' : JSON.stringify({ ...JSON.parse(original), complete: false, requiredPreanalysisComplete: false }));
       calls = 0; const result = await agent.resume(input.engagementDir);
-      expect(result.status).toBe('incomplete'); expect(result.coverage.complete).toBe(false);
+      expect(result.status).toBe('published'); expect(result.coverage.complete).toBe(true);
       expect(readFileSync(path, 'utf8')).toBe(original); expect(calls).toBe(0);
     }
   });
 
-  it('derives legacy completed coverage from verified execution rather than its mutable JSON', async () => {
+  it('does not infer completed coverage when a sealed checkpoint is missing', async () => {
     const input = fixture(), agent = createOffsecAgent({ sessionRunner: async spec => syntheticOutcome(spec) });
-    await agent.run(input);
+    const first = await agent.run(input);
     const path = join(input.engagementDir, 'run-events.jsonl');
     const events = readFileSync(path, 'utf8').trim().split('\n').map(line => JSON.parse(line)).filter(event => event.type !== 'analysis.checkpoint');
+    // Legacy publication had no host read-coverage appendix. Downgrade both its
+    // bytes and verified receipt, not just the checkpoint events.
+    const legacyReport = readFileSync(join(input.engagementDir, '07_security_report.draft.md'));
+    for (const final of new Set([first.finalReport, join(input.engagementDir, '07_security_report.md')])) writeFileSync(final, legacyReport);
+    const publication = events.find(event => event.type === 'publication.completed');
+    publication.artifact.bytes = legacyReport.byteLength;
+    publication.artifact.sha256 = createHash('sha256').update(legacyReport).digest('hex');
     writeFileSync(path, events.map((event, i) => JSON.stringify({ ...event, seq: i + 1 })).join('\n') + '\n');
     writeFileSync(join(input.engagementDir, '00_analysis_coverage.json'), '{');
     const neverCall = createOffsecAgent({ sessionRunner: async () => { throw new Error('unexpected model call'); } });
-    expect((await neverCall.resume(input.engagementDir)).status).toBe('published');
+    const resumed = await neverCall.resume(input.engagementDir);
+    expect(resumed.status).toBe('incomplete'); expect(resumed.coverage.complete).toBe(false);
+    expect(readFileSync(first.finalReport, 'utf8')).toBe(legacyReport.toString());
     const snapshot = FileRunStateStore.open(input.engagementDir).read();
     const units = JSON.parse(readFileSync(join(input.engagementDir, '00_work_plan.json'), 'utf8')).units;
     expect(legacyCompletedCoverage({ snapshot, units, sourceErrors: [], requiredPreanalysisComplete: false, preanalysisAvailable: false }).complete).toBe(false);
@@ -221,7 +325,7 @@ describe('assessment crash and resumption boundaries', () => {
   });
 
   it('serializes the shared PostgreSQL mission writer across phase and budget events', async () => {
-    const input = { ...fixture(['a', 'b']), maxBudgetUsd: 10 }; let active = 0, peak = 0;
+    const input = { ...fixture(['a', 'b']), costPolicy: 'enforce' as const, maxBudgetUsd: 10 }; let active = 0, peak = 0;
     vi.spyOn(PostgresRunStateStore, 'create').mockImplementation(async (_pool, identity) => {
       const local = FileRunStateStore.create({ ...identity, engagementDir: input.engagementDir });
       return { backend: 'postgres', read: async () => local.read(),
@@ -237,24 +341,27 @@ describe('assessment crash and resumption boundaries', () => {
     } }).run(input);
     expect(result.status).toBe('published'); expect(peak).toBe(1);
     const snapshot = FileRunStateStore.open(input.engagementDir).read();
-    expect(Object.values(snapshot.budgetReservations ?? {})).toHaveLength(5);
-    expect(committedBudget(snapshot)).toBeCloseTo(0.05);
+    expect(Object.values(snapshot.budgetReservations ?? {})).toHaveLength(6);
+    expect(committedBudget(snapshot)).toBeCloseTo(0.06);
   });
 
-  it('finishes independent work after a unit timeout and ignores the late provider completion', async () => {
-    const input = fixture(['a', 'b']), execute = workExecutor.executePagedWork;
-    vi.spyOn(workExecutor, 'executePagedWork').mockImplementation(options => execute({ ...options, unitTimeoutMs: 500 }));
-    let release!: () => void; const waiting = new Promise<void>(resolve => { release = resolve; });
-    const result = await createOffsecAgent({ sessionRunner: async spec => {
-      if (spec.workUnit?.ownedSourceFiles.some(file => file.endsWith('/a.ts'))) await waiting;
-      return syntheticOutcome(spec);
-    } }).run(input);
+  it('retains the slot through delayed cancellation and records late usage without accepting late success', async () => {
+    const input = fixture(['a', 'b']);
+    const result = await createOffsecAgent({ scheduler: { unitTimeoutMs: 1000, cancellationGraceMs: 2000, controlIntervalMs: 1 },
+      sessionRunner: async spec => {
+        if (spec.workUnit?.ownedSourceFiles.some(file => file.endsWith('/a.ts'))) await new Promise<void>(resolve => {
+          const signal = spec.abortController!.signal;
+          const settleLate = () => setTimeout(resolve, 100);
+          if (signal.aborted) settleLate();
+          else signal.addEventListener('abort', settleLate, { once: true });
+        });
+        return syntheticOutcome(spec);
+      } }).run(input);
+    expect(result.publicationStatus, JSON.stringify(result.storage.errors)).toBe('published');
     expect(result.status).toBe('incomplete'); expect(result.coverage.uncoveredFiles).toContain('packages/a/a.ts');
-    const before = FileRunStateStore.open(input.engagementDir).read(); expect(before.status).toBe('completed');
-    release(); await new Promise(resolve => setTimeout(resolve, 25));
-    const after = FileRunStateStore.open(input.engagementDir).read();
-    expect(after.lastSeq).toBe(before.lastSeq);
-    expect(Object.values(after.attempts).filter(attempt => attempt.phase === 'analyze' && attempt.status === 'completed')).toHaveLength(1);
+    const state = FileRunStateStore.open(input.engagementDir).read(); expect(state.status).toBe('incomplete');
+    expect(Object.values(state.attempts).filter(attempt => attempt.phase === 'analyze' && attempt.status === 'completed')).toHaveLength(1);
+    expect(state.totalCostUsd).toBeCloseTo(0.06);
   });
 
   it('schedules more than 128 units without truncating the inventory', async () => {
@@ -278,7 +385,7 @@ describe('assessment crash and resumption boundaries', () => {
     const result = await createOffsecAgent({ astBuilder: async () => ({ ok: false }), sessionRunner: async spec => {
       if (spec.workUnit) assigned.push(...spec.workUnit.ownedSourceFiles); return syntheticOutcome(spec);
     } }).run(input);
-    expect(result.status).toBe('incomplete'); expect(assigned).toEqual([join(input.target, 'app.ts')]);
+    expect(result.status).toBe('incomplete'); expect(assigned).toEqual([join(input.engagementDir, 'source-snapshot', 'app.ts')]);
     expect(result.coverage.uncoveredFiles).toContain('bad.ts');
     expect(readFileSync(result.finalReport, 'utf8')).toContain('bad.ts');
     expect(JSON.parse(readFileSync(join(input.engagementDir, 'source_manifest.json'), 'utf8')).source_files).toContain('bad.ts');

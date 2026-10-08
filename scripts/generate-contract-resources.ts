@@ -43,36 +43,6 @@ function updateContract(path: string, root: string, paths: readonly string[]): v
 }
 
 const offsecRoot = join(ROOT, 'domains', 'offsec');
-const offsecContractPath = join(offsecRoot, 'contracts', 'offsec-contract.v1.json');
-const offsec = readJson(offsecContractPath);
-const offsecSchemaPaths = [
-  offsec.schemaResources.phaseResultSchema,
-  offsec.schemaResources.findingSchema,
-  offsec.schemaResources.liveTestProfileSchema,
-] as string[];
-if (!check) {
-  writeJson(join(offsecRoot, offsecSchemaPaths[0]), offsec.phaseResultSchema);
-  writeJson(join(offsecRoot, offsecSchemaPaths[1]), offsec.findingSchema);
-}
-updateContract(
-  offsecContractPath,
-  offsecRoot,
-  [
-    ...Object.values(offsec.roles).flatMap((role: any) => [
-      role.agentFile,
-      ...role.skills.map((skill: string) => `skills/${skill.split(':').pop()}/SKILL.md`),
-    ]),
-    ...offsec.phases.flatMap((phase: any) => phase.requiredMethodFiles),
-    ...Object.values(offsec.methodologyResources ?? {}).flatMap((paths: any) => paths),
-    offsec.analysisResources.semgrepManifest,
-    ...offsec.analysisResources.semgrepRules,
-    ...offsecSchemaPaths,
-  ],
-);
-
-console.log(check ? 'contract resource manifests: in sync' : 'contract resource manifests: generated');
-
-// ── v2 계약 resource manifest ────────────────────────────────────
 const offsecV2Path = join(offsecRoot, 'contracts', 'offsec-contract.v2.json');
 if (existsSync(offsecV2Path)) {
   const v2 = readJson(offsecV2Path);
@@ -97,6 +67,7 @@ if (existsSync(offsecV2Path)) {
       ...Object.values(v2.methodologyResources ?? {}).flatMap((paths: any) => paths),
       v2.analysisResources.semgrepManifest,
       ...v2.analysisResources.semgrepRules,
+      ...['parser', 'context-builder', 'semgrep', 'call-graph', 'data-flow', 'taint'].map(name => `lib/ch015/ast/${name}.js`),
       ...v2SchemaPaths,
     ],
   );

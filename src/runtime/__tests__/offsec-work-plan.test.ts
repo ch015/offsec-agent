@@ -592,7 +592,7 @@ describe('bounded host work executor', () => {
       maxConcurrency: 1,
       maximumWorkUnits: 2,
       worker: async () => undefined,
-    })).rejects.toThrow(/중복/);
+    })).rejects.toThrow(/duplicate/);
     await expect(executeBoundedWork({
       units: [...units, { unitKey: 'unit-1111111111111111' }],
       maxConcurrency: 1,
@@ -601,7 +601,7 @@ describe('bounded host work executor', () => {
     })).rejects.toThrow(/상한/);
   });
 
-  it('retries rejected units once and sequentially after the bounded wave', async () => {
+  it('retries rejected units once through the same continuous queue', async () => {
     const units = Array.from({ length: 3 }, (_, index) => ({ unitKey: `unit-${String(index).padStart(16, '0')}` }));
     const attempts = new Map<string, number>();
     let retryActive = 0;
@@ -630,7 +630,8 @@ describe('bounded host work executor', () => {
     expect(attempts.get(units[0]!.unitKey)).toBe(1);
     expect(attempts.get(units[1]!.unitKey)).toBe(2);
     expect(attempts.get(units[2]!.unitKey)).toBe(2);
-    expect(maximumRetryActive).toBe(1);
+    expect(maximumRetryActive).toBeLessThanOrEqual(3);
+    expect(maximumRetryActive).toBeGreaterThan(1);
   });
 });
 

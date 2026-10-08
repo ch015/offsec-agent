@@ -13,8 +13,10 @@ for (const name of ['domains', 'templates']) {
   const from = join(root, name);
   if (existsSync(from)) cpSync(from, join(dist, name), { recursive: true, filter: file => {
     const parts = relative(root, file).split('/');
-    return !parts.some(p => ['node_modules', '.git', '__tests__', 'test', '.nunchi', '.recon-cache', 'engagements'].includes(p)
-      || /(^|\.)env($|\.)/.test(p) && !p.endsWith('.env.example'));
+    return !parts.some(p => ['node_modules', '.git', '__tests__', 'test', '.nunchi', '.ch015', '.recon-cache', 'engagements'].includes(p)
+      || /(^|\.)env($|\.)/.test(p) && !p.endsWith('.env.example'))
+      && !relative(root, file).replaceAll('\\', '/').includes('/harness/eval/reports')
+      && !/\.(?:log|jsonl)$/.test(file);
   } });
 }
 // Runtime migrations are resources; tsc only emits TypeScript dependencies.

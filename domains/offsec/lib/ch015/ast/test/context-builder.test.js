@@ -17,6 +17,22 @@ afterEach(() => {
 });
 
 describe('context-builder', () => {
+  it('T15 parses every one of 622 supported files and explicitly lists unsupported inputs', async () => {
+    const root = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ast-complete-scope-'));
+    try {
+      const files = Array.from({ length: 622 }, (_, i) => path.join(root, `source-${i}.js`));
+      for (const file of files) fs.writeFileSync(file, 'module.exports = 1;\n');
+      const unsupported = path.join(root, 'config.unknown'); fs.writeFileSync(unsupported, 'configuration');
+      const outputPath = path.join(root, 'result.yaml');
+      const result = await buildAstContext(root, { sourceFiles: [...files, unsupported], runSemgrep: false, outputPath, logger: () => {} });
+      assert.equal(result.ok, true);
+      const context = yaml.load(fs.readFileSync(outputPath, 'utf8'));
+      assert.equal(context.scope.parsed_files.length, 622);
+      assert.ok(context.scope.parsed_files.includes('source-621.js'));
+      assert.deepEqual(context.scope.skipped_files, []); assert.deepEqual(context.scope.unsupported_files, ['config.unknown']);
+      assert.equal(context.stats.truncation.files, false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
   describe('collectSourceFiles', () => {
     it('finds source files in fixture directory', () => {
       const { getSupportedExtensions } = require('../parser');

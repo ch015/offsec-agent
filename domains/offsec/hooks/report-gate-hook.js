@@ -119,6 +119,15 @@ function runGate({ filePath, env, content = '' }) {
   if (!isWithinDir(filePath, engagementDir)) {
     return { activated: false };
   }
+  // A host-managed draft is not a publication. The host verifies its sealed
+  // review/evaluation, empty-candidate policy and provenance before publishing.
+  // Only the exact declared draft is exempt here; final reports still run the gate.
+  if (env.AGENT_CONTRACT_ID === 'nunchi.offsec.assessment' && /^2\./.test(env.AGENT_CONTRACT_VERSION || '') &&
+      env.AGENT_PHASE === 'report' && env.AGENT_REPORT_DRAFT_ARTIFACT &&
+      path.basename(env.AGENT_REPORT_DRAFT_ARTIFACT) === env.AGENT_REPORT_DRAFT_ARTIFACT &&
+      path.resolve(filePath) === path.resolve(engagementDir, env.AGENT_REPORT_DRAFT_ARTIFACT)) {
+    return { activated: false, hostDraft: true };
+  }
   const strongFinal = FINAL_REPORT_RE.test(path.basename(filePath));
 
   const files = listFiles(engagementDir);

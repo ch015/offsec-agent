@@ -12,3 +12,9 @@
 
 산출물에는 채택, 기각, 미해결의 이유를 남긴다. 다수결, 역할 권위, 먼저 본 결과는
 수렴 근거가 아니다.
+
+분류 YAML의 `equivalence_review.groups[].decision`은 MERGE / SPLIT / KEEP만 허용한다.
+REJECT/FOLD는 이 필드의 값이 아니다. 기각은 후보 final_status와 반증으로,
+중복은 후보 FOLDED_INTO + folded_into와 그룹 MERGE로 기록한다.
+Write 검증이 형식 오류를 반환하면 해당 파일을 같은 세션에서 고쳐 다시 저장한다.
+중간 수렴의 DISPUTED나 미해결 사항을 발행 가능한 상태로 꾸미지 않는다.

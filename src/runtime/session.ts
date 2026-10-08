@@ -1,4 +1,7 @@
+import { managedProviderProcess } from './provider-process.js';
+import { observeSourceDelivery } from './source-delivery.js';
 import { ACTION_GUIDANCE } from './workflow/action-guidance.js';
+import { prepareReviewProgress, finishReviewProgress, type ReviewProgressContext, type ReviewReuse } from './review-progress.js';
 /**
  * 세션 조립 — 미션 요청을 SDK `query()` 호출로 번역하는 유일한 지점.
  *
@@ -13,7 +16,10 @@ import { ACTION_GUIDANCE } from './workflow/action-guidance.js';
  *   F4  벤더 트리는 CommonJS이고 `domains/<d>/package.json`이 그것을 국소화한다.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { atomicPrivateWrite } from './workflow/storage-files.js';
+import { SHARED_KNOWLEDGE_TOOLS } from './shared-knowledge.js';
 
 import {
   query,
@@ -26,6 +32,7 @@ import {
 import { createFindingMcpServer } from './finding-mcp-server.js';
 import {
   DOMAINS,
+  SessionExecutionError,
   type CompactBoundaryMetadata,
   type Domain,
   type LedgerRow,
@@ -136,7 +143,7 @@ function bindWorkUnitOutputFormat(
 /**
  * Options 조립. 순수 함수 — 격리 회귀를 단위테스트 하나로 잡기 위해 분리한다.
  */
-export function buildOptions(spec: SessionSpec): Options {
+export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow[] = []): Options {
   if (!isAbsolute(spec.target)) {
     throw new Error(`target 은 절대경로여야 한다: ${spec.target}`);
   }
@@ -164,7 +171,7 @@ export function buildOptions(spec: SessionSpec): Options {
 
   const pluginPath = domainPluginPath(spec.domain);
   // contractPath가 있으면 해당 계약(v2)을 로드해 adapter를 만들고, MCP finding server에도 전달한다.
-  // 없으면 registry 기본(v1) adapter를 사용한다.
+  // 없으면 단일 기본 계약 adapter를 사용한다.
   const loadedContract: OffsecContract | undefined =
     spec.domain === 'offsec' && spec.contractPath
       ? loadOffsecContract(spec.contractPath)
@@ -175,6 +182,9 @@ export function buildOptions(spec: SessionSpec): Options {
   const workflowContract = adapter.contract;
   if (!spec.phase) throw new Error(`${spec.domain}/${adapter.mission} 세션에는 contract phase가 필요하다`);
   const { workflow: workflowPhase, legacy: phase } = adapter.getPhase(spec.phase);
+  const reviewProgressContext: ReviewProgressContext | undefined = spec.domain === 'offsec' && spec.phase === 'review'
+    && spec.model && spec.attemptId ? { engagementDir: spec.engagementDir, target: spec.target, runId: spec.engagementId,
+      model: spec.model, revision: Number(spec.taskData?.reviewRevision ?? 0) } : undefined;
   const explicitAgents = adapter.buildAgentDefinitions();
   if (spec.domain !== 'offsec' && (!spec.allowedReadFiles || spec.allowedReadFiles.length === 0)) {
     throw new Error(`${spec.domain}/${adapter.mission} 세션에는 host exact read allow-list가 필요하다`);
@@ -219,46 +229,16 @@ export function buildOptions(spec: SessionSpec): Options {
   if (!roleContract) throw new Error(`세션 role 계약이 없다: ${workflowPhase.role}`);
   const sourceReadable =
     spec.domain !== 'offsec' ||
-    workflowPhase.role === 'va-auditor' ||
-    workflowPhase.role === 'verifier' ||
-    workflowPhase.role === 'pentester' ||
-    workflowPhase.role === 'redteam-reviewer' ||
+    workflowPhase.role === 'scanner' ||
     workflowPhase.role === 'analyzer' ||
     workflowPhase.role === 'reviewer';
-  const livePentestPhase = [
-    'pentest-discovery',
-    'pentest',
-    'pentest-feedback',
-  ].includes(workflowPhase.id);
   const exactReadScope = spec.readScope === 'exact';
   if (exactReadScope && (!spec.allowedReadFiles || spec.allowedReadFiles.length === 0)) {
     throw new Error(`${spec.domain}/${workflowPhase.id} exact read scope에는 file allow-list가 필요하다`);
   }
   const networkAllowedDomains = [...new Set(spec.networkAllowedDomains ?? [])];
-  if (spec.domain === 'offsec' && networkAllowedDomains.length > 0 && !livePentestPhase) {
-    throw new Error(`OffSec network allow-list는 pentest phase에서만 허용된다: ${workflowPhase.id}`);
-  }
-  if (spec.liveTestTarget) {
-    const liveUrl = new URL(spec.liveTestTarget);
-    if (
-      spec.domain !== 'offsec' ||
-      !livePentestPhase ||
-      !networkAllowedDomains.includes(liveUrl.hostname)
-    ) {
-      throw new Error('typed live test target은 승인된 OffSec pentest phase에만 허용된다');
-    }
-  }
-  if (
-    spec.domain === 'offsec' &&
-    livePentestPhase &&
-    (!spec.liveTestTarget || !spec.liveTestPlan || networkAllowedDomains.length === 0)
-  ) {
-    throw new Error('OffSec pentest phase에는 host live target과 sealed plan binding이 필요하다');
-  }
-  for (const domain of networkAllowedDomains) {
-    if (!domain || domain.includes('/') || domain.includes(':')) {
-      throw new Error(`network allow-list에는 hostname만 허용된다: ${domain}`);
-    }
+  if (networkAllowedDomains.length || spec.liveTestTarget || spec.liveTestPlan || spec.liveDastContext) {
+    throw new Error('Live testing and network options are unsupported by source assessment');
   }
   const disabledTools = new Set(spec.disabledTools ?? []);
   for (const tool of disabledTools) {
@@ -267,15 +247,8 @@ export function buildOptions(spec: SessionSpec): Options {
   const effectiveTools = roleContract.tools.filter(
     (tool) =>
       !disabledTools.has(tool) &&
-      !(
-        (tool === 'mcp__nunchi__propose_live_scenario' || tool === 'mcp__nunchi__execute_live_scenario') &&
-        !spec.liveDastContext
-      ) &&
-      !(
-        workflowPhase.role === 'pentester' &&
-        tool === 'Bash' &&
-        (!livePentestPhase || networkAllowedDomains.length === 0)
-      ),
+      !(SHARED_KNOWLEDGE_TOOLS.some(name => tool === `mcp__nunchi__${name}`) && !spec.sharedKnowledge) &&
+      !(tool === 'mcp__nunchi__publish_shared_observation' && spec.sharedKnowledge?.snapshotPath),
   );
   const methodologyFiles = adapter.resolveMethodologyFiles?.(phase) ?? [];
   const knowledgeFiles = adapter.resolveKnowledgeFiles?.(phase) ?? [];
@@ -309,10 +282,7 @@ export function buildOptions(spec: SessionSpec): Options {
   const observedLedger: LedgerRow[] = [];
   let pendingWorkUnitReminder = false;
   let pendingFindingReminder = false;
-  let contextBudgetWarned = false;
-  let readToolCount = 0;
-  const parsedWarnTools = parseInt(process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS ?? '12', 10);
-  const contextBudgetWarnTools = Number.isFinite(parsedWarnTools) && parsedWarnTools > 0 ? parsedWarnTools : 12;
+  let pendingReviewWrite: string | undefined;
   const workUnitReminder = spec.workUnit
     ? `Host-owned immutable work-unit identity for subsequent tool work: ${JSON.stringify({
         workUnitKey: spec.workUnit.unitKey,
@@ -371,15 +341,14 @@ export function buildOptions(spec: SessionSpec): Options {
       ? {
           mcpServers: {
             nunchi: createFindingMcpServer({
+              sharedKnowledge: spec.sharedKnowledge,
               target: spec.target,
               engagementDir: spec.engagementDir,
               phase: workflowPhase.id,
               role: agentRole,
               round: spec.phaseRound,
-              liveTestTarget: spec.liveTestTarget,
-              liveTestPlan: spec.liveTestPlan,
-              liveDastContext: spec.liveDastContext,
-              evidenceAllowedFiles: spec.workUnit?.ownedSourceFiles,
+              evidenceAllowedFiles: spec.workUnit?.findingSourceFiles ?? spec.workUnit?.ownedSourceFiles,
+              sourceReadFiles: spec.allowedReadFiles,
               ...(loadedContract ? { contract: loadedContract } : {}),
             }),
           },
@@ -418,6 +387,7 @@ export function buildOptions(spec: SessionSpec): Options {
     // 예외적으로 전달한다 — sandbox network strictAllowlist로 유출 경로를 통제한다.
     env: {
       ...safeParentEnv(),
+      CH015_COST_POLICY: spec.maxBudgetUsd === undefined ? 'record-only' : 'enforce',
       // P1: 인증 모드에 따라 API 키 전달 여부 결정
       // AUTH_MODE=oauth이면 API 키를 전달하지 않아 SDK가 OAuth 경로를 사용하도록 한다.
       // AUTH_MODE=api_key(기본)이면 API 키를 명시적으로 전달한다.
@@ -444,6 +414,7 @@ export function buildOptions(spec: SessionSpec): Options {
         : {}),
       AGENT_CONTRACT_ID: workflowContract.id,
       AGENT_CONTRACT_VERSION: workflowContract.version,
+      ...(spec.domain === 'offsec' && loadedContract ? { AGENT_REPORT_DRAFT_ARTIFACT: loadedContract.publication.draftArtifact } : {}),
     },
 
     hooks: {
@@ -465,18 +436,40 @@ export function buildOptions(spec: SessionSpec): Options {
                 decision = { decision: 'deny', reason: 'The work unit was cancelled or exceeded its execution limit.' };
               }
               const artifactPath = toolInput?.file_path;
-              if (['Read', 'Grep', 'Bash', 'Glob'].includes(tool)) readToolCount++;
-              let additionalContext: string | undefined;
+              let artifactContext: string | undefined;
+              const reviewWrite = spec.domain === 'offsec' && spec.phase === 'review' && tool === 'Write'
+                && typeof artifactPath === 'string' && basename(artifactPath) === '03_review_result.json';
+              if (decision.decision === 'allow' && tool === 'Write' && adapter.validateArtifactWrite && typeof artifactPath === 'string') {
+                try {
+                  if (reviewWrite && pendingReviewWrite !== undefined) throw new Error('A review Write is still in progress. Wait for its result, then retry this patch; send review Writes sequentially.');
+                  if (typeof toolInput?.content !== 'string') throw new Error('Write requires string content');
+                  const prepared = adapter.validateArtifactWrite({ phase, engagementDir: spec.engagementDir,
+                    target: spec.target, name: basename(artifactPath), content: toolInput.content,
+                    taskData: spec.taskData, events: sourceLedger });
+                  if (prepared) {
+                    decision = { ...decision, updatedInput: { ...(decision.updatedInput ?? toolInput), content: prepared.content } };
+                    artifactContext = prepared.additionalContext;
+                  }
+                  if (reviewWrite && 'tool_use_id' in input) {
+                    if (reviewProgressContext) prepareReviewProgress(reviewProgressContext, {
+                      attempt: spec.attemptId!, content: prepared?.content ?? toolInput.content,
+                      events: sourceLedger.map(row => ({ ...row, actor: row.agentType ?? workflowPhase.role })),
+                      reuse: spec.taskData?.reviewReuse as ReviewReuse | undefined,
+                    });
+                    pendingReviewWrite = String(input.tool_use_id);
+                  }
+                } catch (error) {
+                  decision = { decision: 'deny', reason: `Artifact validation failed; repair this Write in the current session: ${error instanceof Error ? error.message : String(error)}` };
+                }
+              }
+              let additionalContext: string | undefined = artifactContext;
               if (pendingFindingReminder) {
-                additionalContext = buildCompactionReminder(spec.engagementDir, observedLedger, workUnitReminder);
+                additionalContext = [additionalContext, buildCompactionReminder(spec.engagementDir, observedLedger, workUnitReminder)].filter(Boolean).join('\n');
                 pendingFindingReminder = false;
                 pendingWorkUnitReminder = false;
               } else if (pendingWorkUnitReminder) {
-                additionalContext = workUnitReminder;
+                additionalContext = [additionalContext, workUnitReminder].filter(Boolean).join('\n');
                 pendingWorkUnitReminder = false;
-              } else if (!contextBudgetWarned && readToolCount >= contextBudgetWarnTools) {
-                additionalContext = 'Host context budget warning: tool output volume approaching context window capacity. Submit any pending observations via submit_finding now before reading more files.';
-                contextBudgetWarned = true;
               }
               record(input, { decision: decision.decision, reason: decision.reason });
               if (
@@ -506,11 +499,22 @@ export function buildOptions(spec: SessionSpec): Options {
           hooks: [
             async (input) => {
               if (input.hook_event_name !== 'PostToolUse') return { continue: true };
+              if (String(input.tool_use_id) === pendingReviewWrite) {
+                if (reviewProgressContext) finishReviewProgress(reviewProgressContext, true);
+                pendingReviewWrite = undefined;
+              }
               return { continue: true };
             },
           ],
         },
       ],
+      PostToolUseFailure: [{ matcher: 'Write', hooks: [async input => {
+        if ('tool_use_id' in input && String(input.tool_use_id) === pendingReviewWrite) {
+          if (reviewProgressContext) finishReviewProgress(reviewProgressContext, false);
+          pendingReviewWrite = undefined;
+        }
+        return { continue: true };
+      }] }],
       // 위임 그래프 — 누가 언제 어떤 워커를 띄웠는지
       SubagentStart: [{ hooks: [async (i) => (record(i), { continue: true })] }],
       SubagentStop: [{ hooks: [async (i) => (record(i), { continue: true })] }],
@@ -519,8 +523,6 @@ export function buildOptions(spec: SessionSpec): Options {
           if (input.hook_event_name === 'PostCompact') {
             if (spec.workUnit) pendingWorkUnitReminder = true;
             pendingFindingReminder = true;
-            contextBudgetWarned = false;
-            readToolCount = 0;
           }
           return { continue: true };
         }],
@@ -540,6 +542,8 @@ export type SessionOutcome = {
   errors?: string[];
   numTurns?: number;
   totalCostUsd?: number;
+  /** False means some provider usage is unknown; totalCostUsd is only the known total. */
+  costAccountingComplete?: boolean;
   /** 모델별 토큰 회계 */
   modelUsage?: unknown;
   /** outputFormat JSON schema로 검증된 phase 결과 */
@@ -562,63 +566,123 @@ export async function runSession(spec: SessionSpec): Promise<SessionOutcome> {
   const options = buildOptions({
     ...spec,
     onLedger: emitLedger,
-  });
+  }, ledger);
+  options.includePartialMessages = true;
   mkdirSync(spec.engagementDir, { recursive: true, mode: 0o700 });
 
+  const processLifetime = managedProviderProcess(spec.engagementDir, spec.attemptId, options.stderr);
+  options.spawnClaudeCodeProcess = processLifetime.start;
   const q: Query = query({ prompt: spec.prompt, options });
+  const readCalls = new Map<string, { file: string; offset?: number; limit?: number }>();
+  // close() ends the local CLI and its transports; it does not prove remote billing stopped.
+  const closeQuery = () => q.close?.();
+  spec.abortController?.signal.addEventListener('abort', closeQuery, { once: true });
+  if (spec.abortController?.signal.aborted) closeQuery();
   const outcome: SessionOutcome = { texts: [], ledger };
+  let lastHeartbeat = 0;
+  const usageReceiptPath = join(spec.engagementDir, 'session-usage', `${randomUUID()}.json`);
 
-  for await (const message of q) {
-    if (message.type === 'system' && message.subtype === 'compact_boundary') {
-      const metadata: CompactBoundaryMetadata = {
-        trigger: message.compact_metadata.trigger,
-        preTokens: message.compact_metadata.pre_tokens,
-        ...(message.compact_metadata.post_tokens !== undefined
-          ? { postTokens: message.compact_metadata.post_tokens }
-          : {}),
-        ...(message.compact_metadata.duration_ms !== undefined
-          ? { durationMs: message.compact_metadata.duration_ms }
-          : {}),
-        boundaryId: message.uuid,
-      };
-      emitLedger({ at: new Date().toISOString(), event: 'compact_boundary', compaction: metadata });
-    }
-    if (message.type === 'system' && message.subtype === 'init') {
-      outcome.registeredAgents = await q.supportedAgents().catch(() => undefined);
-    }
-    if (message.type === 'assistant') {
-      // parent_tool_use_id 가 있으면 서브에이전트의 발화다 (forwardSubagentText).
-      const fromSubagent =
-        'parent_tool_use_id' in message && message.parent_tool_use_id !== null;
-      for (const block of message.message.content) {
-        if (block.type === 'text') {
-          if (fromSubagent) {
-            spec.onProgress?.({ kind: 'text', from: 'subagent', detail: block.text });
-          } else {
-            outcome.texts.push(block.text);
+  try {
+    for await (const message of q) {
+      // Report that bytes are arriving without logging reasoning, partial tool
+      // arguments or model text. Heartbeats are transient, not evidence/usage.
+      if (message.type === 'stream_event' && message.parent_tool_use_id === null && Date.now() - lastHeartbeat >= 5000) {
+        lastHeartbeat = Date.now(); spec.onProgress?.({ kind: 'heartbeat', from: 'provider', detail: '' });
+      }
+      if (message.type === 'system' && message.subtype === 'api_retry') {
+        const delay = Number.isFinite(message.retry_delay_ms) && message.retry_delay_ms >= 0 ? message.retry_delay_ms : 1000;
+        emitLedger({ at: new Date().toISOString(), event: [429, 503, 529].includes(message.error_status ?? 0) ? 'ProviderPressure' : 'ProviderRetry',
+          reason: `SDK API retry ${message.attempt}/${message.max_retries}; HTTP ${message.error_status ?? 'unknown'}`, retryAfterMs: delay });
+      }
+      if (message.type === 'rate_limit_event' && message.rate_limit_info.status === 'rejected') {
+        emitLedger({ at: new Date().toISOString(), event: 'ProviderPressure', reason: 'SDK subscription rate limit rejected a request', retryAfterMs: 1000 });
+      }
+      if (message.type === 'system' && message.subtype === 'compact_boundary') {
+        const metadata: CompactBoundaryMetadata = {
+          trigger: message.compact_metadata.trigger,
+          preTokens: message.compact_metadata.pre_tokens,
+          ...(message.compact_metadata.post_tokens !== undefined
+            ? { postTokens: message.compact_metadata.post_tokens }
+            : {}),
+          ...(message.compact_metadata.duration_ms !== undefined
+            ? { durationMs: message.compact_metadata.duration_ms }
+            : {}),
+          boundaryId: message.uuid,
+        };
+        emitLedger({ at: new Date().toISOString(), event: 'compact_boundary', compaction: metadata });
+      }
+      if (message.type === 'system' && message.subtype === 'init') {
+        outcome.registeredAgents = await q.supportedAgents().catch(() => undefined);
+      }
+      if (message.type === 'user' && message.parent_tool_use_id === null && Array.isArray(message.message.content)) {
+        for (const block of message.message.content) {
+          if (block.type !== 'tool_result') continue;
+          const call = readCalls.get(block.tool_use_id);
+          if (!call) continue;
+          readCalls.delete(block.tool_use_id);
+          const observed = observeSourceDelivery({ target: spec.target, ...call,
+            allowedFiles: spec.allowedReadFiles ?? [], toolCallId: block.tool_use_id,
+            content: block.content, isError: block.is_error });
+          if (observed) {
+            emitLedger({ at: new Date().toISOString(), event: 'SourceDelivery',
+              tool: 'Read', decision: 'allow', agentType: spec.agentRole, ...observed });
+            if (observed.delivery.status === 'error') emitLedger({ at: new Date().toISOString(), event: 'SourceReadFailed', tool: 'Read', resource: observed.resource, reason: observed.reason });
           }
-        } else if (block.type === 'tool_use') {
-          spec.onProgress?.({
-            kind: 'tool',
-            from: fromSubagent ? 'subagent' : 'main',
-            detail: block.name,
-          });
+        }
+      }
+      if (message.type === 'assistant') {
+        // parent_tool_use_id 가 있으면 서브에이전트의 발화다 (forwardSubagentText).
+        const fromSubagent =
+          'parent_tool_use_id' in message && message.parent_tool_use_id !== null;
+        for (const block of message.message.content) {
+          if (block.type === 'text') {
+            if (fromSubagent) {
+              spec.onProgress?.({ kind: 'text', from: 'subagent', detail: block.text });
+            } else {
+              outcome.texts.push(block.text);
+            }
+          } else if (block.type === 'tool_use') {
+            const args = block.input as Record<string, unknown> | null;
+            if (!fromSubagent && ['Read', 'mcp__nunchi__read_source'].includes(block.name) && typeof args?.file_path === 'string') {
+              readCalls.set(block.id, { file: args.file_path,
+                ...(typeof args.offset === 'number' ? { offset: args.offset } : {}),
+                ...(typeof args.limit === 'number' ? { limit: args.limit } : {}),
+              });
+            }
+            spec.onProgress?.({
+              kind: 'tool',
+              from: fromSubagent ? 'subagent' : 'main',
+              detail: block.name,
+            });
+          }
+        }
+      }
+      if (message.type === 'result') {
+        outcome.subtype = message.subtype;
+        outcome.terminalReason = message.terminal_reason;
+        outcome.numTurns = message.num_turns;
+        outcome.totalCostUsd = message.total_cost_usd;
+        if ('modelUsage' in message) outcome.modelUsage = message.modelUsage;
+        atomicPrivateWrite(usageReceiptPath, JSON.stringify({
+          runId: spec.engagementId, attemptId: spec.attemptId,
+          phase: spec.phase, round: spec.phaseRound, model: spec.model,
+          subtype: outcome.subtype, terminalReason: outcome.terminalReason,
+          turns: outcome.numTurns, costUsd: outcome.totalCostUsd, modelUsage: outcome.modelUsage,
+        }) + '\n');
+        if (message.subtype === 'success') outcome.resultText = message.result;
+        else outcome.errors = message.errors;
+        if ('structured_output' in message && message.structured_output !== undefined) {
+          outcome.structuredOutput = message.structured_output;
+          outcome.structuredOutputSource = 'sdk';
         }
       }
     }
-    if (message.type === 'result') {
-      outcome.subtype = message.subtype;
-      outcome.terminalReason = message.terminal_reason;
-      outcome.numTurns = message.num_turns;
-      outcome.totalCostUsd = message.total_cost_usd;
-      if ('modelUsage' in message) outcome.modelUsage = message.modelUsage;
-      if (message.subtype === 'success') outcome.resultText = message.result;
-      else outcome.errors = message.errors;
-      if ('structured_output' in message && message.structured_output !== undefined) {
-        outcome.structuredOutput = message.structured_output;
-        outcome.structuredOutputSource = 'sdk';
-      }
-    }
+  } catch (cause) {
+    throw new SessionExecutionError(outcome, cause);
+  } finally {
+    spec.abortController?.signal.removeEventListener('abort', closeQuery);
+    closeQuery();
+    await processLifetime.exited();
   }
 
   if (outcome.subtype === 'success' && outcome.structuredOutput === undefined) {

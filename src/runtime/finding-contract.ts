@@ -12,7 +12,6 @@ import { relative, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
 
-import { assertRuntimeEvidenceIntact } from './live-evidence-contract.js';
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
 
 type StandardEvidence = {
@@ -80,7 +79,7 @@ export type FindingContract = {
 
 /**
  * 계약별 finding schema/submit shape를 조립하는 팩토리.
- * v1은 runtimeEvidence를 포함하고 v2는 생략한다 — 스키마가 실제로 정의한 필드만 build한다.
+ * 스키마가 실제로 정의한 필드만 build한다. Historical evidence remains readable.
  */
 export function buildFindingContract(contract: OffsecContract): FindingContract {
   const contractFindingSchema = contract.findingSchema;
@@ -125,14 +124,13 @@ export function buildFindingContract(contract: OffsecContract): FindingContract 
   };
 }
 
-// 하위 호환 — 기본(v1) 계약으로 build한 module-global binding.
+// 기본 단일 계약으로 build한 module-global binding.
 const defaultFindingContract = buildFindingContract(loadOffsecContract());
 export const StandardFindingSchema = defaultFindingContract.StandardFindingSchema;
 export const SubmitFindingShape = defaultFindingContract.SubmitFindingShape;
 
 const FINDINGS_LEDGER = 'standard-findings.jsonl';
 const FINDINGS_RECORDS = 'standard-findings';
-const LIVE_PENTEST_PHASES = new Set(['pentest', 'pentest-feedback']);
 
 export type StandardFindingRecordReceipt = Readonly<{
   recordName: string;
@@ -157,7 +155,7 @@ function stableFindingId(path: string, lineStart: number, title: string): string
   return `F-${numeric.toString().padStart(12, '0')}`;
 }
 
-function validateEvidence(input: {
+export function validateEvidence(input: {
   evidence: StandardEvidence[];
   target: string;
   allowedFiles?: readonly string[];
@@ -198,7 +196,6 @@ export function submitStandardFinding(input: {
   contract?: OffsecContract;
 }): StandardFinding {
   const contract = input.contract ?? loadOffsecContract();
-  const isV2 = contract.version.startsWith('2.');
   const findingContract = input.contract
     ? buildFindingContract(input.contract)
     : defaultFindingContract;
@@ -233,26 +230,6 @@ export function submitStandardFinding(input: {
   }
   if (input.finding.confidence > 0.9 && input.finding.reachability !== 'confirmed') {
     throw new Error('0.9 초과 confidence에는 confirmed reachability가 필요하다');
-  }
-  if (
-    !isV2 &&
-    input.role === 'pentester' &&
-    input.finding.verdict === 'supported' &&
-    input.finding.reachability === 'confirmed'
-  ) {
-    if (!LIVE_PENTEST_PHASES.has(input.phase)) {
-      throw new Error('live 실행 단계 밖의 pentester는 confirmed finding을 제출할 수 없다');
-    }
-    if (input.finding.evidenceClass !== 'runtime' || !input.finding.runtimeEvidence) {
-      throw new Error('live-confirmed pentest finding에는 runtime evidence와 host receipt가 필요하다');
-    }
-    assertRuntimeEvidenceIntact({
-      engagementDir: input.engagementDir,
-      runtimeEvidence: input.finding.runtimeEvidence,
-    });
-    if (!input.finding.runtimeEvidence.observedImpact.trim()) {
-      throw new Error('live-confirmed pentest finding에는 observed impact가 필요하다');
-    }
   }
   const first = evidence[0];
   const finding = findingSchema.parse({
@@ -304,28 +281,6 @@ export function readStandardFindings(engagementDir: string): StandardFinding[] {
     unique.set(key, finding);
   }
   return [...unique.values()];
-}
-
-export function assertPentestRuntimeEvidenceIntact(
-  engagementDir: string,
-  planSha256: string,
-): number {
-  const findings = readStandardFindings(engagementDir).filter((finding) =>
-    finding.role === 'pentester' && finding.verdict === 'supported' && finding.reachability === 'confirmed');
-  for (const finding of findings) {
-    if (!LIVE_PENTEST_PHASES.has(finding.phase)) {
-      throw new Error(`live 실행 단계 밖의 pentester confirmed finding이 있다: ${finding.id}`);
-    }
-    if (finding.evidenceClass !== 'runtime' || !finding.runtimeEvidence) {
-      throw new Error(`live-confirmed pentest finding의 runtime evidence가 없다: ${finding.id}`);
-    }
-    assertRuntimeEvidenceIntact({
-      engagementDir,
-      runtimeEvidence: finding.runtimeEvidence,
-      planSha256,
-    });
-  }
-  return findings.length;
 }
 
 export function readStandardFindingRecordReceipts(
@@ -382,21 +337,15 @@ export function promoteStandardFindingRecords(input: {
 export function assertStandardFindingsRepresented(
   engagementDir: string,
   reportPath: string,
+  appendix = '',
 ): number {
-  const content = readFileSync(resolve(reportPath), 'utf8');
+  const content = readFileSync(resolve(reportPath), 'utf8') + appendix;
   const findings = readStandardFindings(engagementDir);
   for (const finding of findings) {
     if (!content.includes(finding.id)) {
       throw new Error(`최종 보고서가 표준 Finding을 소비하지 않았다: ${finding.id}`);
     }
-    if (finding.runtimeEvidence && !content.includes(finding.runtimeEvidence.receiptId)) {
-      throw new Error(`최종 보고서가 HTTP probe receipt를 인용하지 않았다: ${finding.id}`);
-    }
-    for (const receiptId of finding.runtimeEvidence?.relatedReceiptIds ?? []) {
-      if (!content.includes(receiptId)) {
-        throw new Error(`최종 보고서가 related HTTP receipt를 인용하지 않았다: ${finding.id}`);
-      }
-    }
+
   }
   return findings.length;
 }

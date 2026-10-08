@@ -80,11 +80,16 @@ const PlanningPolicySchema = z.object({
   estimatedCharsPerToken: z.number().int().positive(),
   maxContextEstimatedTokensPerUnit: z.number().int().positive(),
   maxContextFilesPerUnit: z.number().int().nonnegative(),
+  // Optional so existing sealed V2 plans retain their hash and resume unchanged.
+  maxOwnedFilesPerUnit: z.number().int().positive().optional(),
+  maxOwnedEstimatedTokensPerUnit: z.number().int().positive().optional(),
 }).strict();
 
 const WorkUnitV2Schema = WorkUnitSchema.extend({
   estimatedTokens: z.number().int().nonnegative(),
   contextSelectionReceipt: ContextSelectionReceiptSchema,
+  // A file exceeding the source budget must be isolated and read in ranges.
+  oversizedOwnedFiles: z.array(RelativePathSchema).optional(),
 });
 
 export const OffsecWorkPlanV2Schema = z.object({
@@ -177,6 +182,8 @@ export function createOffsecWorkPlanV2(input: {
   dependencyGraph: DependencyGraph;
   maxContextFilesPerUnit?: number;
   maxContextEstimatedTokensPerUnit?: number;
+  maxOwnedFilesPerUnit?: number;
+  maxOwnedEstimatedTokensPerUnit?: number;
   estimatedCharsPerToken?: number;
 }): OffsecWorkPlanV2 {
   const targetRealpath = realpathSync(input.target);
@@ -187,6 +194,14 @@ export function createOffsecWorkPlanV2(input: {
   const charsPerToken = input.estimatedCharsPerToken ?? 4;
   const maxContextFilesPerUnit = input.maxContextFilesPerUnit ?? 75;
   const maxContextTokens = input.maxContextEstimatedTokensPerUnit ?? 98_304;
+  for (const [name, value] of Object.entries({
+    maxOwnedFilesPerUnit: input.maxOwnedFilesPerUnit,
+    maxOwnedEstimatedTokensPerUnit: input.maxOwnedEstimatedTokensPerUnit,
+  })) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 1)) {
+      throw new Error(`${name} must be a positive safe integer`);
+    }
+  }
   const graph = input.dependencyGraph;
 
   const sourceFiles = [...new Set(sourceManifest.source_files)].sort();
@@ -215,6 +230,7 @@ export function createOffsecWorkPlanV2(input: {
 
   const units = sourceManifest.units
     .filter((unit) => unit.files.length > 0)
+    .flatMap((unit) => partitionSourceUnit(unit, nodeMap, input.maxOwnedFilesPerUnit, input.maxOwnedEstimatedTokensPerUnit))
     .map((unit) => buildUnitV2({
       targetRealpath,
       unit,
@@ -235,6 +251,8 @@ export function createOffsecWorkPlanV2(input: {
     estimatedCharsPerToken: charsPerToken,
     maxContextEstimatedTokensPerUnit: maxContextTokens,
     maxContextFilesPerUnit,
+    ...(input.maxOwnedFilesPerUnit !== undefined ? { maxOwnedFilesPerUnit: input.maxOwnedFilesPerUnit } : {}),
+    ...(input.maxOwnedEstimatedTokensPerUnit !== undefined ? { maxOwnedEstimatedTokensPerUnit: input.maxOwnedEstimatedTokensPerUnit } : {}),
   };
   const core = {
     schemaVersion: '2.0.0' as const,
@@ -435,9 +453,46 @@ function fileReceipt(targetRoot: string, relativePath: string) {
   return FileReceiptSchema.parse({ path: relativePath, bytes: content.byteLength, sha256: digest(content) });
 }
 
+function partitionSourceUnit(
+  unit: { id: string; files: string[] },
+  nodes: ReadonlyMap<string, { estimatedTokenCount: number }>,
+  maxFiles = Number.MAX_SAFE_INTEGER,
+  maxTokens = Number.MAX_SAFE_INTEGER,
+): Array<{ id: string; files: string[]; partitionKey?: string; oversizedOwnedFiles?: string[] }> {
+  const chunks: string[][] = [];
+  let files: string[] = [], tokens = 0;
+  for (const path of [...unit.files].sort()) {
+    const node = nodes.get(path);
+    if (!node) throw new Error(`OffSec partition source file이 graph에 없다: ${path}`);
+    if (files.length > 0 && (files.length >= maxFiles || tokens + node.estimatedTokenCount > maxTokens)) {
+      chunks.push(files);
+      files = [];
+      tokens = 0;
+    }
+    files.push(path);
+    tokens += node.estimatedTokenCount;
+    if (tokens > maxTokens) {
+      chunks.push(files);
+      files = [];
+      tokens = 0;
+    }
+  }
+  if (files.length > 0) chunks.push(files);
+  return chunks.map((part) => {
+    const oversized = part.filter(path => nodes.get(path)!.estimatedTokenCount > maxTokens);
+    return {
+      id: unit.id,
+      files: part,
+      // Keep the graph's parent ownership; only the execution key changes.
+      ...(chunks.length > 1 ? { partitionKey: stableJson([unit.id, part]) } : {}),
+      ...(oversized.length > 0 ? { oversizedOwnedFiles: oversized } : {}),
+    };
+  });
+}
+
 function buildUnitV2(input: {
   targetRealpath: string;
-  unit: { id: string; files: string[] };
+  unit: { id: string; files: string[]; partitionKey?: string; oversizedOwnedFiles?: string[] };
   owner: ReadonlyMap<string, string>;
   receipts: ReadonlyMap<string, z.infer<typeof FileReceiptSchema>>;
   nodeMap: ReadonlyMap<string, { estimatedTokenCount: number }>;
@@ -527,13 +582,14 @@ function buildUnitV2(input: {
   const unitEstimatedTokens = ownedEstimatedTokens + selectedContextEstimatedTokens;
 
   return WorkUnitV2Schema.parse({
-    unitKey: `unit-${digest(input.unit.id).slice(0, 16)}`,
+    unitKey: `unit-${digest(input.unit.partitionKey ?? input.unit.id).slice(0, 16)}`,
     sourceUnitId: input.unit.id,
     ownedFiles,
     contextFiles,
     unresolvedEdges,
     assignedSourceSha256: digest(stableJson(ownedFiles)),
     estimatedTokens: unitEstimatedTokens,
+    ...(input.unit.oversizedOwnedFiles ? { oversizedOwnedFiles: input.unit.oversizedOwnedFiles } : {}),
     contextSelectionReceipt: {
       ownedEstimatedTokens,
       candidateCount: candidates.length,
@@ -593,6 +649,21 @@ function assertPlanV2InternalIntegrity(plan: OffsecWorkPlanV2): void {
 
   for (const unit of plan.units) {
     const receipt = unit.contextSelectionReceipt;
+
+    const sourceFileCap = plan.planningPolicy.maxOwnedFilesPerUnit;
+    const sourceTokenCap = plan.planningPolicy.maxOwnedEstimatedTokensPerUnit;
+    if (sourceFileCap !== undefined && unit.ownedFiles.length > sourceFileCap) {
+      throw new Error(`OffSec v2 owned file cap 초과: ${unit.unitKey}`);
+    }
+    const oversized = unit.oversizedOwnedFiles ?? [];
+    const exceedsTokens = sourceTokenCap !== undefined && receipt.ownedEstimatedTokens > sourceTokenCap;
+    if (exceedsTokens) {
+      if (unit.ownedFiles.length !== 1 || oversized.length !== 1 || oversized[0] !== unit.ownedFiles[0]!.path) {
+        throw new Error(`OffSec v2 owned token cap 초과: oversized file은 단독 작업으로 표시해야 한다: ${unit.unitKey}`);
+      }
+    } else if (oversized.length > 0) {
+      throw new Error(`OffSec v2 oversized file 표시가 token cap과 다르다: ${unit.unitKey}`);
+    }
 
     // Context files must not be owned by this unit
     for (const cf of unit.contextFiles) {
@@ -654,6 +725,7 @@ function assertPlanV2InternalIntegrity(plan: OffsecWorkPlanV2): void {
  * before publication for V2 plans.
  */
 export function assertPlanGraphIntegrity(plan: OffsecWorkPlanV2, graph: DependencyGraph): void {
+  assertPlanV2InternalIntegrity(plan);
   // 1. Full graph integrity validation (not merely hash recomputation)
   assertDependencyGraphIntact(graph);
 

@@ -34,6 +34,7 @@ export const HostResourceReceiptSchema = z.object({
   path: z.string().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   bytes: z.number().int().nonnegative(),
+  semanticSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
 export type HostResourceReceipt = z.infer<typeof HostResourceReceiptSchema>;
 
@@ -77,6 +78,11 @@ export const RunEventSchema = z.discriminatedUnion('type', [
   }),
   EventBaseSchema.merge(AttemptIdentitySchema).extend({
     type: z.literal('attempt.received'),
+    usage: ProviderUsageSchema,
+  }),
+  EventBaseSchema.merge(AttemptIdentitySchema).extend({
+    type: z.literal('usage.reconciled'),
+    receiptId: z.string().min(1),
     usage: ProviderUsageSchema,
   }),
   EventBaseSchema.merge(AttemptIdentitySchema).extend({
@@ -126,7 +132,24 @@ export const RunEventSchema = z.discriminatedUnion('type', [
     stage: z.enum(['units', 'review']),
     artifacts: z.array(ArtifactRefSchema).min(1),
   }),
+  EventBaseSchema.extend({ type: z.literal('coverage.finalized'), artifact: ArtifactRefSchema }),
   EventBaseSchema.extend({ type: z.literal('run.completed') }),
+  EventBaseSchema.extend({ type: z.literal('run.incomplete'), reason: z.string().min(1) }),
+  EventBaseSchema.extend({
+    type: z.literal('analysis.revised'),
+    revision: z.number().int().positive(),
+    reason: z.string().min(1),
+    invalidatedAttemptKeys: z.array(z.string()),
+    archivedArtifacts: z.array(ArtifactRefSchema),
+    preserveAnalysisCheckpoint: z.boolean().optional(),
+  }),
+  EventBaseSchema.extend({
+    type: z.literal('evaluation.reopened'),
+    revision: z.number().int().positive(),
+    reason: z.string().min(1),
+    invalidatedAttemptKeys: z.array(z.string()),
+    archivedArtifacts: z.array(ArtifactRefSchema),
+  }),
   EventBaseSchema.extend({
     type: z.literal('run.awaiting-input'),
     reason: z.string().min(1),
@@ -152,6 +175,7 @@ export type NewRunEvent = RunEvent extends infer Event
   : never;
 
 export type AttemptSnapshot = {
+  superseded?: boolean;
   phase: string;
   round?: string;
   attempt: number;
@@ -169,11 +193,16 @@ export type RunSnapshot = {
   contractVersion: string;
   domain: string;
   mission: string;
-  status: 'running' | 'awaiting-input' | 'completed' | 'blocked';
+  status: 'running' | 'awaiting-input' | 'completed' | 'blocked' | 'incomplete';
   maxBudgetUsd?: number;
   totalCostUsd: number;
   lastSeq: number;
   completedPhases: string[];
+  completionCoverage?: z.infer<typeof ArtifactRefSchema>;
+  analysisRevision?: number;
+  revisions?: Array<{ revision: number; reason: string; artifacts: z.infer<typeof ArtifactRefSchema>[] }>;
+  evaluationRevisions?: Array<{ revision: number; reason: string; artifacts: z.infer<typeof ArtifactRefSchema>[] }>;
+  usageReceiptIds?: string[];
   budgetReservations?: Record<string, { amountUsd: number; chargedUsd?: number; accountingComplete?: boolean }>;
   analysisCheckpoint?: { stage: 'units' | 'review'; artifacts: z.infer<typeof ArtifactRefSchema>[] };
   attempts: Record<string, AttemptSnapshot>;
@@ -270,7 +299,8 @@ function applyEvent(snapshot: RunSnapshot, event: RunEvent): void {
     throw new Error(`run event seq 불연속: ${event.seq} != ${snapshot.lastSeq + 1}`);
   }
   const resumeEvent = event.type === 'input.revised' || event.type === 'run.resumed';
-  if (snapshot.status !== 'running' && event.type !== 'run.created' && !(snapshot.status === 'awaiting-input' && resumeEvent)) {
+  const administrative = ['usage.reconciled', 'analysis.revised', 'evaluation.reopened', 'run.budget-increased'].includes(event.type);
+  if (snapshot.status !== 'running' && event.type !== 'run.created' && !administrative && !(snapshot.status === 'awaiting-input' && resumeEvent)) {
     throw new Error(`종료된 run에는 event를 추가할 수 없다: ${snapshot.status}`);
   }
   if (event.effects) (snapshot.effects ??= {})[event.eventId] = event.effects;
@@ -293,6 +323,52 @@ function applyEvent(snapshot: RunSnapshot, event: RunEvent): void {
     if (!reservation || reservation.chargedUsd !== undefined) throw new Error('budget settlement requires an unsettled reservation');
     reservation.chargedUsd = event.chargedUsd;
     reservation.accountingComplete = event.accountingComplete;
+  } else if (event.type === 'usage.reconciled') {
+    const key = phaseAttemptKey(event.phase, event.round, event.attempt);
+    const attempt = snapshot.attempts[key];
+    if (!attempt) throw new Error(`usage receipt has no attempt: ${key}`);
+    const ids = snapshot.usageReceiptIds ??= [];
+    if (ids.includes(event.receiptId)) throw new Error('duplicate usage receipt');
+    if (attempt.usage?.accountingComplete && (!event.usage.accountingComplete || attempt.usage.costUsd !== event.usage.costUsd)) {
+      throw new Error('usage receipt conflicts with settled accounting');
+    }
+    snapshot.totalCostUsd += event.usage.costUsd - (attempt.usage?.costUsd ?? 0);
+    attempt.usage = { ...attempt.usage, ...event.usage };
+    ids.push(event.receiptId);
+  } else if (event.type === 'evaluation.reopened') {
+    if (event.revision !== (snapshot.evaluationRevisions?.length ?? 0) + 1) throw new Error('evaluation revision is not consecutive');
+    if (Object.values(snapshot.attempts).some(a => a.status === 'started' || a.status === 'received')) throw new Error('active attempts prevent evaluation reopening');
+    for (const key of event.invalidatedAttemptKeys) {
+      const attempt = snapshot.attempts[key];
+      if (!attempt || !['evaluate', 'report'].includes(attempt.phase)) throw new Error(`evaluation reopening cannot invalidate attempt: ${key}`);
+      attempt.superseded = true;
+    }
+    if (Object.values(snapshot.attempts).some(a => !a.superseded && ['evaluate', 'report'].includes(a.phase))) throw new Error('evaluation reopening must invalidate all downstream attempts');
+    snapshot.completedPhases = [...new Set(Object.values(snapshot.attempts)
+      .filter(a => a.status === 'completed' && !a.superseded).map(a => a.round ? `${a.phase}:${a.round}` : a.phase))];
+    (snapshot.evaluationRevisions ??= []).push({ revision: event.revision, reason: event.reason, artifacts: event.archivedArtifacts });
+    delete snapshot.publication;
+    delete snapshot.blockReason;
+    snapshot.status = 'running';
+  } else if (event.type === 'analysis.revised') {
+    if (event.revision !== (snapshot.analysisRevision ?? 0) + 1) throw new Error('analysis revision is not consecutive');
+    if (Object.values(snapshot.attempts).some(a => a.status === 'started' || a.status === 'received')) throw new Error('active attempts prevent revision');
+    for (const key of event.invalidatedAttemptKeys) {
+      const attempt = snapshot.attempts[key];
+      if (!attempt) throw new Error(`unknown revision attempt: ${key}`);
+      attempt.superseded = true;
+    }
+    snapshot.completedPhases = [...new Set(Object.values(snapshot.attempts)
+      .filter(a => a.status === 'completed' && !a.superseded).map(a => a.round ? `${a.phase}:${a.round}` : a.phase))];
+    (snapshot.revisions ??= []).push({ revision: event.revision, reason: event.reason, artifacts: event.archivedArtifacts });
+    snapshot.analysisRevision = event.revision;
+    if (!event.preserveAnalysisCheckpoint) delete snapshot.analysisCheckpoint;
+    delete snapshot.publication;
+    delete snapshot.completionCoverage;
+    delete snapshot.blockReason;
+    snapshot.status = 'running';
+  } else if (event.type === 'coverage.finalized') {
+    snapshot.completionCoverage = event.artifact;
   } else if (event.type === 'analysis.checkpoint') {
     if (snapshot.analysisCheckpoint?.stage === 'review') throw new Error('review inputs are already sealed');
     snapshot.analysisCheckpoint = { stage: event.stage, artifacts: event.artifacts };
@@ -348,8 +424,8 @@ function applyEvent(snapshot: RunSnapshot, event: RunEvent): void {
       } else if (event.type === 'attempt.received') {
         if (current.status === 'received') throw new Error(`provider receipt가 중복됐다: ${key}`);
         current.status = 'received';
+        snapshot.totalCostUsd += event.usage.costUsd - (current.usage?.costUsd ?? 0);
         current.usage = event.usage;
-        snapshot.totalCostUsd += event.usage.costUsd;
       } else if (event.type === 'phase.completed') {
         if (current.status !== 'received') {
           throw new Error(`provider receipt 없이 phase를 완료할 수 없다: ${key}`);
@@ -377,14 +453,15 @@ function applyEvent(snapshot: RunSnapshot, event: RunEvent): void {
     }
     snapshot.status = 'running';
     delete snapshot.awaitingInput;
-  } else if (event.type === 'run.completed') {
+  } else if (event.type === 'run.completed' || event.type === 'run.incomplete') {
     if (Object.values(snapshot.attempts).some((attempt) => attempt.status === 'started' || attempt.status === 'received')) {
       throw new Error('미종료 phase attempt가 있어 run을 완료할 수 없다');
     }
     if ((snapshot.domain === 'feedback' || snapshot.domain === 'offsec') && !snapshot.publication) {
       throw new Error(`${snapshot.domain} run은 publication 없이 완료할 수 없다`);
     }
-    snapshot.status = 'completed';
+    snapshot.status = event.type === 'run.completed' ? 'completed' : 'incomplete';
+    if (event.type === 'run.incomplete') snapshot.blockReason = event.reason;
   } else if (event.type === 'publication.completed') {
     if (snapshot.publication) throw new Error('publication event가 중복됐다');
     if (event.artifact.producer.role !== 'host') {

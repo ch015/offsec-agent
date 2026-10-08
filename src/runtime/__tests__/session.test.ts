@@ -40,7 +40,7 @@ function spec(overrides: Partial<SessionSpec> = {}): SessionSpec {
   const target = mkdtempSync(join(tmpdir(), 'nunchi-session-test-'));
   return {
     domain: 'offsec',
-    phase: 'va',
+    phase: 'analyze',
     target,
     prompt: '테스트',
     engagementDir: join(target, 'reports', 'x'),
@@ -86,13 +86,13 @@ describe('buildOptions — 격리', () => {
     expect(options.systemPrompt).toMatchObject({
       type: 'preset',
       preset: 'claude_code',
-      append: expect.stringContaining('# VA Auditor'),
+      append: expect.stringContaining('# Analyzer'),
     });
-    expect(options.agents).toHaveProperty('va-auditor');
+    expect(options.agents).toHaveProperty('analyzer');
     expect(options.tools).toContain('mcp__nunchi__submit_finding');
     expect(options.tools).not.toContain('Agent');
     expect(options.allowedTools).toEqual(options.tools);
-    expect(options.tools).toContain('Bash');
+    expect(options.tools).not.toContain('Bash');
     expect(options.disallowedTools).toEqual(['Agent']);
     expect(options.permissionMode).toBe('dontAsk');
     expect(options.hooks?.PreToolUse).toBeDefined();
@@ -117,13 +117,13 @@ describe('buildOptions — 격리', () => {
 
     const validator = z.fromJSONSchema(outputFormat.schema);
     const result = {
-      contractVersion: '1.10.0',
-      phase: 'va',
-      role: 'va-auditor',
+      contractVersion: '2.1.0',
+      phase: 'analyze',
+      role: 'analyzer',
       status: 'complete',
       artifacts: [],
       summary: 'done',
-      metrics: { findingCount: 0, objectionCount: 0 },
+      metrics: { findingCount: 0 },
       unresolved: [],
     };
     expect(() => validator.parse(result)).not.toThrow();
@@ -154,7 +154,7 @@ describe('buildOptions — 격리', () => {
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
       tool_input: { file_path: join(sessionSpec.target, 'source.ts') },
-      agent_type: 'va-auditor',
+      agent_type: 'analyzer',
     });
     expect(firstTool.hookSpecificOutput?.additionalContext).toContain(workUnit.workPlanSha256);
     expect(firstTool.hookSpecificOutput?.additionalContext).not.toContain('SECRET-SUMMARY');
@@ -162,7 +162,7 @@ describe('buildOptions — 격리', () => {
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
       tool_input: { file_path: join(sessionSpec.target, 'source.ts') },
-      agent_type: 'va-auditor',
+      agent_type: 'analyzer',
     });
     expect(secondTool.hookSpecificOutput?.additionalContext).toBeUndefined();
 
@@ -176,75 +176,7 @@ describe('buildOptions — 격리', () => {
       .toMatchObject({ type: 'object', additionalProperties: false });
   });
 
-  it('격리된 pentest만 sealed plan과 exact source를 통해 typed probe를 받는다', async () => {
-    const base = spec();
-    mkdirSync(base.engagementDir, { recursive: true });
-    const source = join(base.target, 'app.ts');
-    const outsideSource = join(base.target, 'other.ts');
-    const planPath = join(base.engagementDir, '05_pentest_plan.json');
-    writeFileSync(source, 'export const value = 1;\n');
-    writeFileSync(outsideSource, 'export const other = 2;\n');
-    writeFileSync(planPath, `${JSON.stringify({ schemaVersion: '1.0.0', scenarios: [] })}\n`);
-    const s = { ...base,
-      phase: 'pentest',
-      entryAgent: 'pentester',
-      agentRole: 'pentester',
-      networkAllowedDomains: ['test.example'],
-      liveTestTarget: 'https://test.example/app/',
-      liveTestPlan: {
-        path: planPath,
-        sha256: createHash('sha256').update(readFileSync(planPath)).digest('hex'),
-      },
-      allowedReadFiles: [source, planPath],
-      readScope: 'exact' as const,
-    };
-    const options = buildOptions(s);
-    expect(options.cwd).toBe(s.engagementDir);
-    expect(options.tools).not.toContain('Bash');
-    expect(options.tools).toContain('mcp__nunchi__http_probe');
-    expect(options.disallowedTools).toEqual(['Agent']);
-    expect(options.sandbox).toMatchObject({
-      network: { allowedDomains: ['test.example'], strictAllowlist: true },
-      filesystem: {
-        denyWrite: [s.target],
-        denyRead: [s.target],
-        allowRead: expect.arrayContaining([source, planPath, join(s.engagementDir, '06_pentest_result.md')]),
-      },
-    });
-    const callback = options.hooks?.PreToolUse?.[0]?.hooks[0] as unknown as (
-      input: Record<string, unknown>,
-    ) => Promise<{ hookSpecificOutput?: { permissionDecision?: string } }>;
-    expect((await callback({
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
-      tool_input: { file_path: source },
-      agent_type: 'pentester',
-    })).hookSpecificOutput?.permissionDecision).toBeUndefined();
-    expect((await callback({
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
-      tool_input: { file_path: outsideSource },
-      agent_type: 'pentester',
-    })).hookSpecificOutput?.permissionDecision).toBe('deny');
-    expect((await callback({
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
-      tool_input: { file_path: join(s.engagementDir, '06_pentest_result.md') },
-      agent_type: 'pentester',
-    })).hookSpecificOutput?.permissionDecision).toBeUndefined();
-    expect((await callback({
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
-      tool_input: { file_path: join(s.engagementDir, 'host-ledger.jsonl') },
-      agent_type: 'pentester',
-    })).hookSpecificOutput?.permissionDecision).toBe('deny');
-    expect(() => buildOptions(spec({
-      phase: 'pentest',
-      entryAgent: 'pentester',
-      agentRole: 'pentester',
-    }))).toThrow(/sealed plan/);
-    expect(() => buildOptions(spec({ networkAllowedDomains: ['test.example'] }))).toThrow(/pentest phase/);
-  });
+  it('rejects retired live phases', () => { expect(() => buildOptions(spec({phase: 'pentest'}))).toThrow(/phase/); });
 });
 
 describe('buildOptions — 입력 검증', () => {
@@ -267,7 +199,7 @@ describe('domainAgentNames — 위임 허용 집합', () => {
   it('offsec 의 contract-bound 워커를 프론트매터에서 읽는다', () => {
     const names = domainAgentNames('offsec');
     expect([...names].sort()).toEqual([
-      'offsec-lead', 'pentester', 'redteam-reviewer', 'va-auditor', 'verifier',
+      'analyzer', 'evaluator', 'reporter', 'reviewer', 'scanner',
     ]);
   });
 
@@ -315,8 +247,8 @@ describe('compaction resilience', () => {
       hook_event_name: 'PreToolUse',
       tool_name: tool,
       tool_input: { file_path: join(target, file) },
-      agent_type: 'va-auditor',
-      agent_id: 'va-auditor',
+      agent_type: 'analyzer',
+      agent_id: 'analyzer',
     };
   }
 
@@ -393,36 +325,22 @@ describe('compaction resilience', () => {
     expect(ctx).toContain('F-000000000003');
   });
 
-  it('context budget warning fires at threshold and resets after compaction', async () => {
+  it.each(['3', 'invalid'])('does not infer context exhaustion from read counts or obsolete warning setting %s', async setting => {
     const original = process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS;
-    process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = '3';
+    process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = setting;
     try {
       const s = spec();
       const options = buildOptions(s);
       const { postCompact, preToolUse } = getHooks(options);
 
-      // Calls 1-2: no warning
-      await preToolUse(readInput(s.target, 'Read', 'a.ts'));
-      const r2 = await preToolUse(readInput(s.target, 'Read', 'b.ts'));
-      expect(r2.hookSpecificOutput?.additionalContext).toBeUndefined();
-
-      // Call 3: warning fires
-      const r3 = await preToolUse(readInput(s.target, 'Read', 'c.ts'));
-      expect(r3.hookSpecificOutput?.additionalContext).toContain('context budget warning');
-
-      // Call 4: warning does not repeat
-      const r4 = await preToolUse(readInput(s.target, 'Read', 'd.ts'));
-      expect(r4.hookSpecificOutput?.additionalContext).toBeUndefined();
-
-      // After compaction, counter resets
+      for (let i = 0; i < 256; i++) {
+        const result = await preToolUse(readInput(s.target, 'Read', `f${i}.ts`));
+        expect(result.hookSpecificOutput?.additionalContext).toBeUndefined();
+      }
       await postCompact({ hook_event_name: 'PostCompact', compact_summary: '' });
-      // Consume the compaction reminder
-      await preToolUse(readInput(s.target, 'Read', 'e.ts'));
-
-      // New threshold reached
-      await preToolUse(readInput(s.target, 'Read', 'f.ts'));
-      const r7 = await preToolUse(readInput(s.target, 'Read', 'g.ts'));
-      expect(r7.hookSpecificOutput?.additionalContext).toContain('context budget warning');
+      const recovery = await preToolUse(readInput(s.target, 'Read', 'after-compaction.ts'));
+      expect(recovery.hookSpecificOutput?.additionalContext).toContain('Post-compaction context recovery');
+      for (let i = 0; i < 16; i++) expect((await preToolUse(readInput(s.target, 'Read', `g${i}.ts`))).hookSpecificOutput?.additionalContext).toBeUndefined();
     } finally {
       if (original !== undefined) process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = original;
       else delete process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS;
@@ -451,27 +369,7 @@ describe('compaction resilience', () => {
     expect(ctx).not.toContain('workPlanSha256');
   });
 
-  it('invalid NUNCHI_CONTEXT_BUDGET_WARN_TOOLS falls back to 12', async () => {
-    const original = process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS;
-    process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = 'invalid';
-    try {
-      const s = spec();
-      const options = buildOptions(s);
-      const { preToolUse } = getHooks(options);
-      // 12 calls should not trigger warning (threshold is 12, fires at >=12)
-      for (let i = 0; i < 11; i++) {
-        await preToolUse(readInput(s.target, 'Read', `f${i}.ts`));
-      }
-      const r11 = await preToolUse(readInput(s.target, 'Read', 'f11.ts'));
-      // Call 12 should trigger
-      expect(r11.hookSpecificOutput?.additionalContext).toContain('context budget warning');
-    } finally {
-      if (original !== undefined) process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = original;
-      else delete process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS;
-    }
-  });
-
-  it('compaction reminder takes priority over budget warning', async () => {
+  it('preserves compaction recovery despite obsolete warning configuration', async () => {
     const original = process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS;
     process.env.NUNCHI_CONTEXT_BUDGET_WARN_TOOLS = '2';
     try {
@@ -487,14 +385,9 @@ describe('compaction resilience', () => {
       const options = buildOptions(s);
       const { postCompact, preToolUse } = getHooks(options);
 
-      // Hit budget threshold
       await preToolUse(readInput(s.target, 'Read', 'a.ts'));
       await preToolUse(readInput(s.target, 'Read', 'b.ts'));
-
-      // Now trigger compaction (which resets budget)
       await postCompact({ hook_event_name: 'PostCompact', compact_summary: '' });
-
-      // Next call should get compaction reminder, NOT budget warning
       const result = await preToolUse(readInput(s.target, 'Read', 'c.ts'));
       const ctx = result.hookSpecificOutput?.additionalContext ?? '';
       expect(ctx).toContain('Post-compaction context recovery');

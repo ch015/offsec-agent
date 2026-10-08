@@ -52,7 +52,7 @@ export const BenchmarkRunnerOptionsSchema = z.object({
   provider: z.literal('anthropic'),
   model: ExactModelSchema,
   reviewModel: ExactModelSchema.optional(),
-  workflowVersion: z.enum(['v1', 'v2']).optional(),
+  workflowVersion: z.literal('v2').optional(),
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
   maxTurns: z.number().int().positive(),
   randomizationSeed: z.number().int().nonnegative(),
@@ -62,7 +62,7 @@ export const BenchmarkRunnerOptionsSchema = z.object({
   ch015PluginRoot: z.string().min(1),
   dryRun: z.boolean(),
 }).strict().superRefine((value, context) => {
-  if (value.workflowVersion === 'v2' && (!value.reviewModel || value.reviewModel === value.model)) {
+  if ( (!value.reviewModel || value.reviewModel === value.model)) {
     context.addIssue({ code: 'custom', path: ['reviewModel'], message: 'v2 benchmark에는 primary와 다른 고정 review model ID가 필요하다' });
   }
   const unique = new Set(value.arms);
@@ -148,15 +148,14 @@ export function buildArmCommand(input: {
     prompt,
     args: [
       '--dir', options.currentRoot,
-      options.workflowVersion === 'v2' ? 'assess:v2' : 'assess', target, prompt,
+      'assess', target, prompt,
       `--model=${options.model}`,
       ...(options.reviewModel ? [`--review-model=${options.reviewModel}`] : []),
       `--effort=${options.effort}`,
       `--max-turns=${options.maxTurns}`,
       `--engagement-dir=${engagementDir}`,
-      ...(options.workflowVersion === 'v2' ? [] : ['--verification-mode=VA_ONLY']),
       `--semgrep=${options.semgrepMode}`,
-      `--work-units=${options.workflowVersion === 'v2' || arm === 'current-parallel' ? 'force' : 'off'}`,
+      '--work-units=force',
       `--max-concurrency=${arm === 'current-parallel' ? options.maxConcurrency : 1}`,
     ],
   };
@@ -290,7 +289,7 @@ async function executePlannedRun(input: {
     .map((path) => `engagement/${path}`)]);
   const contractPath = item.arm === 'ch015'
     ? join(options.ch015PluginRoot, 'ch015.config.json')
-    : join(options.currentRoot, `domains/offsec/contracts/offsec-contract.${options.workflowVersion ?? 'v1'}.json`);
+    : join(options.currentRoot, 'domains/offsec/contracts/offsec-contract.v2.json');
   const resourceRoot = item.arm === 'ch015'
     ? options.ch015PluginRoot
     : join(options.currentRoot, 'domains/offsec');
@@ -309,7 +308,7 @@ async function executePlannedRun(input: {
     promptSha256: benchmarkSha256(TASK_TEMPLATE),
     contractSha256: benchmarkSha256(readFileSync(contractPath)),
     resourceManifestSha256: treeSha256(resourceRoot),
-    entrypoint: item.arm === 'ch015' ? 'claude-plugin' as const : options.workflowVersion === 'v2' ? 'nunchi-assess-v2' as const : 'nunchi-assess' as const,
+    entrypoint: item.arm === 'ch015' ? 'claude-plugin' as const : 'nunchi-assess-v2' as const,
     commandSha256: benchmarkSha256(benchmarkStableJson({
       executable: command.executable,
       args: command.args,
