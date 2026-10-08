@@ -18,7 +18,10 @@ evaluator는 finding을 추가·수정·삭제하지 않는다 (평가 전용).
 원문 확인을 새로 수행했다거나 새 등가성 판단을 내렸다고 표현하지 않는다. 분류는 Reviewer의
 판정이며 호스트는 직렬화만 수행했다. 실제 AST/Semgrep 범위는 actualToolCoverage와 그 한계에
 따른다. 의존성 그래프 작성기의 언어 지원 메타데이터는 별도 도구의 처리 범위다.
-04_evaluation.json의 actualToolCoverage에는 호스트 입력의 같은 객체를 그대로 포함한다.
+04_evaluation.json을 Write할 때는 종합 평가·범위 해석·한계만 작성한다.
+vulnerabilityInventory, severityDistribution, actualToolCoverage는 작성하지 않는다.
+호스트가 원본 파일의 SHA-256과 Reviewer/원장 최신성을 검증한 뒤 세 객체를 그대로 연결한다.
+모델이 전체 목록을 재출력하거나 분할 복사할 필요는 없다. 명시적으로 다른 값을 제출하면 검증에서 거절된다.
 누락된 도구 통계를 0으로 추정하지 않는다. semgrepFindings는 정적 도구 후보 수이며
 검토 후 채택 finding 수와 다르다. 이전 시도의 평가 파일은 확정 근거가 아니므로
 그 문구를 재사용할 때에도 현재 호스트 통계와 대조해 잘못된 0건 주장을 제거한다.
@@ -170,11 +173,11 @@ evaluator는 두 가지 입력을 조합한다:
    증거와 severity의 **canonical source**이며, 기각·대체된 ID도 삭제되지 않는다.
 
 2. **`03_review_result.json`**: reviewer의 검수 결과. 각 finding의 판정(retained/corrected/
-   rejected/inconclusive)과 검증 증거가 기록돼 있다. 호스트가 입력의 `resolvedReview`에
-   이 판정과 원장을 결합한 ID별 최종 상태·대체 ID·채택 심각도 분포를 제공한다.
+   rejected/inconclusive)과 검증 증거가 기록돼 있다. evaluationProjection이 있으면 호스트가
+   참조 파일에 ID별 최종 상태·대체 ID·채택 심각도 분포를 제공한다. 독립/이전 방식은 입력의 resolvedReview를 사용한다.
    correctedFindingId가 달라지면 이전 ID는 FOLDED_INTO, 대체 ID만 집계한다.
 
-evaluator는 `resolvedReview`의 판정을 따라 원장을 읽고, review result에서 한계 사항과
+evaluator는 호스트 참조 파일(독립/이전 방식은 `resolvedReview`)의 판정을 따라 필요한 원장을 읽고, review result에서 한계 사항과
 검수 통계를 참조한다. analyzer의 escalate를 그대로 DISPUTED로 옮기지 않는다.
 
 ## 평가 항목
@@ -215,4 +218,5 @@ independentVulnerabilityCount가 null이면 '독립 원인 분류 미완료'로 
 독립 심각도 분포는 independentSeverityDistribution을 사용한다. 이 값은 검토된 원인 그룹의 최대 심각도 요약이며
 모델 판정 자체의 정확성을 증명하지 않는다. 챌린지 대응률과 취약점 Precision/Recall/F1을 혼동하지 않는다.
 
-04_evaluation.json의 vulnerabilityInventory에는 호스트 입력의 동일 객체를 그대로 포함한다.
+evaluationProjection이 있으면 최종 04_evaluation.json의 vulnerabilityInventory는 호스트가 원본 객체를 연결한다.
+모델의 Write에서는 이 필드를 생략한다. evaluationProjection이 없는 독립/이전 방식만 해당 필드를 직접 제공한다.

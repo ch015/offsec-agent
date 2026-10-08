@@ -18,7 +18,7 @@ import {
   type PhaseResult,
 } from '../offsec-contract.js';
 import { countStandardFindings } from '../finding-contract.js';
-import { validateOffsecClassificationSyntax, validateV2Evaluation, validateV2EvaluationArtifact, validateV2ReviewSourceReads } from '../v2-evaluation.js';
+import { prepareV2EvaluationArtifact, validateOffsecClassificationSyntax, validateV2Evaluation, validateV2EvaluationArtifact, validateV2ReviewSourceReads } from '../v2-evaluation.js';
 import { prepareReviewPatch } from '../review-artifact-patch.js';
 import { canonicalV2Findings } from '../v2-review-resolution.js';
 import type { ProviderRuntimeEvent } from '../providers/provider-runtime.js';
@@ -237,7 +237,9 @@ export class OffsecDomainAdapter
       if (input.taskData?.independentCounting === true) return { content: JSON.stringify(proposedReview, null, 2) + '\n' };
     }
     if (input.phase.id === 'evaluate') {
-      validateV2EvaluationArtifact(input.engagementDir, input.name, input.content, input.target);
+      const content = input.name === '04_evaluation.json' ? prepareV2EvaluationArtifact(input.engagementDir, input.content) : undefined;
+      validateV2EvaluationArtifact(input.engagementDir, input.name, content ?? input.content, input.target);
+      if (content !== undefined) return { content, additionalContext: 'The host attached the hash-verified inventory and statistics to the evaluation file. Do not transcribe or rewrite those fields.' };
     }
   }
 

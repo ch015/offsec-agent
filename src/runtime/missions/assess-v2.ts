@@ -41,7 +41,7 @@ import { parseAssessV2Args, parseAnalysisTools, resolveAnalysisSelection, type A
 
 import { loadOffsecContract, type PhaseResult } from '../offsec-contract.js';
 import { OffsecDomainAdapter } from '../domains/offsec.js';
-import { resolveV2Review, ReviewFinalizationError } from '../v2-review-resolution.js';
+import { ReviewFinalizationError } from '../v2-review-resolution.js';
 import { REVIEW_PATCH_GUIDANCE } from '../review-artifact-patch.js';
 import { loadReviewProgress, mergeReviewReuse, stageReviewReopen, finishReviewReopen, reviewProgressAdvance, type ReviewReuse } from '../review-progress.js';
 import { readStandardFindings } from '../finding-contract.js';
@@ -1158,7 +1158,6 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
     const reviewCoveragePath = join(engagementDir, '03_review_coverage.json');
     atomicPrivateWrite(reviewCoveragePath, JSON.stringify({ revisions: reviewRound, deferred: deferredReviewRequests }, null, 2));
     rootAllowedReadFiles.push(reviewCoveragePath);
-    const resolvedReview = resolveV2Review(engagementDir);
     // Canonical bookkeeping is deterministic host work. Preserve completed
     // evaluations on resume; otherwise create a checked, immutable projection.
     const evaluationComplete = Object.values((await missionRuntime.read()).attempts).some(attempt =>
@@ -1172,8 +1171,8 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
     const evaluate = await executePhase({
       id: 'evaluate',
       priorArtifactPaths: review.result.artifacts.map((name) => join(engagementDir, name)),
-      inputs: { reviewArtifacts: review.result.artifacts, reviewCoverage: reviewCoveragePath, findingRecords: findingRecordInputs(), resolvedReview, evaluationProjection,
-        instruction: 'Read evaluationProjection.path first. The host has already serialized and validated every Reviewer decision in 04_evaluation_classification.yaml. Do not rewrite that immutable classification or enumerate every record again. Assess coverage, security level and limitations in 04_evaluation.json; include both evaluation artifacts in the result. Read exact findingRecords.path only for selected supporting context. Use actualToolCoverage from the host projection, not dependency-graph parser support metadata.' },
+      inputs: { reviewArtifacts: review.result.artifacts, reviewCoverage: reviewCoveragePath, findingRecords: findingRecordInputs(), evaluationProjection,
+        instruction: 'Read evaluationProjection.path first; the path and SHA-256 identify the sealed file. The host has already serialized and validated every Reviewer decision in 04_evaluation_classification.yaml. Do not rewrite that immutable classification or enumerate every record again. Write only your assessment, coverage interpretation and limitations in 04_evaluation.json. Omit vulnerabilityInventory, severityDistribution and actualToolCoverage: the host validates the sealed files and attaches these objects unchanged. Include both evaluation artifacts in the result. Read exact findingRecords.path only for selected supporting context. Use actualToolCoverage from the host projection, not dependency-graph parser support metadata.' },
     });
     refreshCanonicalFindingReadSet();
     await executePhase({
@@ -1182,7 +1181,7 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
         ...evaluate.result.artifacts.map((name) => join(engagementDir, name)),
         ...phases.flatMap((p) => p.result.artifacts.map((name) => join(engagementDir, name))),
       ])],
-      inputs: { evaluationArtifacts: evaluate.result.artifacts, findingRecords: findingRecordInputs(), resolvedReview, evaluationProjection,
+      inputs: { evaluationArtifacts: evaluate.result.artifacts, findingRecords: findingRecordInputs(), evaluationProjection,
         canonicalAppendix: { generatedBy: 'host', instruction: 'Write a concise narrative: risk, selected evidence, remediation priorities, scope and limitations. The host appends every canonical finding ID, disposition, severity, confidence, original citations, preconditions, unresolved items and remediation without omissions. Do not manually transcribe the entire catalog or reread every ledger file. Use selected records for the narrative. classificationSha256 identifies the classification file; inputSha256 identifies the evaluation input file.' },
         ...(!analysisCoverage.complete ? { publicationNotice: '분석 범위 미완료', uncoveredFiles } : {}) },
     });

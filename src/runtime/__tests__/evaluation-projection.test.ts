@@ -9,6 +9,8 @@ import { loadPreanalysisEvidence } from '../workflow/preanalysis-evidence.js';
 import { canonicalFindingAppendix } from '../report-appendix.js';
 import { normalizeCurrentV2OffsecFindings } from '../../../evals/offsec/adapters/current-v2.js';
 import type { BenchmarkRunRecord } from '../offsec-benchmark.js';
+import { buildOptions } from '../session.js';
+import { OffsecDomainAdapter } from '../domains/offsec.js';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -32,6 +34,53 @@ function fixture(count = 5) {
 }
 
 describe('host projection of finalized review', () => {
+  it('accepts a small native Write and forwards a large sealed inventory without model transcription', async () => {
+    const f = fixture(69);
+    for (const [i, row] of f.rows.entries()) {
+      row.counting = { kind: 'vulnerability', causeId: `VC-fixture-${i}`, component: `component-${i}`,
+        rootCause: `Independent control failure ${i}: ${'preserved source-grounded context '.repeat(120)}`,
+        fixBoundary: `Repair the independently owned boundary ${i}`, primaryEvidence: f.records[i]!.evidence };
+    }
+    f.save(); f.write();
+    const inputPath = join(f.root, '03_evaluation_input.json');
+    const original = readFileSync(inputPath), input = JSON.parse(original.toString());
+    expect(Buffer.byteLength(JSON.stringify(input.vulnerabilityInventory))).toBeGreaterThan(240_000);
+    const target = mkdtempSync(join(tmpdir(), 'evaluation-hook-source-')); roots.push(target);
+    const options = buildOptions({ domain: 'offsec', phase: 'evaluate', entryAgent: 'evaluator', agentRole: 'evaluator',
+      target, engagementDir: f.root, engagementId: 'large-evaluation', prompt: 'Evaluate the sealed file' });
+    const hook = options.hooks!.PreToolUse![0]!.hooks[0] as unknown as (input: Record<string, unknown>) => Promise<any>;
+    const path = join(f.root, '04_evaluation.json');
+    const draft = JSON.stringify({ overallAssessment: 'Source review completed; exploitability remains conditional.', limitations: ['No live exploitation performed'] });
+    const result = await hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path, content: draft } });
+    expect(result.hookSpecificOutput.permissionDecision).not.toBe('deny');
+    const prepared = result.hookSpecificOutput.updatedInput;
+    expect(prepared.file_path).toBe(path);
+    expect(Buffer.byteLength(draft)).toBeLessThan(250);
+    const evaluation = JSON.parse(prepared.content);
+    for (const key of ['vulnerabilityInventory', 'severityDistribution', 'actualToolCoverage']) expect(evaluation[key]).toEqual(input[key]);
+    expect(evaluation.overallAssessment).toContain('conditional');
+    expect(evaluation.limitations).toEqual(['No live exploitation performed']);
+    writeFileSync(path, prepared.content); // Emulate the SDK's allowed Write with updatedInput.
+    expect(() => validateV2EvaluationArtifact(f.root, '04_evaluation.json', readFileSync(path, 'utf8'))).not.toThrow();
+    expect(readFileSync(inputPath)).toEqual(original);
+    // Skipping the hook must not make a bare narrative a valid final artifact.
+    expect(() => validateV2EvaluationArtifact(f.root, '04_evaluation.json', draft)).toThrow();
+  });
+  it.each(['input', 'classification', 'review'])('refuses host attachment after %s changes', change => {
+    const f = fixture(), projection = f.write();
+    if (change === 'input') writeFileSync(projection.path, '{}');
+    if (change === 'classification') writeFileSync(projection.classificationPath, '{}');
+    if (change === 'review') { f.rows[0].reason += ' changed'; f.save(); }
+    const adapter = new OffsecDomainAdapter();
+    expect(() => adapter.validateArtifactWrite({ phase: adapter.getPhase('evaluate').legacy,
+      engagementDir: f.root, target: f.root, name: '04_evaluation.json', content: '{}' })).toThrow(/integrity|immutable|stale/);
+  });
+  it.each(['vulnerabilityInventory', 'severityDistribution', 'actualToolCoverage'])('does not overwrite a contradictory explicit %s', field => {
+    const f = fixture(); f.write();
+    const adapter = new OffsecDomainAdapter();
+    expect(() => adapter.validateArtifactWrite({ phase: adapter.getPhase('evaluate').legacy,
+      engagementDir: f.root, target: f.root, name: '04_evaluation.json', content: JSON.stringify({ [field]: {} }) })).toThrow();
+  });
   it('publishes one independent cause, two corroborating records and a separate observation', () => {
     const f = fixture(3);
     const cause = { kind: 'vulnerability', causeId: 'VC-same-root-cause', component: 'fixture',

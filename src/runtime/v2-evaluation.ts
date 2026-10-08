@@ -6,7 +6,7 @@ import { load } from 'js-yaml';
 import { readStandardFindings } from './finding-contract.js';
 import type { ProviderRuntimeEvent } from './providers/provider-runtime.js';
 import { canonicalV2Findings, evaluationSeverities, resolveV2Review } from './v2-review-resolution.js';
-import { assertEvaluationProjection, assertEvaluationToolCoverage } from './evaluation-projection.js';
+import { assertEvaluationProjection, assertEvaluationToolCoverage, readEvaluationProjection } from './evaluation-projection.js';
 import { isDeepStrictEqual } from 'node:util';
 
 const gate = createRequire(import.meta.url)('../../domains/offsec/hooks/report-gate-hook.js') as {
@@ -71,6 +71,24 @@ export function validateV2ReviewSourceReads(engagementDir: string, target: strin
     throw new ReviewSourceDeliveryError([resolutionError instanceof Error ? resolutionError.message : resolutionError, message].filter(Boolean).join('\n'));
   }
   if (resolutionError) throw resolutionError;
+}
+
+/** Forward sealed host data without asking the model to regenerate it.
+ * Explicit model values remain subject to validation; a contradictory value is
+ * never silently replaced. Missing fields are attached only to native Writes,
+ * so final validation still rejects files that bypass this preparation path.
+ */
+export function prepareV2EvaluationArtifact(engagementDir: string, content: string): string | undefined {
+  const projection = readEvaluationProjection(engagementDir);
+  if (!projection) return; // Historical evaluations keep their original contract.
+  const evaluation: unknown = JSON.parse(content);
+  if (!evaluation || typeof evaluation !== 'object' || Array.isArray(evaluation)) throw new Error('Evaluation must be a JSON object');
+  const proposed = evaluation as Record<string, unknown>;
+  const sealed = JSON.parse(readFileSync(projection.path, 'utf8'));
+  for (const field of ['vulnerabilityInventory', 'severityDistribution', 'actualToolCoverage']) {
+    if (!Object.hasOwn(proposed, field) && Object.hasOwn(sealed, field)) proposed[field] = sealed[field];
+  }
+  return JSON.stringify(proposed, null, 2) + '\n';
 }
 
 /** Validate each proposed Write independently so repairs stay in the same session. */

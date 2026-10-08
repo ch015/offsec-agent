@@ -102,8 +102,10 @@ describe('v2 publication evidence and coverage', () => {
         outcome.ledger.push(...deliveryFixture(spec, join(spec.target, 'packages/a/a.ts')));
       }
       if (spec.phase === 'evaluate') {
-        expect(spec.prompt).toContain('resolvedReview');
-        expect(spec.prompt).toContain('foldedInto');
+        expect(spec.taskData?.resolvedReview).toBeUndefined();
+        expect(spec.prompt).not.toContain('resolvedReview');
+        expect(spec.prompt).not.toContain('foldedInto');
+        expect(spec.taskData?.evaluationProjection).toMatchObject({ path: expect.any(String), inputSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
         const classification = JSON.parse(readFileSync(join(spec.engagementDir, '04_evaluation_classification.yaml'), 'utf8'));
         expect(classification.candidates).toEqual(expect.arrayContaining([
           expect.objectContaining({ id: originalId, final_status: 'FOLDED_INTO', folded_into: correctedId }),
@@ -112,17 +114,21 @@ describe('v2 publication evidence and coverage', () => {
         const originalContent = readFileSync(join(spec.engagementDir, '04_evaluation_classification.yaml'), 'utf8');
         classification.equivalence_review.groups[0].decision = 'FOLD';
         const options = buildOptions({ ...spec, onLedger: row => outcome.ledger.push(row) });
-        const hook = options.hooks!.PreToolUse![0]!.hooks[0] as unknown as (input: Record<string, unknown>) => Promise<{ hookSpecificOutput?: { permissionDecision?: string } }>;
+        const hook = options.hooks!.PreToolUse![0]!.hooks[0] as unknown as (input: Record<string, unknown>) => Promise<{ hookSpecificOutput?: { permissionDecision?: string; updatedInput?: { content: string } } }>;
         const path = join(spec.engagementDir, '04_evaluation_classification.yaml');
         const write = () => hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path, content: JSON.stringify(classification) } });
         expect((await write()).hookSpecificOutput?.permissionDecision).toBe('deny'); localDenials++;
         expect((await hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path, content: originalContent } })).hookSpecificOutput?.permissionDecision).not.toBe('deny');
         expect(readFileSync(path, 'utf8')).toBe(originalContent);
         const evaluationPath = join(spec.engagementDir, '04_evaluation.json');
-        writeFileSync(evaluationPath, JSON.stringify({ ...JSON.parse(readFileSync(evaluationPath, 'utf8')), severityDistribution: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 1, INFO: 0 } }));
+        const prepared = await hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: {
+          file_path: evaluationPath, content: JSON.stringify({ overallAssessment: 'One reviewed LOW fixture cause; see the sealed source.' }),
+        } });
+        expect(prepared.hookSpecificOutput?.permissionDecision).not.toBe('deny');
+        writeFileSync(evaluationPath, prepared.hookSpecificOutput!.updatedInput!.content);
       }
       if (spec.phase === 'report') {
-        expect(spec.prompt).toContain('resolvedReview');
+        expect(spec.prompt).not.toContain('resolvedReview');
         expect(spec.taskData?.canonicalAppendix).toBeDefined();
         writeFileSync(join(spec.engagementDir, '07_security_report.draft.md'), '# Fixture narrative\nOne accepted LOW fixture finding. See the host canonical appendix for its source and history.\n');
       }
