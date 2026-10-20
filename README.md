@@ -109,5 +109,6 @@ pnpm test:all
 - [저장·복구·사용량](docs/analysis-storage-recovery.md)
 - [분석 범위와 한계](docs/detection-improvements.md)
 - [도메인 자산](domains/offsec/README.md)
+- [개발 지침](AGENTS.md) · [현재 구현·계약·회귀 테스트 지도](docs/implementation-map.json) — 변경 전 기존 기능 확인, `pnpm check:implementation`, `pnpm test:regression`
 - [결과 감사와 수동 이견 기록](docs/results-review.md) — `pnpm results:admin`, 보완 전후 상태 대조와 오프라인 품질 계산
 - [문서 안내와 과거 설계 기록](docs/README.md)

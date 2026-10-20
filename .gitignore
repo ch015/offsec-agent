@@ -18,7 +18,7 @@ domains/*/knowledge-base/engagements/
 domains/*/harness/eval/reports/
 domains/*/.recon-cache/
 
-# agent tooling state (mirrors ../nahonza-agents policy: only CLAUDE.md is tracked)
+# Local agent tooling state; shared root development instructions are tracked.
 .asx/graph.db
 .asx/handoff*.md
 .asx/last_nudge.sha
@@ -26,8 +26,10 @@ domains/*/.recon-cache/
 .asx/capabilities.json
 .asx/skills/
 .agents/
+.ch015/
 .claude/skills/
 AGENTS.md
+!/AGENTS.md
 *.md.lock
 .cursor/
 .kiro/

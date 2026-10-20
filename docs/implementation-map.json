@@ -1,0 +1,865 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-13",
+  "scope": "현재 작업 트리의 핵심 경계 지도. 전체 함수 목록이나 진단 품질 보증이 아니다. callers는 확인한 연결 지점이며 검사기는 호출 관계 자체를 증명하지 않는다. 테스트는 로컬 합성 회귀이며 PostgreSQL 통합 검증은 별도이다.",
+  "features": [
+    {
+      "id": "mission",
+      "name": "공개 API와 단일 실행 경로",
+      "status": "implemented",
+      "behavior": "CLI/API/재개가 같은 계약과 실행 경로를 사용한다. assess:v2는 별도 엔진이 아닌 별칭이다.",
+      "entrypoints": [
+        {
+          "path": "src/api/agent.ts",
+          "symbol": "createOffsecAgent"
+        },
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "runAssessCli"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "assessV2"
+        },
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "resumeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "src/runtime/offsec-contract.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/v2-publication.test.ts",
+          "title": "publishes host-captured Git provenance even when a zero-finding narrative omits it"
+        }
+      ],
+      "invariants": [
+        "발행 완료 재개는 기존 영수증과 최종 바이트를 검증하고 provider를 다시 호출하지 않는다."
+      ],
+      "limitations": [
+        "파일명 assess-v2는 남아 있지만 v1과 공존하는 실행 구조는 아니다."
+      ]
+    },
+    {
+      "id": "scheduling",
+      "name": "호스트 작업 큐와 자원 점유",
+      "status": "implemented",
+      "behavior": "작업 의존성, 점유, backoff와 재시도를 호스트가 관리한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/workflow/task-scheduler.ts",
+          "symbol": "executeTaskQueue"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "src/runtime/workflow/scheduler-journal.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/task-scheduler.test.ts",
+          "title": "runs bridges only after all prerequisites succeed and defers failed dependency chains"
+        },
+        {
+          "path": "src/runtime/__tests__/task-scheduler.test.ts",
+          "title": "retains occupancy until cancellation actually settles and rejects late success"
+        }
+      ],
+      "invariants": [
+        "실제 종료 전 점유를 해제하지 않는다.",
+        "실패한 선행 작업의 후속 작업을 완료로 처리하지 않는다."
+      ],
+      "limitations": [
+        "병렬 Analyzer 큐가 있다는 사실은 병렬 Reviewer 구현을 뜻하지 않는다."
+      ]
+    },
+    {
+      "id": "source-evidence",
+      "name": "스냅샷과 실제 소스 전달 근거",
+      "status": "implemented",
+      "behavior": "원본 바이트, 전달 범위와 검증된 재사용을 구별한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/source-snapshot.ts",
+          "symbol": "createSourceSnapshot"
+        },
+        {
+          "path": "src/runtime/source-delivery.ts",
+          "symbol": "observeSourceDelivery"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        },
+        {
+          "path": "src/runtime/v2-evaluation.ts",
+          "symbol": "validateV2ReviewSourceReads"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "src/runtime/source-delivery.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/source-snapshot.test.ts",
+          "title": "keeps uncommitted source fixed while classifying workspace changes and rejecting evidence tampering"
+        },
+        {
+          "path": "src/runtime/__tests__/source-delivery.test.ts",
+          "title": "combines verified line and byte reads across UTF-8/CRLF boundaries without accepting a one-byte gap"
+        }
+      ],
+      "invariants": [
+        "읽기 요청만으로 내용 전달을 인정하지 않는다.",
+        "검증된 과거 재사용을 새로운 독립 원문 읽기로 집계하지 않는다."
+      ],
+      "limitations": [
+        "내용 전달 영수증은 모델의 이해나 보안 판정 정확도를 입증하지 않는다."
+      ]
+    },
+    {
+      "id": "recovery",
+      "name": "부분 완료와 revision 복구",
+      "status": "implemented",
+      "behavior": "완료 작업을 재사용하고 변경/보완 대상의 후속 산출물을 이력 보존 후 갱신한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/missions/analysis-revision.ts",
+          "symbol": "beginAnalysisRevision"
+        },
+        {
+          "path": "src/runtime/missions/assessment-recovery.ts",
+          "symbol": "checkpointInput"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        },
+        {
+          "path": "src/runtime/missions/review-loop.ts",
+          "symbol": "coordinateReview"
+        }
+      ],
+      "contracts": [
+        "src/runtime/workflow/state-store.ts",
+        "domains/offsec/contracts/offsec-contract.v2.json"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/analysis-resumption.test.ts",
+          "title": "preserves a partial report after invalid root output and resumes only the unfinished phases"
+        },
+        {
+          "path": "src/runtime/__tests__/analysis-resumption.test.ts",
+          "title": "archives an incorrect evaluation and reruns only evaluation/report while preserving the finalized review and cost"
+        }
+      ],
+      "invariants": [
+        "이전 보고서·검토·사용량을 지우지 않는다.",
+        "평가만 갱신할 때 성공한 분석과 검토를 재호출하지 않는다."
+      ],
+      "limitations": [
+        "현재 계약과 손상되지 않은 영수증을 요구하며 모든 과거 형식의 무조건 재개를 보장하지 않는다."
+      ]
+    },
+    {
+      "id": "finding-history",
+      "name": "Finding ID 충돌과 버전 승계",
+      "status": "implemented",
+      "behavior": "동일 정체성의 수정본은 정확한 이전 바이트와 승계 근거를 보존하며 승격한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/finding-contract.ts",
+          "symbol": "promoteStandardFindingRecords"
+        },
+        {
+          "path": "src/runtime/missions/finding-promotion.ts",
+          "symbol": "promoteCompletedTaskFindings"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-finding-schema.v2.json"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/finding-promotion.test.ts",
+          "title": "archives exact superseded bytes before replacing a record, and is idempotent"
+        },
+        {
+          "path": "src/runtime/__tests__/finding-promotion.test.ts",
+          "title": "resumes a revised task with the same finding ID and preserves completed analysis on a second resume"
+        }
+      ],
+      "invariants": [
+        "재개가 최신 기록을 오래된 시도로 되돌리지 않는다.",
+        "다른 정체성의 충돌을 임의 새 ID 발급으로 숨기지 않는다."
+      ],
+      "limitations": [
+        "정체성/이력 손상은 계속 오류이다. 모든 충돌을 자동 병합하지 않는다."
+      ]
+    },
+    {
+      "id": "review-feedback",
+      "name": "추가 근거 요청과 제한된 재검토",
+      "status": "implemented",
+      "behavior": "Reviewer의 추가 근거 요청을 저장하고 범위가 정해진 보완 후 변경/요청 대상만 다시 검토하도록 전달한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/missions/review-loop.ts",
+          "symbol": "coordinateReview"
+        },
+        {
+          "path": "src/runtime/planning/review-coordinator.ts",
+          "symbol": "validateFollowupAnswers"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "domains/offsec/methods/review.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/redesign-acceptance.test.ts",
+          "title": "T21 investigates only requested evidence and defers a repeated request (%s)"
+        },
+        {
+          "path": "src/runtime/__tests__/review-feedback-preservation.test.ts",
+          "title": "preserves unrelated decisions and receipts while requiring fresh evidence for a requested finding"
+        }
+      ],
+      "invariants": [
+        "요청과 이전 검토를 보완 시작 전에 보존한다.",
+        "변경 없는 비요청 finding의 판정과 검증된 읽기를 재사용한다.",
+        "요청 대상은 같은 hash여도 재사용 대상에서 제외한다."
+      ],
+      "limitations": [
+        "선택적 추가 근거 요청과 최대 3회의 revision이다. 다중 Reviewer 간 의미적 이견 조정기는 아니다."
+      ]
+    },
+    {
+      "id": "review-continuation",
+      "name": "검토 patch와 중단 후 계속",
+      "status": "implemented",
+      "behavior": "최대 20개 판정 patch와 검증된 진행 checkpoint로 남은 검토를 계속한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/review-artifact-patch.ts",
+          "symbol": "prepareReviewPatch"
+        },
+        {
+          "path": "src/runtime/review-progress.ts",
+          "symbol": "loadReviewProgress"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        },
+        {
+          "path": "src/runtime/session.ts",
+          "symbol": "buildOptions"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "domains/offsec/methods/review.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/review-continuation.test.ts",
+          "title": "continues only verified progress and stops on no progress=%s"
+        }
+      ],
+      "invariants": [
+        "초안은 발행 가능한 완료 검토가 아니다.",
+        "검증된 진행 없이 턴 한도 세션을 무한 계속하지 않는다."
+      ],
+      "limitations": [
+        "한 검토자의 연속 세션이며 파일 수 기반 독립 검토 병렬화는 아직 없다."
+      ]
+    },
+    {
+      "id": "review-decisions",
+      "name": "검토 판정 확정",
+      "status": "partial",
+      "behavior": "원장 ID·심각도·판정·원문 읽기를 검사하며 미확정을 backlog로 유지한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/v2-review-resolution.ts",
+          "symbol": "resolveV2Review"
+        },
+        {
+          "path": "src/runtime/v2-evaluation.ts",
+          "symbol": "validateV2ReviewSourceReads"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/review-artifact-patch.ts",
+          "symbol": "prepareReviewPatch"
+        },
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-finding-schema.v2.json",
+        "domains/offsec/methods/review.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/v2-review-resolution.test.ts",
+          "title": "supports same-ID corrections and preserves inconclusive risks as backlog"
+        },
+        {
+          "path": "src/runtime/__tests__/v2-review-resolution.test.ts",
+          "title": "does not automatically accept unreviewed additions or unsupported escalations"
+        }
+      ],
+      "invariants": [
+        "inconclusive와 근거 없는 승격을 confirmed로 집계하지 않는다.",
+        "채택/보정의 심각도와 원장이 일치해야 한다."
+      ],
+      "limitations": [
+        "명시적 등급 문구와 구조적 모순 검사이다. 일반적인 의미 충돌·오탐을 모두 검출하지 않는다."
+      ]
+    },
+    {
+      "id": "cause-counting",
+      "name": "독립 원인 집계와 수정 이력",
+      "status": "implemented",
+      "behavior": "후보 기록 수와 원인 수를 구별하고 같은 원인의 보강 근거와 수정 전 이력을 연결한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/vulnerability-inventory.ts",
+          "symbol": "buildVulnerabilityInventory"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/v2-review-resolution.ts",
+          "symbol": "resolveV2Review"
+        }
+      ],
+      "contracts": [
+        "src/runtime/vulnerability-inventory.ts",
+        "domains/offsec/methods/review.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/vulnerability-inventory.test.ts",
+          "title": "keeps corrected history without resurrecting a refuted impact or an old severity"
+        },
+        {
+          "path": "src/runtime/__tests__/vulnerability-inventory.test.ts",
+          "title": "rejects one cause ID with different fix boundaries and different IDs with identical definitions"
+        }
+      ],
+      "invariants": [
+        "수정으로 철회된 영향이나 심각도를 중복 통합 과정에서 복원하지 않는다.",
+        "동일 소스 줄만으로 다른 원인을 병합하지 않는다."
+      ],
+      "limitations": [
+        "검토자가 선택한 rootCause/fixBoundary의 의미적 정확성은 추가 검증이 필요하다."
+      ]
+    },
+    {
+      "id": "publication",
+      "name": "평가 projection과 통합 보고서",
+      "status": "implemented",
+      "behavior": "확정 판정을 호스트가 평가 입력과 전체 Finding 부록으로 옮기고 최종 바이트를 발행한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/evaluation-projection.ts",
+          "symbol": "writeEvaluationProjection"
+        },
+        {
+          "path": "src/runtime/report-appendix.ts",
+          "symbol": "canonicalFindingAppendix"
+        },
+        {
+          "path": "src/runtime/missions/publication-files.ts",
+          "symbol": "copyPublication"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/missions/assess-v2.ts",
+          "symbol": "executeAssessV2"
+        }
+      ],
+      "contracts": [
+        "domains/offsec/contracts/offsec-contract.v2.json",
+        "domains/offsec/methods/report.v2.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/evaluation-projection.test.ts",
+          "title": "serializes more than 300 IDs without dropping corrected, rejected or backlog history"
+        },
+        {
+          "path": "src/runtime/__tests__/evaluation-projection.test.ts",
+          "title": "publishes one independent cause, two corroborating records and a separate observation"
+        },
+        {
+          "path": "src/runtime/__tests__/v2-publication.test.ts",
+          "title": "carries corrected review IDs through local repair and publication in one evaluation attempt"
+        }
+      ],
+      "invariants": [
+        "보고서 요약/분류/원인이 확정된 원장과 일치한다.",
+        "기각·보류·보정 전 ID도 부록에서 누락하지 않는다."
+      ],
+      "limitations": [
+        "결정적 집계는 입력 판정의 의미적 정확도를 보증하지 않는다."
+      ]
+    },
+    {
+      "id": "state-storage",
+      "name": "파일/PostgreSQL 상태 원장",
+      "status": "implemented",
+      "behavior": "동일 workflow 계약으로 상태·사용량·발행 이벤트를 저장하고 재구성한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/workflow/state-store.ts",
+          "symbol": "FileRunStateStore"
+        },
+        {
+          "path": "src/runtime/workflow/postgres-run-state-store.ts",
+          "symbol": "PostgresRunStateStore"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/workflow/mission-runtime.ts",
+          "symbol": "createMissionRuntime"
+        },
+        {
+          "path": "src/runtime/workflow/mission-runtime.ts",
+          "symbol": "openMissionRuntime"
+        }
+      ],
+      "contracts": [
+        "src/runtime/workflow/state-store.ts",
+        "src/runtime/workflow/run-lease.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/state-store.test.ts",
+          "title": "replays the event ledger and repairs a missing snapshot"
+        },
+        {
+          "path": "src/runtime/__tests__/state-store.test.ts",
+          "title": "charges a provider receipt once even if validation fails and the receipt is retried"
+        }
+      ],
+      "invariants": [
+        "영수증 재전달이 비용 이중 청구로 이어지지 않는다.",
+        "발행 없이 run 완료를 선언하지 않는다."
+      ],
+      "limitations": [
+        "이 회귀 묶음의 상태 검사는 파일 backend이다. 실제 PostgreSQL/lease는 별도 integration suite로 검증한다."
+      ]
+    },
+    {
+      "id": "knowledge",
+      "name": "설정·공유 지식·CVE 참고 자료",
+      "status": "partial",
+      "behavior": "공유 관측과 Finding·CVE 버전을 보존하며 PostgreSQL 연결 설정을 해석한다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/config.ts",
+          "symbol": "loadConfig"
+        },
+        {
+          "path": "src/runtime/knowledge/runtime.ts",
+          "symbol": "KnowledgeRuntime"
+        },
+        {
+          "path": "src/runtime/knowledge/cve.ts",
+          "symbol": "parseCve"
+        },
+        {
+          "path": "src/runtime/shared-knowledge.ts",
+          "symbol": "publishSharedObservation"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/api/agent.ts",
+          "symbol": "createOffsecAgent"
+        },
+        {
+          "path": "src/runtime/knowledge/tools.ts",
+          "symbol": "databaseKnowledgeTools"
+        }
+      ],
+      "contracts": [
+        "src/runtime/knowledge/schema.sql",
+        "docs/postgres-knowledge.md",
+        "nunchi.config.example.json"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/database-config.test.ts",
+          "title": "uses connection environment overrides and password references without mutating or disclosing config"
+        },
+        {
+          "path": "src/runtime/__tests__/database-config.test.ts",
+          "title": "preserves original bytes, unknown containers and applicability uncertainty"
+        },
+        {
+          "path": "src/runtime/__tests__/shared-knowledge.test.ts",
+          "title": "retains conflicting claims at the same source location for review"
+        }
+      ],
+      "invariants": [
+        "CVE 원문과 불확실성을 잃지 않고 참고 입력으로 유지한다.",
+        "충돌 주장을 삭제해 합의로 꾸미지 않는다."
+      ],
+      "limitations": [
+        "자동 CVE 수집·벡터 검색·모든 MD 제거가 구현되었다는 의미는 아니다. PostgreSQL 질의/격리는 별도 integration suite가 필요하다."
+      ]
+    },
+    {
+      "id": "provider-diagnostics",
+      "name": "응답 실패와 검증 오류 기록",
+      "status": "implemented",
+      "behavior": "종료 영수증과 구조 검증 실패 입력을 제한된 진단 기록으로 남긴다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/providers/anthropic-agent-sdk.ts",
+          "symbol": "AnthropicAgentRuntime"
+        },
+        {
+          "path": "src/runtime/structured-output-diagnostics.ts",
+          "symbol": "structuredOutputDiagnostics"
+        }
+      ],
+      "callers": [
+        {
+          "path": "src/runtime/session.ts",
+          "symbol": "runSession"
+        }
+      ],
+      "contracts": [
+        "src/runtime/session-types.ts",
+        "src/runtime/providers/provider-runtime.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/session-stream.test.ts",
+          "title": "retains all five structured-output errors and their inputs when the SDK throws after its terminal receipt"
+        },
+        {
+          "path": "src/runtime/__tests__/session-stream.test.ts",
+          "title": "does not turn a missing usage receipt into confirmed zero spend"
+        }
+      ],
+      "invariants": [
+        "검증 실패를 네트워크 실패와 같은 사유로 단정하지 않는다.",
+        "미수신 사용량은 확정된 0으로 기록하지 않는다."
+      ],
+      "limitations": [
+        "provider가 전달하지 않은 내부 오류/비용은 복원할 수 없다."
+      ]
+    },
+    {
+      "id": "quality-measurement",
+      "name": "진단 품질 측정",
+      "status": "partial",
+      "behavior": "고정된 정답·미해결·음성 대조군과 실행 조건을 분리해 precision/recall을 계산한다. results:admin quality에서 사람이 작성한 자료를 평가할 수 있다. assess 실행 경로의 자동 판정 gate는 아니다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/diagnostic-quality.ts",
+          "symbol": "scoreDiagnosticQuality"
+        }
+      ],
+      "callers": [
+        {
+          "path": "scripts/results-admin.ts",
+          "symbol": "runResultAdmin"
+        }
+      ],
+      "contracts": [
+        "src/runtime/diagnostic-quality.ts",
+        "docs/detection-improvements.md"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/diagnostic-quality.test.ts",
+          "title": "does not remove unresolved predictions to obtain a passing score"
+        },
+        {
+          "path": "src/runtime/__tests__/diagnostic-quality.test.ts",
+          "title": "requires actually assessed negative controls and rejects any failed or unresolved control"
+        },
+        {
+          "path": "src/runtime/__tests__/results-admin.test.ts",
+          "title": "scores supplied adjudication offline with distinct gate and input failure exits"
+        }
+      ],
+      "invariants": [
+        "미해결 예측을 분모에서 제거해 점수를 올리지 않는다.",
+        "라벨 일치만으로 실제 조건과 영향을 검증했다고 보지 않는다."
+      ],
+      "limitations": [
+        "오프라인 입력의 판단·출처 boolean은 작성자의 진술이다. CLI가 독립 검증하거나 실제 진단이 품질 목표를 달성했다고 보증하지 않는다."
+      ]
+    },
+    {
+      "id": "manual-review-notes",
+      "name": "수동 이견과 해소 이력",
+      "status": "implemented",
+      "behavior": "현재 Finding 버전과 근거 파일에 묶인 사람의 이견/해소 주석을 파일 또는 설정된 PostgreSQL에 보존한다. 공통 검증, CAS, 명시적 이력 이전과 저장소 결합을 재사용한다.",
+      "entrypoints": [{"path": "src/runtime/review-notes.ts", "symbol": "appendReviewNote"}, {"path": "src/runtime/review-notes.ts", "symbol": "summarizeReviewNotes"}, {"path": "src/runtime/postgres-results.ts", "symbol": "PostgresResultStore"}],
+      "callers": [{"path": "scripts/results-admin.ts", "symbol": "runResultAdmin"}, {"path": "src/runtime/result-audit.ts", "symbol": "auditResultRecords"}],
+      "contracts": ["src/runtime/review-notes.ts", "src/runtime/review-note-schema.ts", "src/runtime/review-notes.sql", "src/runtime/__tests__/postgres-results.integration.test.ts", "docs/results-review.md"],
+      "tests": [{"path": "src/runtime/__tests__/review-notes.test.ts", "title": "retains an idempotent history and never changes canonical artifacts"}, {"path": "src/runtime/__tests__/review-notes.test.ts", "title": "marks changed references stale and retains them when a fresh human resolution is added"}, {"path": "src/runtime/__tests__/postgres-results.test.ts", "title": "redacts connection failures without falling back to a local result history"}],
+      "invariants": ["같은 ID의 다른 내용을 덮어쓰지 않는다.", "원래 이견을 삭제하지 않고 현재 Finding 버전에 대한 해소 근거를 별도 기록한다."],
+      "limitations": ["사람의 주석이며 자동 중재·재지시·판정 수정·재발행·작성자 인증은 포함하지 않는다. 실제 PostgreSQL 동시성·이전·장애 복구는 별도 integration suite로 검증한다. 파일과 DB 사이 분산 트랜잭션은 없으며 장애 후 원래 작업 재시도가 필요할 수 있다."]
+    },
+    {
+      "id": "result-audit",
+      "name": "결과 무결성과 보완 상태 대조",
+      "status": "implemented",
+      "behavior": "파일 또는 PostgreSQL 이벤트와 로컬 봉인 자료에서 범위 전후 상태, revision별 보완 답변, 원장/분류/발행 일관성과 수동 이견을 읽기 전용으로 조회한다. DB 결과는 트랜잭션 시점 스냅샷이다.",
+      "entrypoints": [{"path": "src/runtime/result-audit.ts", "symbol": "auditResultRecords"}, {"path": "src/runtime/result-audit.ts", "symbol": "renderResultAudit"}],
+      "callers": [{"path": "scripts/results-admin.ts", "symbol": "runResultAdmin"}],
+      "contracts": ["src/runtime/result-records.ts", "src/runtime/missions/analysis-checkpoint.ts", "docs/results-review.md"],
+      "tests": [{"path": "src/runtime/__tests__/result-audit.test.ts", "title": "reconciles recorded answers without erasing unresolved checks or changing published artifacts"}],
+      "invariants": ["한 질문의 resolved를 파일 전체 또는 다른 미확인 검사의 해결로 확대하지 않는다.", "감사가 모델 호출이나 기존 발행 자료 변경을 일으키지 않는다.", "누락·미확정 값을 0이나 완료로 추정하지 않는다."],
+      "limitations": ["로컬 산출물과 원래 engagement 경로가 필요하다. PostgreSQL 이벤트 조회는 명시적 run ID와 봉인 manifest의 경로/해시 결합을 요구한다. 자동 범위 판정 수정은 미구현이며 의미적 정확성을 증명하지 않는다."]
+    },
+    {
+      "id": "manual-review-contracts",
+      "name": "사람의 검토 계약·회신·피드백",
+      "status": "implemented",
+      "behavior": "명시한 파일의 묶음, 원자적 등록, 계약·최신 요청·회신 버전 결합과 사람의 피드백 이력을 기존 주석 원장에 보존한다. 담당자·파일 버전별 현황과 최신 요청의 미검토 회신 양식을 파일/PostgreSQL에서 읽기 전용으로 내보낸다.",
+      "entrypoints": [
+        {
+          "path": "src/runtime/manual-review.ts",
+          "symbol": "planManualReview"
+        },
+        {
+          "path": "src/runtime/manual-review.ts",
+          "symbol": "projectManualReviews"
+        },
+        {
+          "path": "src/runtime/review-notes.ts",
+          "symbol": "appendReviewNoteBatch"
+        },
+        {
+          "path": "src/runtime/manual-review-view.ts",
+          "symbol": "readManualReviewStatus"
+        },
+        {
+          "path": "src/runtime/manual-review-view.ts",
+          "symbol": "createManualResponseTemplate"
+        }
+      ],
+      "callers": [
+        {
+          "path": "scripts/results-admin.ts",
+          "symbol": "runResultAdmin"
+        },
+        {
+          "path": "src/runtime/review-notes.ts",
+          "symbol": "summarizeReviewNotes"
+        },
+        {
+          "path": "src/runtime/postgres-results.ts",
+          "symbol": "PostgresResultStore"
+        }
+      ],
+      "contracts": [
+        "src/runtime/review-note-schema.ts",
+        "docs/results-review.md",
+        "src/runtime/__tests__/postgres-results.integration.test.ts"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/manual-review.test.ts",
+          "title": "registers every assignment atomically and preserves idempotency and CAS for mixed batches"
+        },
+        {
+          "path": "src/runtime/__tests__/manual-review.test.ts",
+          "title": "requires a latest-request response and explicit human acceptance without changing canonical coverage"
+        },
+        {
+          "path": "src/runtime/__tests__/results-admin.test.ts",
+          "title": "previews and atomically registers a manual review plan without a provider or database"
+        },
+        {
+          "path": "src/runtime/__tests__/manual-review-view.test.ts",
+          "title": "keeps overlapping assignments and global pending work visible under assignee filters"
+        },
+        {
+          "path": "src/runtime/__tests__/manual-review-view.test.ts",
+          "title": "exports an unreviewed latest-request template without inheriting prior completed claims"
+        },
+        {
+          "path": "src/runtime/__tests__/manual-review-view.test.ts",
+          "title": "keeps changed current-request evidence visible after a later reply and acceptance"
+        }
+      ],
+      "invariants": [
+        "작업 초안은 명시한 파일만 사용하고 남은 파일을 버리지 않는다.",
+        "일괄 등록은 모두 저장하거나 모두 취소한다.",
+        "미회신·보완 필요·근거 변경을 완료로 바꾸지 않고 현재 회신과 과거 이력을 구별한다.",
+        "필터 적용 시 전체 수치를 숨기지 않고 중복 배정·다른 파일 버전·취소를 수락으로 합치지 않는다.",
+        "회신 양식은 최신 요청과 head를 보존하고 모든 파일을 미검토로 시작하며 원장을 변경하지 않는다.",
+        "사람의 수락은 실행 coverage, Finding 판정 또는 발행 보고서를 바꾸지 않는다."
+      ],
+      "limitations": [
+        "에이전트 병렬 실행·자동 중재·자동 재지시는 포함하지 않는다. 담당자는 입력 표기이며 인증된 사용자나 실제 읽기 증명이 아니다.",
+        "초안 생성만으로 파일 존재/해시 진위가 확인되지는 않는다. 실제 PostgreSQL 원자성·이전은 별도 integration suite로 검증한다."
+      ]
+    },
+    {
+      "id": "review-intake",
+      "name": "제출 기록 수집과 명시적 의견 중재",
+      "status": "implemented",
+      "behavior": "제출된 회신/의견 파일을 제한된 동시성으로 읽고 구조·계약·버전·ID 충돌을 검사해 개별 결과를 보존한다. 기존 주석 원장에 의견과 사람의 중재를 기록한다. 무인 모드는 미해결 대기 목록을 출력하며 자동 채택하지 않는다.",
+      "entrypoints": [
+        {"path": "src/runtime/review-intake.ts", "symbol": "collectReviewSubmissions"},
+        {"path": "src/runtime/review-intake.ts", "symbol": "readReviewConflicts"},
+        {"path": "src/runtime/review-mediation.ts", "symbol": "projectReviewMediation"}
+      ],
+      "callers": [
+        {"path": "scripts/results-admin.ts", "symbol": "runResultAdmin"},
+        {"path": "src/runtime/review-notes.ts", "symbol": "summarizeReviewNotes"},
+        {"path": "src/runtime/postgres-results.ts", "symbol": "PostgresResultStore"}
+      ],
+      "contracts": ["src/runtime/review-note-schema.ts", "src/runtime/review-intake.ts", "docs/results-review.md", "src/runtime/__tests__/postgres-results.integration.test.ts"],
+      "tests": [
+        {"path": "src/runtime/__tests__/review-intake.test.ts", "title": "isolates malformed inputs and preserves both colliding payloads in unattended collection"},
+        {"path": "src/runtime/__tests__/review-intake.test.ts", "title": "preserves both sides and requires an explicit current human decision instead of majority voting"},
+        {"path": "src/runtime/__tests__/review-intake.test.ts", "title": "bounds concurrent file reads and returns stable order despite asynchronous completion"},
+        {"path": "src/runtime/__tests__/results-admin.test.ts", "title": "finishes unattended intake with unresolved receipts and requires explicit mediation"}
+      ],
+      "invariants": [
+        "수집은 읽기 전용이며 한 입력 오류로 다른 제출 기록을 버리지 않는다.",
+        "동일 ID의 다른 내용이나 경쟁 회신을 입력 순서로 채택하지 않는다.",
+        "무인 모드에서도 의견 일치·다수결·불확실성을 자동 확정으로 바꾸지 않는다.",
+        "새 의견 또는 근거 변경 시 과거 중재의 채택을 그대로 적용하지 않는다.",
+        "사람의 중재 주석은 canonical Finding·실행 coverage·발행 보고서를 바꾸지 않는다."
+      ],
+      "limitations": [
+        "동시 파일 I/O이며 CPU 또는 에이전트 병렬 검토가 아니다. 취약점 의미 판정·자동 재지시·자동 발행은 포함하지 않는다.",
+        "수집 결과는 자동 저장하지 않는다. 원본 제출 파일의 보관은 제출자 책임이다.",
+        "작성자 표기는 인증이 아니다. 같은 파일 버전과 정확히 같은 topic의 표기 차이만 비교하며 의미적 동등성은 추론하지 않는다."
+      ]
+    },
+    {
+      "id": "development-map",
+      "name": "개발 영향 검토와 참조 검사",
+      "status": "implemented",
+      "behavior": "변경 전에 기존 구현·계약·테스트를 찾고 삭제/이름 변경된 참조를 검사한다.",
+      "entrypoints": [
+        {
+          "path": "scripts/lib/implementation-map.ts",
+          "symbol": "validateImplementationMap"
+        }
+      ],
+      "callers": [
+        {
+          "path": "scripts/check-implementation-map.ts"
+        }
+      ],
+      "contracts": [
+        "AGENTS.md",
+        "docs/implementation-map.json"
+      ],
+      "tests": [
+        {
+          "path": "src/runtime/__tests__/implementation-map.test.ts",
+          "title": "validates the repository map and derives a deduplicated regression suite"
+        }
+      ],
+      "invariants": [
+        "제안 기능을 구현 완료로 표시하지 않는다.",
+        "주석이나 건너뛴 테스트만으로 참조를 충족하지 않는다."
+      ],
+      "limitations": [
+        "정적 선언/테스트 제목의 존재를 확인한다. 문서의 의미·전체 호출 관계·테스트 성공 여부는 별도 검사이다."
+      ]
+    }
+  ],
+  "plannedCapabilities": [
+    {
+      "id": "parallel-review",
+      "name": "읽기 범위를 기준으로 한 독립 검토 분할",
+      "relatedFeatureIds": [
+        "review-feedback",
+        "review-continuation",
+        "review-decisions",
+        "manual-review-contracts"
+      ],
+      "acceptanceCriteria": [
+        "사람이 명시한 파일의 묶음과 계약·회신 관리는 manual-review-contracts에 구현됐다. 에이전트의 자동 병렬 실행은 미구현이다.",
+        "기존 검토 입력/판정 계약과 영수증을 보존하는 분할·통합 설계를 먼저 검토한다.",
+        "수정·보완·재개에서 중복/누락 판정과 다른 소스 revision의 읽기가 섞이지 않는 수용 테스트가 필요하다."
+      ]
+    },
+    {
+      "id": "semantic-disputes",
+      "name": "근거 기반 이견 등록과 판정 이력",
+      "relatedFeatureIds": [
+        "review-decisions",
+        "cause-counting",
+        "knowledge",
+        "manual-review-notes",
+        "review-intake"
+      ],
+      "acceptanceCriteria": [
+        "수동 이견 보존은 manual-review-notes, 명시적 의견 비교와 사람/무인 대기 처리는 review-intake에 구현됐다. 자동 의미적 이견 조정은 미구현이다.",
+        "보정 영향이 최종 집계/보고서까지 전달되는 계약을 검증한다."
+      ]
+    },
+    {
+      "id": "coverage-reconciliation",
+      "name": "보완 후 범위 판정 재대조",
+      "relatedFeatureIds": [
+        "review-feedback",
+        "recovery",
+        "publication",
+        "result-audit"
+      ],
+      "acceptanceCriteria": [
+        "기록 전후와 보완 답변의 읽기 전용 대조는 result-audit에 구현됐다. 개별 검사에 대한 정식 해소/판정 갱신은 미구현이다.",
+        "새 근거가 없는 미확인 항목은 그대로 유지한다."
+      ]
+    }
+  ]
+}
