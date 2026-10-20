@@ -162,10 +162,10 @@ export function prepareReviewProgress(context: ReviewProgressContext, input: {
   save(context, checkpoint);
 }
 
-export function finishReviewProgress(context: ReviewProgressContext, succeeded: boolean): void {
-  const checkpoint = readCheckpoint(context);
-  if (succeeded) reconcile(context, checkpoint);
-  else if (checkpoint.pending) { delete checkpoint.pending; save(context, checkpoint); }
+export function finishReviewProgress(context: ReviewProgressContext, _succeeded: boolean): void {
+  // A tool can report failure after writing. Reconcile exact prepared bytes in
+  // either case; discarding the pending receipt would strand a valid new file.
+  reconcile(context, readCheckpoint(context));
 }
 
 export function mergeReviewReuse(...values: Array<ReviewReuse | undefined>): ReviewReuse | undefined {

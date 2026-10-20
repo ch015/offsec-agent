@@ -138,6 +138,19 @@ describe('bounded incremental review artifacts', () => {
     expect(loadReviewProgress(context)).toMatchObject({ draft: false, remainingIds: [] });
     expect(() => validateV2ReviewSourceReads(f.engagementDir, f.target, [], loadReviewProgress(context)!.reuse)).not.toThrow();
   });
+  it('recovers a completed Write even when its tool reports failure after writing', () => {
+    const f = fixture(), context = { ...f, runId: 'run', model: 'review-model', revision: 0 };
+    const events = f.events.map(event => ({ ...event, actor: 'reviewer' }));
+    const first = f.prepare({ reviewPatch: true, reviewedFindings: [f.row(0)] });
+    prepareReviewProgress(context, { attempt: '1', content: first.content, events });
+    writeFileSync(f.path, first.content); finishReviewProgress(context, true);
+    const next = f.prepare({ reviewPatch: true, reviewedFindings: [f.row(1)] });
+    prepareReviewProgress(context, { attempt: '2', content: next.content, events });
+    writeFileSync(f.path, next.content);
+    finishReviewProgress(context, false);
+    expect(loadReviewProgress(context)!.reviewedIds.sort()).toEqual(f.findings.map(finding => finding.id).sort());
+  });
+
   it('preserves committed work on failed writes and rejects altered bytes or cross-run reuse', () => {
     const f = fixture(), context = { ...f, runId: 'run', model: 'review-model', revision: 0 };
     const events = f.events.map(event => ({ ...event, actor: 'reviewer' }));
