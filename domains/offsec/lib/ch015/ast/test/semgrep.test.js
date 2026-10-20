@@ -17,7 +17,7 @@ function fixture() {
   return { target, source };
 }
 
-function runner(output, version = '1.157.0') {
+function runner(output, version = '1.163.0') {
   const calls = [];
   const execFileImpl = (command, args, options, callback) => {
     calls.push({ command, args, options });
@@ -89,7 +89,7 @@ describe('trusted Semgrep runner', () => {
     });
     const batches = [];
     const execFileImpl = (_command, args, _options, callback) => {
-      if (args[0] === '--version') return callback(null, '1.157.0', '');
+      if (args[0] === '--version') return callback(null, '1.163.0', '');
       const sources = args.filter(arg => files.map(file => fs.realpathSync(file)).includes(arg)); batches.push(sources);
       callback(null, JSON.stringify({ results: sources.map((file, index) => ({ check_id: `rule-${index}`, path: file, start: { line: 1 }, extra: {} })), paths: { scanned: sources } }), '');
     };
@@ -111,7 +111,7 @@ describe('trusted Semgrep runner', () => {
     });
     let scans = 0;
     const execFileImpl = (_command, args, _options, callback) => {
-      if (args[0] === '--version') return callback(null, '1.157.0', '');
+      if (args[0] === '--version') return callback(null, '1.163.0', '');
       const sources = args.filter(arg => arg.endsWith('.js'));
       assert.ok(sources.reduce((sum, file) => sum + Buffer.byteLength(file) + 3, 0) <= 24_000);
       scans++;
@@ -150,7 +150,7 @@ describe('trusted Semgrep runner', () => {
       retained_findings: 1,
       truncated: true,
     });
-    assert.equal(result.receipt.version, '1.157.0');
+    assert.equal(result.receipt.version, '1.163.0');
     const scan = mock.calls[1];
     assert.ok(scan.args.includes('--metrics=off'));
     assert.ok(scan.args.includes(fs.realpathSync(source)));

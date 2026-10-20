@@ -62,7 +62,7 @@ function observation(input: {
       executionOrder: input.repetition,
       elapsedMs: 100,
       usage: { inputTokens: 10, outputTokens: 5 },
-      toolVersions: { semgrep: '1.157.0' },
+      toolVersions: { semgrep: '1.163.0' },
       artifactSha256: [hash],
     },
   };
@@ -265,7 +265,7 @@ describe('OffSec comparative claim gate', () => {
       ...value,
       provenance: {
         ...value.provenance,
-        toolVersions: value.arm === 'ch015' ? { 'ch015-plugin': '1.0.0' } : { semgrep: '1.157.0' },
+        toolVersions: value.arm === 'ch015' ? { 'ch015-plugin': '1.0.0' } : { semgrep: '1.163.0' },
       },
     }));
     expect(compareOffsecArms({

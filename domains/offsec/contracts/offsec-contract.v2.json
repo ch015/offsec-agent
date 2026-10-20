@@ -775,7 +775,7 @@
     },
     {
       "path": "rules/semgrep/manifest.json",
-      "sha256": "08371c500661d89430021685309a1f2a39a305ceccd762d0361145e8695dea25"
+      "sha256": "41ffc9fb2685342ff2a265b4de017a3bd954e7ccaa6417f6d23667cb8906af35"
     },
     {
       "path": "rules/semgrep/code.yml",

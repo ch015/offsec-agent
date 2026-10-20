@@ -21,7 +21,7 @@ describe('native preanalysis → AI evidence', () => {
   it('retains partial parser/tool evidence per unit and discloses it even in a completed report', async () => {
     const f = fixture(), source = f.put('fragment.ts', 'export function incomplete('), unsupported = f.put('contract.sol', 'contract Example {}');
     const semgrepExecFile = (_command: string, args: string[], _options: unknown, callback: (error: unknown, stdout: string, stderr: string) => void) => {
-      callback(null, args[0] === '--version' ? '1.157.0\n' : JSON.stringify({ results: [], paths: { scanned: [source] }, errors: [{ path: source, code: 3, level: 'warn', type: 'Syntax error', message: 'incomplete fragment' }] }), '');
+      callback(null, args[0] === '--version' ? '1.163.0\n' : JSON.stringify({ results: [], paths: { scanned: [source] }, errors: [{ path: source, code: 3, level: 'warn', type: 'Syntax error', message: 'incomplete fragment' }] }), '');
     };
     const result = await buildAstContext(f.target, { outputPath: f.outputPath, sourceFiles: [source, unsupported], runSemgrep: true, semgrepExecFile, logger() {} });
     expect(result.semgrep.status).toBe('complete');
@@ -39,7 +39,7 @@ describe('native preanalysis → AI evidence', () => {
     const excluded = f.put('src/excluded.js', 'function secret() { return 3; }');
     let scanArgs: string[] = [];
     const semgrepExecFile = (_command: string, args: string[], _options: unknown, callback: (error: unknown, stdout: string, stderr: string) => void) => {
-      if (args[0] === '--version') callback(null, '1.157.0\n', '');
+      if (args[0] === '--version') callback(null, '1.163.0\n', '');
       else { scanArgs = args; callback(null, JSON.stringify({ results: [], paths: { scanned: [a, b] } }), ''); }
     };
     const result = await buildAstContext(f.target, { outputPath: f.outputPath, sourceFiles: [a, b], semgrepFiles: [excluded], maxFiles: 1, runSemgrep: true, semgrepExecFile, logger() {} });
