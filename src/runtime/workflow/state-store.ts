@@ -12,6 +12,7 @@ import { ArtifactReceiptSchema, type ArtifactReceipt } from './artifact-store.js
 
 import { appendLedger, recoverLedger } from './file-ledger.js';
 import { atomicPrivateWrite, privateDirectory } from './storage-files.js';
+import { canonicalJson } from './outbox.js';
 
 export const HostInputRecordSchema = z.object({
   inputRevision: z.number().int().nonnegative(),
@@ -579,7 +580,8 @@ export class FileRunStateStore implements RunStateStore {
       const existing = this.eventsById.get(event.eventId);
       if (existing) {
         const { seq: _seq, at: _at, runId: _runId, ...existingPayload } = existing;
-        if (!isDeepStrictEqual(existingPayload, event)) {
+        // Compare the JSON that survives persistence, including omitted optionals.
+        if (canonicalJson(existingPayload) !== canonicalJson(event)) {
           throw new Error(`run event idempotency key 충돌: ${event.eventId}`);
         }
         return this.read();

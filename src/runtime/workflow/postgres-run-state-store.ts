@@ -1,5 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
-
 import {
   replayRunEvents,
   RunEventSchema,
@@ -32,7 +30,7 @@ function comparableEvent(event: RunEvent | NewRunEvent): unknown {
 }
 
 function assertExpectedEvent(existing: RunEvent, requested: NewRunEvent): void {
-  if (!isDeepStrictEqual(comparableEvent(existing), comparableEvent(requested))) {
+  if (canonicalJson(comparableEvent(existing)) !== canonicalJson(comparableEvent(requested))) {
     throw new Error(`run event idempotency key 충돌: ${requested.eventId}`);
   }
 }

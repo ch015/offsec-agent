@@ -31,6 +31,15 @@ function append(store: RunStateStore, event: NewRunEvent): void {
 }
 
 describe('FileRunStateStore', () => {
+  it('deduplicates the persisted JSON event after resume, including omitted optional fields', () => {
+    const store = createStore();
+    const event: NewRunEvent = { type: 'phase.started', eventId: 'resume-start', phase: 'analyze', round: undefined, attempt: 1 };
+    store.append(event);
+    const reopened = FileRunStateStore.open(store.engagementDir), lastSeq = reopened.read().lastSeq;
+    expect(reopened.append(event).lastSeq).toBe(lastSeq);
+    expect(() => reopened.append({ ...event, round: 'different-task' })).toThrow('idempotency');
+  });
+
   it('replays budget increases and removal without erasing recorded usage', () => {
     const store = createStore();
     append(store, { type: 'phase.started', eventId: 'budget:start', phase: 'analyze', attempt: 1 });

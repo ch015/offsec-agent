@@ -146,6 +146,7 @@ suite('PostgresRunStateStore', () => {
       await expect(store.append({ ...started, phase: 'different' }, 2, firstLease.fencingToken))
         .rejects.toThrow(/idempotency key 충돌/);
       expect(await store.append(started, 2, firstLease.fencingToken)).toEqual(first);
+      expect(await store.append({ ...started, round: undefined }, 2, firstLease.fencingToken)).toEqual(first);
 
       const raceEvents = [1, 2].map((attempt) => ({
         type: 'phase.started' as const,
