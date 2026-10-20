@@ -5,7 +5,7 @@ import {
   LiveDastMetricsSchema,
   OffsecEvaluationObservationSchema,
   type OffsecComparison,
-} from './offsec-evaluation.js';
+} from '../offsec-evaluation.js';
 
 export const LIVE_DAST_ARMS = ['legacy-read-only', 'adaptive-unverified', 'adaptive-verified'] as const;
 export const LIVE_DAST_METRICS = [

@@ -9,7 +9,7 @@ import {
   awaitOwnerCompletion,
   createLocalHeadedBrowserAdapter,
   createRemoteHandoffAdapter,
-} from '../auth-interaction.js';
+} from '../live-test/auth-interaction.js';
 import {
   createOwnerAuthRequest,
   readAuthInteractionSelection,
@@ -17,7 +17,7 @@ import {
   readOpaqueAuthSession,
   sealAuthInteractionSelection,
   sealOpaqueAuthSession,
-} from '../live-auth-session.js';
+} from '../live-test/live-auth-session.js';
 
 function engagement(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));

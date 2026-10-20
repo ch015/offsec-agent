@@ -9,7 +9,7 @@ import {
   LiveScenarioSchema,
   loadLiveTestProfile,
   type LiveTestProfile,
-} from '../live-test-contract.js';
+} from '../live-test/live-test-contract.js';
 
 function profile(overrides: Partial<LiveTestProfile> = {}): LiveTestProfile {
   return {

@@ -9,15 +9,15 @@ import {
   createLocalHeadedBrowserAdapter,
   createRemoteHandoffAdapter,
   type AuthInteractionAdapter,
-} from '../auth-interaction.js';
-import { createAdaptiveLiveTestBroker } from '../live-test-broker.js';
-import { LiveScenarioJournal } from '../live-scenario-journal.js';
+} from '../live-test/auth-interaction.js';
+import { createAdaptiveLiveTestBroker } from '../live-test/live-test-broker.js';
+import { LiveScenarioJournal } from '../live-test/live-scenario-journal.js';
 import {
   createOwnerAuthRequest,
   sealAuthInteractionSelection,
   sealOpaqueAuthSession,
-} from '../live-auth-session.js';
-import type { AuthInteractionMode, LiveScenario, LiveTestProfile } from '../live-test-contract.js';
+} from '../live-test/live-auth-session.js';
+import type { AuthInteractionMode, LiveScenario, LiveTestProfile } from '../live-test/live-test-contract.js';
 
 let baseUrl = '';
 const created = new Set<string>();

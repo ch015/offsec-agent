@@ -13,10 +13,10 @@ import {
   readStandardFindings,
   submitStandardFinding,
 } from '../finding-contract.js';
-import { createAdaptiveLiveTestBroker, createLiveTestBroker } from '../live-test-broker.js';
-import { LiveScenarioJournal } from '../live-scenario-journal.js';
-import { sealAuthInteractionSelection } from '../live-auth-session.js';
-import type { LiveScenario, LiveTestProfile } from '../live-test-contract.js';
+import { createAdaptiveLiveTestBroker, createLiveTestBroker } from '../live-test/live-test-broker.js';
+import { LiveScenarioJournal } from '../live-test/live-scenario-journal.js';
+import { sealAuthInteractionSelection } from '../live-test/live-auth-session.js';
+import type { LiveScenario, LiveTestProfile } from '../live-test/live-test-contract.js';
 
 const execFileAsync = promisify(execFile);
 

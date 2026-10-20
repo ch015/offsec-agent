@@ -1,4 +1,4 @@
-import type { StandardFinding } from './finding-contract.js';
+import type { StandardFinding } from '../finding-contract.js';
 import { readApprovedLiveScenario } from './live-scenario-journal.js';
 import { verifyLiveTestReceipt } from './live-test-broker.js';
 

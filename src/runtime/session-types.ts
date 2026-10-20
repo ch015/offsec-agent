@@ -1,6 +1,6 @@
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 
-import type { LiveDastContext } from './live-dast-tools.js';
+import type { LiveDastContext } from './live-test/live-dast-tools.js';
 
 export const DOMAINS = ['offsec'] as const;
 export type Domain = (typeof DOMAINS)[number];

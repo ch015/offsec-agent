@@ -7,14 +7,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createAdaptiveLiveTestBroker,
   verifyLiveTestReceipt,
-} from '../live-test-broker.js';
-import { LiveScenarioJournal } from '../live-scenario-journal.js';
+} from '../live-test/live-test-broker.js';
+import { LiveScenarioJournal } from '../live-test/live-scenario-journal.js';
 import {
   createOwnerAuthRequest,
   sealAuthInteractionSelection,
   sealOpaqueAuthSession,
-} from '../live-auth-session.js';
-import type { LiveScenario, LiveTestProfile } from '../live-test-contract.js';
+} from '../live-test/live-auth-session.js';
+import type { LiveScenario, LiveTestProfile } from '../live-test/live-test-contract.js';
 
 function profile(): LiveTestProfile {
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateLiveDastObservations } from '../live-dast-evaluation.js';
+import { evaluateLiveDastObservations } from '../live-test/live-dast-evaluation.js';
 
 const policy = {
   minimumEligibleCases: 2,

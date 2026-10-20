@@ -14,7 +14,7 @@ import {
   evaluateLiveDastObservations,
   LIVE_DAST_ARMS,
   LIVE_DAST_METRICS,
-} from '../src/runtime/live-dast-evaluation.js';
+} from '../src/runtime/live-test/live-dast-evaluation.js';
 import { assertBenchmarkCorpusIntact, benchmarkStableJson } from '../src/runtime/offsec-benchmark.js';
 
 type EvaluationMode = 'deterministic' | 'live';

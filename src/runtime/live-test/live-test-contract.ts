@@ -77,6 +77,7 @@ const PROFILE_SCHEMA_PATH = resolve(
   import.meta.dirname,
   '..',
   '..',
+  '..',
   'domains',
   'offsec',
   'contracts',

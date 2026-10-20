@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { createLiveTestBroker, readLiveTestPlan, verifyLiveTestReceipt } from '../live-test-broker.js';
+import { createLiveTestBroker, readLiveTestPlan, verifyLiveTestReceipt } from '../live-test/live-test-broker.js';
 
 describe('OffSec live test broker', () => {
   it('accepts the source-plan method set and preserves source evidence', () => {
