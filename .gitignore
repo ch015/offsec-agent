@@ -13,7 +13,7 @@ evals/offsec/state/
 evals/offsec/results/
 
 # 도메인 플러그인 안에 쌓이는 런타임 산출물.
-# 벤더 훅이 플러그인 루트 기준 경로로 쓴다 (on-stop.js, post-phase.js).
+# 벤더 훅이 플러그인 루트 기준 경로에 쓰는 로컬 실행 잔여물(과거 훅 산출물 포함).
 domains/*/knowledge-base/engagements/
 domains/*/harness/eval/reports/
 domains/*/.recon-cache/

@@ -12,7 +12,7 @@
  * R2 checkCompleteness    : recon이 정의한 유닛 중 실행(산출물 커밋)이 없는 게 있으면 INCOMPLETE_FANOUT.
  * R3 checkCoverageRatio   : audit 유닛의 files_examined / files_in_scope < minRatio면 UNDER_COVERED.
  *
- * 참고: docs/coverage-at-scale-plan.md, S4(large-scale-flow.md/project-scanner.md).
+ * 참고: docs/coverage-at-scale-plan.md.
  * CLI: node lib/ch015/coverage-gate.js --self-test
  */
 

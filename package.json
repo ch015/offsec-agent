@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:vendor": "pnpm test:vendor:offsec",
-    "test:vendor:offsec": "cd domains/offsec && node --test lib/ch015/test/*.test.js lib/ch015/ast/test/*.test.js hooks/test/*.test.js && for t in refuter-cite-check poc-gate source-reader coverage-gate lessons; do node lib/ch015/$t.js --self-test || exit 1; done",
+    "test:vendor:offsec": "cd domains/offsec && node --test lib/ch015/test/*.test.js lib/ch015/ast/test/*.test.js hooks/test/*.test.js && for t in refuter-cite-check poc-gate source-reader coverage-gate; do node lib/ch015/$t.js --self-test || exit 1; done",
     "test:all": "pnpm check:implementation && pnpm check:contracts && pnpm typecheck && pnpm test && pnpm test:vendor",
     "check:implementation": "tsx scripts/check-implementation-map.ts",
     "test:regression": "tsx scripts/check-implementation-map.ts --test",

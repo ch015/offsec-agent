@@ -15,8 +15,3 @@ test('active role registry has no v1 roles or model-owned orchestration', () => 
   }
   for (const name of ['offsec-lead', 'va-auditor', 'verifier', 'pentester']) assert.equal(fs.existsSync(path.join(ROOT, 'agents', name + '.md')), false);
 });
-for (const file of ['large-scale-flow.md', 'parallel-analysis.md']) test(`${file} describes host scheduling without old delegation calls`, () => {
-  const content = fs.readFileSync(path.join(ROOT, 'skills/ch015/common', file), 'utf8');
-  assert.doesNotMatch(content, /subagent_type:|Agent\s*\(/);
-  assert.match(content, /host/i); assert.match(content, /Scanner/); assert.match(content, /Analyzer/);
-});

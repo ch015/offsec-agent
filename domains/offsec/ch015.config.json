@@ -10,14 +10,8 @@
     "reportOutputDir": ".nunchi/reports/",
 
     "limits": {
-      "max_session_tokens": null,
       "cost_limit_usd": null,
-      "max_agent_depth": 1,
-      "max_feedback_iterations": 2,
-      "max_objection_cycles": 2,
-      "per_tool_budget": {},
-      "warn_threshold_ratio": 0.8,
-      "abort_threshold_ratio": 1.0
+      "max_agent_depth": 1
     },
 
     "compliance": {
@@ -52,12 +46,6 @@
       "enabled": false,
       "mode": "sequential",
       "min_source_files": 50
-    },
-
-    "reconCache": {
-      "enabled": true,
-      "ttl_days": 7,
-      "cache_dir": ".ch015/cache/recon/"
     },
 
     "analysisMode": {
@@ -129,27 +117,7 @@
   },
 
   "feedbackLoop": {
-    "max_iterations": 2,
-    "convergence_threshold": 5,
-    "objection_weights": {
-      "false_positive": 3,
-      "not_proxy_pattern": 3,
-      "response_mitigated": 3,
-      "severity_dispute": 2,
-      "severity_overstatement": 2,
-      "severity_understatement": 2,
-      "asset_value_mismatch": 2,
-      "asset_inflation": 2,
-      "impact_gate_overclassified": 2,
-      "impact_gate_underclassified": 2,
-      "excessive_structural_weakness": 2,
-      "quantitative_correction": 2,
-      "evidence_insufficient": 2,
-      "evidence_gap": 2,
-      "reference_missing": 2,
-      "dependency_issue": 2,
-      "missing_finding": 1
-    }
+    "max_iterations": 2
   },
 
   "integrations": {

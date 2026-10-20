@@ -67,7 +67,7 @@ function emptyFindingCounts() {
 
 function normalizeFindingSeverity(finding) {
   // Structural Weakness 판정 신호 단일화: classification(SKILL 분류 필드)과
-  // severity 문자열 중 어느 쪽이 와도 SW로 일관 판정한다 (finding.js countBySeverity와 동일 기준).
+  // severity 문자열 중 어느 쪽이 와도 SW로 일관 판정한다.
   const classification = normalizeScoreToken(finding?.classification);
   if (classification === 'STRUCTURAL_WEAKNESS') {
     return 'STRUCTURAL_WEAKNESS';

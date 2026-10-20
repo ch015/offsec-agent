@@ -392,7 +392,6 @@ export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow
     // 예외적으로 전달한다 — sandbox network strictAllowlist로 유출 경로를 통제한다.
     env: {
       ...safeParentEnv(),
-      CH015_COST_POLICY: spec.maxBudgetUsd === undefined ? 'record-only' : 'enforce',
       // P1: 인증 모드에 따라 API 키 전달 여부 결정
       // AUTH_MODE=oauth이면 API 키를 전달하지 않아 SDK가 OAuth 경로를 사용하도록 한다.
       // AUTH_MODE=api_key(기본)이면 API 키를 명시적으로 전달한다.
