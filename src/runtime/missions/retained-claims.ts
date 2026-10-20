@@ -1,20 +1,30 @@
-import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { promoteStandardFindingRecords, readStandardFindingRecordReceipts } from '../finding-contract.js';
 import { atomicPrivateWrite, managedPath } from '../workflow/storage-files.js';
+import type { RunSnapshot } from '../workflow/state-store.js';
 
 /** Failed execution is not a verdict on a source-grounded claim. Retain it for review. */
-export function retainFailedTaskClaims(root: string, taskIds: readonly string[]) {
+export function retainFailedTaskClaims(root: string, taskIds: readonly string[], snapshot: Readonly<RunSnapshot>) {
   const claims: Array<{ taskId: string; attemptDirectory: string; findingId: string; status: 'review-pending' }> = [];
   for (const taskId of taskIds) {
-    const directory = managedPath(root, join(root, 'work-units', taskId));
-    if (!existsSync(directory)) continue;
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !/^attempt-\d+$/.test(entry.name)) continue;
-      const attempt = managedPath(root, join(directory, entry.name));
-      const receipts = readStandardFindingRecordReceipts(attempt);
-      promoteStandardFindingRecords({ fromEngagementDir: attempt, toEngagementDir: root, expected: receipts });
-      for (const receipt of receipts) claims.push({ taskId, attemptDirectory: attempt, findingId: receipt.findingId, status: 'review-pending' });
+    const attempts = Object.values(snapshot.attempts)
+      .filter(attempt => attempt.phase === 'analyze' && attempt.round === taskId
+        && (attempt.status === 'failed' || attempt.status === 'completed'))
+      .sort((a, b) => a.attempt - b.attempt)
+      .map(attempt => {
+        const directory = managedPath(root, join(root, 'work-units', taskId, `attempt-${attempt.attempt}`));
+        return { ...attempt, directory, receipts: readStandardFindingRecordReceipts(directory) };
+      });
+    const latest = new Map(attempts.flatMap(attempt => attempt.receipts.map(receipt => [receipt.recordName, attempt.attempt] as const)));
+    for (const attempt of attempts) {
+      // Choose first, then promote. Replaying older versions on resume would
+      // otherwise collide with (or roll back) a newer version already at root.
+      const selectedRecordNames = new Set(attempt.receipts.filter(receipt => latest.get(receipt.recordName) === attempt.attempt).map(receipt => receipt.recordName));
+      if (selectedRecordNames.size) promoteStandardFindingRecords({
+        fromEngagementDir: attempt.directory, toEngagementDir: root, expected: attempt.receipts, selectedRecordNames,
+        superseded: attempts.filter(prior => prior.attempt < attempt.attempt && (prior.superseded || prior.status === 'failed')).flatMap(prior => prior.receipts),
+      });
+      for (const receipt of attempt.receipts) claims.push({ taskId, attemptDirectory: attempt.directory, findingId: receipt.findingId, status: 'review-pending' });
     }
   }
   const path = join(root, '00_retained_claims.json');

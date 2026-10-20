@@ -13,6 +13,7 @@ import { relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
+import { atomicPrivateWrite, readManagedFile } from './workflow/storage-files.js';
 
 type StandardEvidence = {
   path: string;
@@ -311,6 +312,10 @@ export function promoteStandardFindingRecords(input: {
   fromEngagementDir: string;
   toEngagementDir: string;
   expected: readonly StandardFindingRecordReceipt[];
+  /** Retention may select the latest version of each record across several attempts. */
+  selectedRecordNames?: ReadonlySet<string>;
+  /** Host-authorized previous attempts; only exact matching root bytes may be replaced. */
+  superseded?: readonly StandardFindingRecordReceipt[];
 }): StandardFindingRecordReceipt[] {
   const observed = readStandardFindingRecordReceipts(input.fromEngagementDir);
   if (JSON.stringify(observed) !== JSON.stringify(input.expected)) {
@@ -319,19 +324,35 @@ export function promoteStandardFindingRecords(input: {
   const sourceDir = resolve(input.fromEngagementDir, FINDINGS_RECORDS);
   const destinationDir = resolve(input.toEngagementDir, FINDINGS_RECORDS);
   mkdirSync(destinationDir, { recursive: true, mode: 0o700 });
-  for (const receipt of observed) {
+  const selected = observed.filter(receipt => !input.selectedRecordNames || input.selectedRecordNames.has(receipt.recordName));
+  for (const receipt of selected) {
     const content = readFileSync(resolve(sourceDir, receipt.recordName));
     const destination = resolve(destinationDir, receipt.recordName);
     try {
       writeFileSync(destination, content, { mode: 0o600, flag: 'wx' });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      if (!readFileSync(destination).equals(content)) {
-        throw new Error(`work unit typed Finding이 root record와 충돌한다: ${receipt.findingId}`);
+      const previous = readManagedFile(input.toEngagementDir, destination);
+      if (!previous.equals(content)) {
+        const sha256 = createHash('sha256').update(previous).digest('hex');
+        const identity = (bytes: Buffer) => {
+          const finding = StandardFindingSchema.parse(JSON.parse(bytes.toString('utf8')));
+          return JSON.stringify([finding.id, finding.contractVersion, finding.phase, finding.role, finding.round,
+            finding.title, finding.evidence[0]?.path, finding.evidence[0]?.lineStart]);
+        };
+        if (identity(previous) !== identity(content) || !input.superseded?.some(old => old.recordName === receipt.recordName && old.findingId === receipt.findingId
+          && old.bytes === previous.byteLength && old.sha256 === sha256)) {
+          throw new Error(`work unit typed Finding이 root record와 충돌한다: ${receipt.findingId}`);
+        }
+        const archived = resolve(input.toEngagementDir, '.recovery', 'finding-history', receipt.recordName, `${sha256}.json`);
+        if (existsSync(archived)) {
+          if (!readManagedFile(input.toEngagementDir, archived).equals(previous)) throw new Error('Superseded Finding history integrity mismatch');
+        } else atomicPrivateWrite(archived, previous);
+        atomicPrivateWrite(destination, content);
       }
     }
   }
-  return observed;
+  return selected;
 }
 
 export function assertStandardFindingsRepresented(

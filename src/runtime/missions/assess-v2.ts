@@ -4,6 +4,7 @@ import { retainFailedTaskClaims } from './retained-claims.js';
 import { schedulerJournal } from '../workflow/scheduler-journal.js';
 import { reconcileUsageReceipts } from '../workflow/usage-ledger.js';
 import { beginAnalysisRevision, finishRevisionCleanup } from './analysis-revision.js';
+import { promoteCompletedTaskFindings } from './finding-promotion.js';
 import { finishEvaluationReopen } from './evaluation-recovery.js';
 import { createAnalysisTasks, analysisTaskRequest } from '../planning/task-planner.js';
 import { readAnalysisAssessments } from '../planning/analysis-assessments.js';
@@ -88,7 +89,6 @@ import { selectAnalysisFollowups } from '../workflow/analysis-followup.js';
 import { SHARED_KNOWLEDGE_SNAPSHOT, snapshotSharedKnowledge, type SharedKnowledgeContext } from '../shared-knowledge.js';
 import {
   assertStandardFindingsRepresented,
-  promoteStandardFindingRecords,
   readStandardFindingRecordReceipts,
   type StandardFindingRecordReceipt,
 } from '../finding-contract.js';
@@ -873,7 +873,7 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
         uncoveredFileCount: uncoveredFiles.length,
       });
     }
-    const retainedClaims = retainFailedTaskClaims(engagementDir, [...rejectedKeys]);
+    const retainedClaims = retainFailedTaskClaims(engagementDir, [...rejectedKeys], await missionRuntime.read());
     if (retainedClaims.claims.length) log({ event: 'FailedTaskClaimsRetained', count: retainedClaims.claims.length });
     rootAllowedReadFiles.push(retainedClaims.path);
     if (completedUnitKeys.length === 0) {
@@ -917,16 +917,20 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
     if (!analysisFrozen) renameSync(temporary, workUnitResultPath);
 
     // per-unit finding record를 root engagement로 승격.
-    const pendingUnitFindings = fulfilled.map(({ unit, unitDir, findingReceipts }) => ({
+    const pendingUnitFindings = fulfilled.map(({ unit, task, unitDir, findingReceipts }) => ({
       unitKey: unit.unitKey,
+      taskId: task.unitKey,
       unitDir,
       receipts: findingReceipts,
     }));
+    const promotionSnapshot = await missionRuntime.read();
     for (const unit of pendingUnitFindings) {
-      promoteStandardFindingRecords({
-        fromEngagementDir: unit.unitDir,
-        toEngagementDir: engagementDir,
+      promoteCompletedTaskFindings({
+        root: engagementDir,
+        taskId: unit.taskId,
+        unitDir: unit.unitDir,
         expected: unit.receipts,
+        snapshot: promotionSnapshot,
       });
     }
     if (pendingUnitFindings.length > 0) {
