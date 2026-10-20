@@ -9,7 +9,7 @@ const dist = join(root, 'dist');
 rmSync(dist, { recursive: true, force: true });
 const result = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', join(root, 'tsconfig.library.json')], { cwd: root, stdio: 'inherit' });
 if (result.status !== 0) process.exit(result.status ?? 1);
-for (const name of ['domains', 'templates']) {
+for (const name of ['domains']) {
   const from = join(root, name);
   if (existsSync(from)) cpSync(from, join(dist, name), { recursive: true, filter: file => {
     const parts = relative(root, file).split('/');

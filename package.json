@@ -84,8 +84,7 @@
   "files": [
     "dist",
     "src",
-    "domains",
-    "templates"
+    "domains"
   ],
   "peerDependencies": {
     "@tree-sitter-grammars/tree-sitter-kotlin": "^1.1.0",

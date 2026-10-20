@@ -24,24 +24,10 @@ function getProjectPath(...segments) {
 }
 
 /**
- * 템플릿 경로 반환
- */
-function getTemplatePath(templateName) {
-  return getPluginPath('templates', templateName);
-}
-
-/**
  * 스킬 경로 반환
  */
 function getSkillPath(service, skillName) {
   return getPluginPath('skills', PLUGIN_NAME, service, skillName);
-}
-
-/**
- * 커맨드 경로 반환
- */
-function getCommandPath(commandName) {
-  return getPluginPath('commands', `${commandName}.md`);
 }
 
 module.exports = {
@@ -51,7 +37,5 @@ module.exports = {
   PLUGIN_NAME,
   getPluginPath,
   getProjectPath,
-  getTemplatePath,
-  getSkillPath,
-  getCommandPath
+  getSkillPath
 };

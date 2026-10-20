@@ -1,6 +1,6 @@
 # Knowledge Base — CH015 조직 기억
 
-현재 호스트가 읽는 보안 차원·도메인 오버레이·표준·판단 보조 패턴입니다. 아래 engagements/CISO 예시는 원본 CH015의 이력 규약이며 현재 호스트의 출력 위치와 구분합니다.
+현재 호스트가 읽는 보안 차원·도메인 오버레이·판단 보조 패턴입니다. 아래 engagements/CISO 예시는 원본 CH015의 이력 규약이며 현재 호스트의 출력 위치와 구분합니다.
 
 ## 지식 리소스와 원본 CH015 이력 규약
 
@@ -12,11 +12,6 @@ knowledge-base/
 ├── tier2-overlays/                            # Tier 2: 서비스 도메인 오버레이
 │   ├── registry.yaml                          #   로딩 조건 (auto/conditional)
 │   └── web3.md, payment.md, ...               #   도메인별 8차원 추가 질문
-│
-├── standards/                                 # 표준/규제 근거
-│   ├── registry.yaml                          #   표준 로딩 레지스트리
-│   └── owasp-top10.yaml, owasp-asvs-v4.yaml,  #   OWASP/NIST/PCI-DSS/프라이버시 규제
-│       nist-sp800-select.yaml, pci-dss-v4.yaml, ...
 │
 ├── conventions/                               # 조직 컨벤션
 │   └── finding-id-naming.md                   #   Finding ID 네이밍 규칙
@@ -40,7 +35,6 @@ knowledge-base/
 ├── patterns/                                  # 판단 보조 패턴
 │   ├── false_positive_patterns.yaml           #   오탐/과대평가 패턴
 │   ├── known_findings.yaml                    #   반복 발견 패턴
-│   ├── domain_issue_map.yaml                  #   도메인별 빈발 이슈
 │   └── coverage-matrix.yaml                   #   커버리지 매트릭스
 │
 └── README.md
