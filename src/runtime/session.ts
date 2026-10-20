@@ -1,5 +1,6 @@
 import { managedProviderProcess } from './provider-process.js';
 import { observeSourceDelivery } from './source-delivery.js';
+import { structuredOutputDiagnostics } from './structured-output-diagnostics.js';
 import { ACTION_GUIDANCE } from './workflow/action-guidance.js';
 import { prepareReviewProgress, finishReviewProgress, type ReviewProgressContext, type ReviewReuse } from './review-progress.js';
 /**
@@ -574,6 +575,7 @@ export async function runSession(spec: SessionSpec): Promise<SessionOutcome> {
   options.spawnClaudeCodeProcess = processLifetime.start;
   const q: Query = query({ prompt: spec.prompt, options });
   const readCalls = new Map<string, { file: string; offset?: number; limit?: number }>();
+  const outputDiagnostics = structuredOutputDiagnostics(spec, options.outputFormat?.schema, emitLedger);
   // close() ends the local CLI and its transports; it does not prove remote billing stopped.
   const closeQuery = () => q.close?.();
   spec.abortController?.signal.addEventListener('abort', closeQuery, { once: true });
@@ -617,6 +619,7 @@ export async function runSession(spec: SessionSpec): Promise<SessionOutcome> {
       if (message.type === 'user' && message.parent_tool_use_id === null && Array.isArray(message.message.content)) {
         for (const block of message.message.content) {
           if (block.type !== 'tool_result') continue;
+          outputDiagnostics.received(block.tool_use_id, block.content, block.is_error);
           const call = readCalls.get(block.tool_use_id);
           if (!call) continue;
           readCalls.delete(block.tool_use_id);
@@ -642,6 +645,9 @@ export async function runSession(spec: SessionSpec): Promise<SessionOutcome> {
               outcome.texts.push(block.text);
             }
           } else if (block.type === 'tool_use') {
+            if (!fromSubagent && block.name === 'StructuredOutput') {
+              outputDiagnostics.submitted(block.id, block.input, message.session_id);
+            }
             const args = block.input as Record<string, unknown> | null;
             if (!fromSubagent && ['Read', 'mcp__nunchi__read_source'].includes(block.name) && typeof args?.file_path === 'string') {
               readCalls.set(block.id, { file: args.file_path,
@@ -671,14 +677,20 @@ export async function runSession(spec: SessionSpec): Promise<SessionOutcome> {
         }) + '\n');
         if (message.subtype === 'success') outcome.resultText = message.result;
         else outcome.errors = message.errors;
+        outputDiagnostics.terminal(message.subtype, message.terminal_reason, outcome.errors);
         if ('structured_output' in message && message.structured_output !== undefined) {
           outcome.structuredOutput = message.structured_output;
           outcome.structuredOutputSource = 'sdk';
         }
       }
     }
+    // SDK close() may end iteration normally without yielding a result. Preserve
+    // cancellation before downstream model/usage validation can misclassify it.
+    spec.abortController?.signal.throwIfAborted();
+    if (outcome.subtype === undefined) throw new Error('Anthropic SDK stream ended without a terminal result receipt');
   } catch (cause) {
-    throw new SessionExecutionError(outcome, cause);
+    outputDiagnostics.streamFailed(cause);
+    throw new SessionExecutionError(outcome, spec.abortController?.signal.aborted ? spec.abortController.signal.reason : cause);
   } finally {
     spec.abortController?.signal.removeEventListener('abort', closeQuery);
     closeQuery();

@@ -87,4 +87,5 @@ export type LedgerRow = {
   compaction?: CompactBoundaryMetadata;
   delivery?: import('./source-delivery.js').SourceDeliveryReceipt;
   retryAfterMs?: number;
+  structuredOutput?: import('./structured-output-diagnostics.js').StructuredOutputDiagnosticRef;
 };

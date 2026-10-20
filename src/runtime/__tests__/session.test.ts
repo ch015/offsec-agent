@@ -177,6 +177,25 @@ describe('buildOptions — 격리', () => {
   });
 
   it('rejects retired live phases', () => { expect(() => buildOptions(spec({phase: 'pentest'}))).toThrow(/phase/); });
+
+  it('accepts a valid review envelope and leaves StructuredOutput input unchanged in the permission hook', async () => {
+    const input = spec({ phase: 'review', agentRole: 'reviewer' });
+    const options = buildOptions(input);
+    if (!options.outputFormat || options.outputFormat.type !== 'json_schema') throw new Error('Missing schema');
+    const validator = z.fromJSONSchema(options.outputFormat.schema);
+    const output = { contractVersion: '2.1.0', phase: 'review', role: 'reviewer', status: 'complete',
+      artifacts: ['03_review_result.json'], summary: 'Review complete', metrics: { findingCount: 0 }, unresolved: [] };
+    expect(validator.parse(output)).toEqual(output);
+    expect(validator.safeParse({ ...output, metrics: {} }).success).toBe(false);
+    expect(validator.safeParse({ ...output, artifacts: [join(input.engagementDir, '03_review_result.json')] }).success).toBe(false);
+    const before = JSON.stringify(output);
+    const hook = options.hooks!.PreToolUse![0]!.hooks[0]!;
+    const result = await hook({ hook_event_name: 'PreToolUse', tool_name: 'StructuredOutput', tool_input: output,
+      tool_use_id: 'review-output', agent_type: 'reviewer', session_id: 'session', transcript_path: '', cwd: input.target },
+    'review-output', { signal: new AbortController().signal });
+    expect(result).toEqual({ continue: true });
+    expect(JSON.stringify(output)).toBe(before);
+  });
 });
 
 describe('buildOptions — 입력 검증', () => {

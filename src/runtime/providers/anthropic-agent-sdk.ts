@@ -226,5 +226,6 @@ function normalizeLedgerRow(row: LedgerRow): ProviderRuntimeEvent {
     ...(row.compaction ? { compaction: row.compaction } : {}),
     ...(row.delivery ? { delivery: row.delivery } : {}),
     ...(row.retryAfterMs !== undefined ? { retryAfterMs: row.retryAfterMs } : {}),
+    ...(row.structuredOutput ? { structuredOutput: row.structuredOutput } : {}),
   };
 }
