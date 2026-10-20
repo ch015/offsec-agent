@@ -39,7 +39,7 @@ Free_Exploration_Areas:
       - "원자적이어야 하는 작업이 DB 트랜잭션/잠금 없이 수행되는가?"
       - "읽기→검증→쓰기 사이에 다른 요청이 개입 가능한가?"
     확장_모듈: |
-      금융/큐/분산 서비스 감지 시 offsec/va/concurrency.md를 로드하여
+      금융/큐/분산 서비스 감지 시 methodology/va/concurrency.md를 로드하여
       5개 분석 영역(TOCTOU, 분산 원자성, 멱등성, 캐시 일관성, 큐 순서)을 체계적으로 수행.
 
   Privacy:

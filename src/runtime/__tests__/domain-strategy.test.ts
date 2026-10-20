@@ -25,7 +25,7 @@ function contract(domain: 'soc' | 'feedback', strategy: 'single' | 'parallel' = 
     },
     roles: {
       reviewer: {
-        agentFile: 'contracts/roles/reviewer.md',
+        agentFile: 'roles/reviewer.md',
         description: 'domain review',
         tools: ['Read'],
         skills: ['review'],
@@ -48,7 +48,7 @@ function contract(domain: 'soc' | 'feedback', strategy: 'single' | 'parallel' = 
         ...(strategy === 'parallel' ? { maxFanout: 2 } : {}),
       },
     ],
-    resources: [{ path: 'contracts/roles/reviewer.md', sha256: '0'.repeat(64) }],
+    resources: [{ path: 'roles/reviewer.md', sha256: '0'.repeat(64) }],
   });
 }
 

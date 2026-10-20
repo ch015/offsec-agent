@@ -5,7 +5,6 @@ keywords: [kubernetes, k8s, container, pod, helm]
 # Kubernetes Attack Primitives (P2-3)
 
 > K8s / EKS / GKE / AKS 환경에서의 Red Team 공격 프리미티브.
-> 참조 시점: redteam/SKILL.md Phase 1 AS1 / AS2.
 
 ## 1. Service Account Token 탈취 → RBAC Escalation (TA0006)
 

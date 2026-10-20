@@ -99,7 +99,7 @@ severity_overstatement_patterns:
     description: |
       Web3 프로젝트에서 DEX/DeFi 특화 이슈를 Wallet/NFT 등
       관련 없는 서브도메인에까지 적용하여 오탐을 생성하는 패턴.
-      domain_issue_map의 Web3_DEX가 Web3 전체에 매칭되면 발생.
+      DEX/DeFi 특화 이슈 매핑이 Web3 전체에 적용되면 발생.
     trigger: |
       Web3 도메인이 감지되었으나 실제 서브도메인(Wallet, NFT, DAO 등)이
       DEX/DeFi가 아닌 경우에 DEX 특화 이슈(Oracle 조작, LP 풀 등)가 보고.

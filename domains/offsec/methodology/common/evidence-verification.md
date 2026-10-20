@@ -99,7 +99,6 @@ Verification_Steps:
 
   # -----------------------------------------------------------------------
   # Step 5: Semantic Taint Re-trace (의미론적 taint 재추적)
-  # 참조: skills/ch015/offsec/verifier/SKILL.md — Phase R1.2
   # 목적: 라인 존재 확인(Step 1~4)을 넘어, 주장(claim)의 논리 자체를 재검증.
   #       "user input → unsafe sink" 형태의 Finding이 taint 경로 중간에서
   #       sanitizer/validator/parameterization에 의해 차단될 수 있으므로,
@@ -173,43 +172,6 @@ Result_Actions:
       findings_unsubstantiated: N
       unverified_ratio_before: "X%"
       unverified_ratio_after: "Y%"
-```
-
----
-
-## 경량 Agent 실행 (선택)
-
-```yaml
-Lightweight_Agent:
-  설명: |
-    증거 검증은 컨텍스트 부담이 적은 작업이므로,
-    별도 경량 Agent로 위임하여 메인 분석 컨텍스트를 보존할 수 있다.
-
-  실행_조건: |
-    아래 조건 중 하나 이상이면 별도 Agent 실행을 권장:
-    - Finding 수가 15건 이상
-    - 전체 증거 수가 50건 이상
-    - 메인 분석 컨텍스트가 이미 압축 경고를 받은 경우
-
-  Agent_호출: |
-    Agent({
-      subagent_type: "general-purpose",
-      prompt: "아래 Evidence_Manifest의 각 file:line 참조를 검증하라.
-               각 참조에 대해:
-               1. 파일이 존재하는지 Glob으로 확인
-               2. 해당 라인 ±5줄을 Read로 읽어 claim과 대조
-               3. 결과를 Verified/Invalidated/Reclassified로 분류
-               
-               Evidence_Manifest:
-               {manifest_yaml}
-               
-               결과를 Evidence_Verification_Summary 형식으로 반환하라.",
-      description: "Evidence verification"
-    })
-
-  결과_통합: |
-    Agent 반환 결과를 받아 Finding 목록을 조정한 후
-    Phase 5(Report)로 진행한다.
 ```
 
 ---

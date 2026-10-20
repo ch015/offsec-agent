@@ -6,7 +6,6 @@ keywords: [aws, s3, lambda, iam, ec2]
 
 > Red Team / Pentest가 AWS 환경을 대상으로 할 때 체크해야 하는
 > 고신뢰 공격 프리미티브 목록. MITRE ATT&CK 매핑 포함.
-> 참조 시점: redteam/SKILL.md Phase 1 (Infra Recon), pentest/SKILL.md Category 2.
 
 ## 1. Metadata / Credential Primitives
 

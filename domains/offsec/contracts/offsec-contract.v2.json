@@ -29,7 +29,7 @@
   },
   "roles": {
     "scanner": {
-      "agentFile": "contracts/roles/scanner.md",
+      "agentFile": "roles/scanner.md",
       "description": "Neutral source structure and ownership planning",
       "tools": [
         "Read",
@@ -45,7 +45,7 @@
       "allowedDelegates": []
     },
     "analyzer": {
-      "agentFile": "contracts/roles/analyzer.md",
+      "agentFile": "roles/analyzer.md",
       "description": "8차원 보안 아키텍처 진단과 증거 기반 취약점 후보 생성을 담당하는 분석 역할",
       "tools": [
         "Read",
@@ -67,7 +67,7 @@
       "allowedDelegates": []
     },
     "reviewer": {
-      "agentFile": "contracts/roles/reviewer.md",
+      "agentFile": "roles/reviewer.md",
       "description": "분석 산출물의 모든 finding을 실제 코드와 대조하여 검수·보정하는 검토 역할",
       "tools": [
         "Read",
@@ -90,7 +90,7 @@
       "allowedDelegates": []
     },
     "evaluator": {
-      "agentFile": "contracts/roles/evaluator.md",
+      "agentFile": "roles/evaluator.md",
       "description": "검토된 취약점 목록을 기반으로 커버리지·심각도·전체 보안 수준을 객관적으로 평가하는 역할",
       "tools": [
         "Read",
@@ -112,7 +112,7 @@
       "allowedDelegates": []
     },
     "reporter": {
-      "agentFile": "contracts/roles/reporter.md",
+      "agentFile": "roles/reporter.md",
       "description": "평가 결과를 기반으로 최종 보안 보고서 초안을 작성하는 역할",
       "tools": [
         "Read",
@@ -189,7 +189,7 @@
       ],
       "requiredMethodFiles": [
         "methods/review.md",
-        "skills/ch015/common/evidence-verification.md"
+        "methodology/common/evidence-verification.md"
       ],
       "requiredArtifacts": [
         "03_review_result.json"
@@ -260,37 +260,37 @@
   },
   "methodologyResources": {
     "shared": [
-      "skills/ch015/common/compensating-control.md",
-      "skills/ch015/common/context-loading.md",
-      "skills/ch015/common/evidence-verification.md",
-      "skills/ch015/common/recon.md",
-      "skills/ch015/common/taint-analysis.md",
+      "methodology/common/compensating-control.md",
+      "methodology/common/context-loading.md",
+      "methodology/common/evidence-verification.md",
+      "methodology/common/recon.md",
+      "methodology/common/taint-analysis.md",
       "knowledge-base/conventions/finding-id-naming.md",
       "knowledge-base/patterns/coverage-matrix.yaml",
       "knowledge-base/patterns/false_positive_patterns.yaml"
     ],
     "analysis": [
-      "skills/ch015/offsec/va/SKILL.md",
-      "skills/ch015/offsec/va/checklists/api.yaml",
-      "skills/ch015/offsec/va/checklists/db-layer.yaml",
-      "skills/ch015/offsec/va/checklists/native-client.yaml",
-      "skills/ch015/offsec/va/checklists/web-app.yaml",
-      "skills/ch015/offsec/va/compliance.md",
-      "skills/ch015/offsec/va/concurrency.md",
-      "skills/ch015/offsec/va/deep-analysis.md",
-      "skills/ch015/offsec/va/depth/access-control.md",
-      "skills/ch015/offsec/va/depth/auth-bypass.md",
-      "skills/ch015/offsec/va/depth/concurrency.md",
-      "skills/ch015/offsec/va/depth/crypto-misuse.md",
-      "skills/ch015/offsec/va/depth/data-flow.md",
-      "skills/ch015/offsec/va/depth/injection.md",
-      "skills/ch015/offsec/va/depth/ssrf.md",
-      "skills/ch015/offsec/va/principles/baas-trust-boundary.md",
-      "skills/ch015/offsec/va/principles/oauth-provider-misconfig.md",
-      "skills/ch015/offsec/va/principles/row-level-security.md",
-      "skills/ch015/offsec/va/principles/webhook-integrity.md",
-      "skills/ch015/offsec/va/regulatory.md",
-      "skills/ch015/offsec/va/supply-chain.md",
+      "methodology/va/index.md",
+      "methodology/va/checklists/api.yaml",
+      "methodology/va/checklists/db-layer.yaml",
+      "methodology/va/checklists/native-client.yaml",
+      "methodology/va/checklists/web-app.yaml",
+      "methodology/va/compliance.md",
+      "methodology/va/concurrency.md",
+      "methodology/va/deep-analysis.md",
+      "methodology/va/depth/access-control.md",
+      "methodology/va/depth/auth-bypass.md",
+      "methodology/va/depth/concurrency.md",
+      "methodology/va/depth/crypto-misuse.md",
+      "methodology/va/depth/data-flow.md",
+      "methodology/va/depth/injection.md",
+      "methodology/va/depth/ssrf.md",
+      "methodology/va/principles/baas-trust-boundary.md",
+      "methodology/va/principles/oauth-provider-misconfig.md",
+      "methodology/va/principles/row-level-security.md",
+      "methodology/va/principles/webhook-integrity.md",
+      "methodology/va/regulatory.md",
+      "methodology/va/supply-chain.md",
       "knowledge-base/tier1-dimensions/a1-auth.md",
       "knowledge-base/tier1-dimensions/a2-authz.md",
       "knowledge-base/tier1-dimensions/a3-dataflow.md",
@@ -552,7 +552,7 @@
   },
   "resources": [
     {
-      "path": "contracts/roles/scanner.md",
+      "path": "roles/scanner.md",
       "sha256": "7074feaa8b02bffce9e4edb209ce78e350bda9aa0dd639c0d45fc80fa3e1267c"
     },
     {
@@ -560,19 +560,19 @@
       "sha256": "76dfc0d329c55e38a3412fd4c375fdf8a3a88e474f5d4d9f519332ed506d1f72"
     },
     {
-      "path": "contracts/roles/analyzer.md",
+      "path": "roles/analyzer.md",
       "sha256": "ddce6f5ffed3433fb07b0bf7fd82f768e3a8ac2a9fb8c78c436dc018ea67ab21"
     },
     {
-      "path": "contracts/roles/reviewer.md",
+      "path": "roles/reviewer.md",
       "sha256": "37f7b0786f9e08d364f5fe43fa8ea7a75c1790773128830e9f66d9ead1ef52b7"
     },
     {
-      "path": "contracts/roles/evaluator.md",
+      "path": "roles/evaluator.md",
       "sha256": "f535d334c8d6324fbfe494eeb9101bd1c7524890f2f12623d078588a357ffcfb"
     },
     {
-      "path": "contracts/roles/reporter.md",
+      "path": "roles/reporter.md",
       "sha256": "9cec3ddac0a63286086c04d62e892e7c81613c0cb5e1b06e8327491a12909061"
     },
     {
@@ -588,8 +588,8 @@
       "sha256": "9538f45e25c9ccb7e4661fd4da4ce7e185ee76ea401e2fec8fe705d992b0b4e9"
     },
     {
-      "path": "skills/ch015/common/evidence-verification.md",
-      "sha256": "d009bdad1490db559284503e7cbb2e06554f991b59f74f9aa32f789e9fc98251"
+      "path": "methodology/common/evidence-verification.md",
+      "sha256": "b6102509f92ab9c69e1d80f0e15016eed53c706042950454f7b866b4a82e3487"
     },
     {
       "path": "methods/evaluate.md",
@@ -600,24 +600,24 @@
       "sha256": "bbbf937ea68cdf0ed15cc0f2ae7c22a1160a7e1a66458675db3e2e24c561cae2"
     },
     {
-      "path": "skills/ch015/common/compensating-control.md",
+      "path": "methodology/common/compensating-control.md",
       "sha256": "6c4ab62fdd1ff967660384afc8a97330d63db3abde495f96b0ef8447351bd929"
     },
     {
-      "path": "skills/ch015/common/context-loading.md",
-      "sha256": "5d327d99e1932cbeb62cb5ba0ce1f94d36df12e53d0335a76c500b1999d4d0f2"
+      "path": "methodology/common/context-loading.md",
+      "sha256": "c349cc43aa765d07b5fd223a35fb97d64598e0b5480e0b30d05a438dfadc2fad"
     },
     {
-      "path": "skills/ch015/common/recon.md",
-      "sha256": "e96e9816d396f4fc122eaf0feea8d6d81986851d70f83bfbd8e7224e100149a8"
+      "path": "methodology/common/recon.md",
+      "sha256": "cdbbc53a1ba934dde65c4a9ce417bdebce56e09a25608971384774b2d8932508"
     },
     {
-      "path": "skills/ch015/common/taint-analysis.md",
+      "path": "methodology/common/taint-analysis.md",
       "sha256": "b376b5796a2443842e17638cac33b18916be3169d1c44e7c324c0d155fdbeedb"
     },
     {
       "path": "knowledge-base/conventions/finding-id-naming.md",
-      "sha256": "9a9b723db52e6528306924a5d708d4e54174fb81fb8b064432a7e5838e21b758"
+      "sha256": "86e49255367583e8be5b77abb7be75e62421785e7b2d1045de495ecd4715943d"
     },
     {
       "path": "knowledge-base/patterns/coverage-matrix.yaml",
@@ -625,90 +625,90 @@
     },
     {
       "path": "knowledge-base/patterns/false_positive_patterns.yaml",
-      "sha256": "f33c631ff2ad66c3dbc14d439bed2ca1f973efa4f332461263d4f9f372d0b205"
+      "sha256": "d3ec841811d626437f579f54f8c4e29891e67b2217e66ce679e928baa60cd1cb"
     },
     {
-      "path": "skills/ch015/offsec/va/SKILL.md",
-      "sha256": "fca87180426d02d223ecc873304a10ef9d7066f4b27878f03c32133bec99ce09"
+      "path": "methodology/va/index.md",
+      "sha256": "a27baef701e3035cdc5c0b27ec7d25f9b185f9e53f4b0e3d7ccd329994748c66"
     },
     {
-      "path": "skills/ch015/offsec/va/checklists/api.yaml",
+      "path": "methodology/va/checklists/api.yaml",
       "sha256": "997b9be05e3d6e20c2fef9133f8db26d26649d5893cd8219100da437cfcbed80"
     },
     {
-      "path": "skills/ch015/offsec/va/checklists/db-layer.yaml",
+      "path": "methodology/va/checklists/db-layer.yaml",
       "sha256": "13b530990c9669719fae61928354b2476d6a123d10d4c76b3cc3ad53ff6d3da5"
     },
     {
-      "path": "skills/ch015/offsec/va/checklists/native-client.yaml",
+      "path": "methodology/va/checklists/native-client.yaml",
       "sha256": "7fbaa98f81e70e92df12a7c1a2eda05174d0b2013e88edc6b6d502eecd5aa3ba"
     },
     {
-      "path": "skills/ch015/offsec/va/checklists/web-app.yaml",
+      "path": "methodology/va/checklists/web-app.yaml",
       "sha256": "7862c361bf5fb3888b318378d1918c49c48aa974569bf26b2f77699dd6aff05f"
     },
     {
-      "path": "skills/ch015/offsec/va/compliance.md",
+      "path": "methodology/va/compliance.md",
       "sha256": "3b53944e681917f3c899df2192c3d2ac2e96ecaade1524aab3493101d411c9be"
     },
     {
-      "path": "skills/ch015/offsec/va/concurrency.md",
+      "path": "methodology/va/concurrency.md",
       "sha256": "597ac0514c83ab663ca58b93a331a3881d6e3a5828a8ba41c64a2b780cc52711"
     },
     {
-      "path": "skills/ch015/offsec/va/deep-analysis.md",
-      "sha256": "ccb294b5c5eaf50f0fa44979c0c7da9d903ac1259ec2ffb17bbe43a2a9f2a88c"
+      "path": "methodology/va/deep-analysis.md",
+      "sha256": "105d273084e1d50538136695750b7b9fc8cad2b8cc882421bf1a9588ceb86a11"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/access-control.md",
+      "path": "methodology/va/depth/access-control.md",
       "sha256": "b4831dd73f6b04f08da779f9df7d4192966ebb05a9c0ee6e199d73e2db3c0492"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/auth-bypass.md",
+      "path": "methodology/va/depth/auth-bypass.md",
       "sha256": "ab776d9e6b5c6fcf5df318ddb4378d851268d351de64ed8355a0e29d473ae110"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/concurrency.md",
+      "path": "methodology/va/depth/concurrency.md",
       "sha256": "dc029e80f0f926e788b19f1bdaac5bafd1497942d0e24b18d895b133a07c9ce2"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/crypto-misuse.md",
+      "path": "methodology/va/depth/crypto-misuse.md",
       "sha256": "b85d7aeb0eba2ce2e277fe644a757324d0391ab2c9979dac532fc80aa2ddcd3d"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/data-flow.md",
+      "path": "methodology/va/depth/data-flow.md",
       "sha256": "0e1355cc75c329b86bfa3a632c339413ef4adeff7491bef6e5574e115d6cc310"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/injection.md",
+      "path": "methodology/va/depth/injection.md",
       "sha256": "451f03ffd87d79af4c47eebe8b20ee5e98a3889c394e890f3bfde0579238f41f"
     },
     {
-      "path": "skills/ch015/offsec/va/depth/ssrf.md",
+      "path": "methodology/va/depth/ssrf.md",
       "sha256": "d77c0c08344ce343ee720a17a461a6858af4461df5093e726afec45aab30942e"
     },
     {
-      "path": "skills/ch015/offsec/va/principles/baas-trust-boundary.md",
+      "path": "methodology/va/principles/baas-trust-boundary.md",
       "sha256": "8d62d1378bd62594f6d61755923c30f1270fee050e32e26b64aed6596f08cf16"
     },
     {
-      "path": "skills/ch015/offsec/va/principles/oauth-provider-misconfig.md",
+      "path": "methodology/va/principles/oauth-provider-misconfig.md",
       "sha256": "035e0c03d9d9797177bd4976f5cfc5f0e35414432c18761fbc72ae0629c49504"
     },
     {
-      "path": "skills/ch015/offsec/va/principles/row-level-security.md",
+      "path": "methodology/va/principles/row-level-security.md",
       "sha256": "68d6232014846b26c5d70b9d85dcc467197874a918ae3e470c2897ca74d7dacc"
     },
     {
-      "path": "skills/ch015/offsec/va/principles/webhook-integrity.md",
+      "path": "methodology/va/principles/webhook-integrity.md",
       "sha256": "f0bbec3a32aa15ab669258a1e61f06b188e07d087ef91343fbb31d100cee99c9"
     },
     {
-      "path": "skills/ch015/offsec/va/regulatory.md",
+      "path": "methodology/va/regulatory.md",
       "sha256": "6fa80c44fe7e09bb614e2b51fd33a7b7c618bee1b234f18d8e3e5ecbfdf29899"
     },
     {
-      "path": "skills/ch015/offsec/va/supply-chain.md",
+      "path": "methodology/va/supply-chain.md",
       "sha256": "e581b5c4ebd0e75a9f7cd5db52f879d2ff3ba0ad2719b30543beef899a027610"
     },
     {
@@ -733,7 +733,7 @@
     },
     {
       "path": "knowledge-base/tier1-dimensions/a6-deps.md",
-      "sha256": "20cd5ab456dd0a47d8e0bf0f8c734d49eaceae594dc49c1ddd9de1addcbb03d2"
+      "sha256": "2136642d0bbb1cc08313f78ec819083447e1c683d668087511efff3794b08649"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a7-error.md",
@@ -753,11 +753,11 @@
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-aws.md",
-      "sha256": "3fbb50fc2a1c50a0c7c1660c54fdee17dec34df6ec2545658f87739fe4cc68fc"
+      "sha256": "54b63461b28e2bdd1c990839c5b27c21314739df6ed7414b6605ee004de42aa2"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-k8s.md",
-      "sha256": "5843d9f1f1dc3033038ea8a36ac28db41c6f51f8ef67b1ade478d8bc3bb255c4"
+      "sha256": "e4029521933d9ef75945ee6b882a258fc1828254dc07a501f4d4c1c552fd5c07"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud.md",

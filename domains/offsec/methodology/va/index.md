@@ -1,9 +1,6 @@
----
-name: ch015-va
-description: "Run CH015 vulnerability assessment workflows for source-code security architecture review, 8-dimension analysis, compliance checks, self-verification, evidence verification, and VA reporting."
----
+# 취약점 진단 (Vulnerability Assessment) 방법론
 
-# 취약점 진단 (Vulnerability Assessment) Skill
+> 문서 안의 `methodology/...`, `knowledge-base/...` 경로는 OffSec 도메인 루트(domains/offsec) 기준이다. 실제 Read는 호스트가 전달한 available_methodology_files의 절대경로로 한다.
 
 > 대상 프로젝트의 소스코드를 아키텍처 차원 기반으로 체계적으로 점검하여
 > 보안 메커니즘의 구현 현황과 미적용 영역을 식별합니다.
@@ -59,7 +56,7 @@ Principles:
 ## Phase 구조
 
 ```
-Phase 0: Recon              → 공통 정찰 (common/recon.md 참조)
+Phase 0: Recon              → 공통 정찰 (methodology/common/recon.md 참조)
 Phase 0.5: Binding          → 정찰 → 분석 컨텍스트 바인딩
 Phase 0.8: AST Pre-Analysis → Tree-sitter + Semgrep 구조 분석 (--mode ast 지정 시)
 Phase 1: Architecture       → 8대 보안 아키텍처 차원 리뷰
@@ -67,7 +64,7 @@ Phase 2: Deep Analysis      → 원칙 기반 심층 분석
 Phase 3: Compliance         → 보안 표준 준수 점검
 Phase 3.5: Self-Verify      → 분석 결과 자체 검증 (도달 가능성, 보상 제어, 경량 공격 체인)
 Phase 4: Scoring            → 보안 점수 산출 (Self-Verify 결과 반영, Self-Verify Gate 통과 필수)
-Phase 4.5: Evidence Verify  → file:line 증거 독립 검증 (common/evidence-verification.md)
+Phase 4.5: Evidence Verify  → file:line 증거 독립 검증 (methodology/common/evidence-verification.md)
 Phase 4.7: Raw Ledger       → Raw Findings Ledger + Pentest Plan 초안 생성 (Phase 5 진입 게이트)
 Phase 5: Report             → 종합 보고서 + 6-step 영향도 분석
 Phase 5.1: Index            → Findings Index YAML 생성 (하류 에이전트 컨텍스트 최적화)
@@ -79,48 +76,34 @@ Phase 5R: Regulatory        → 규제 영향 참조 (Finding 기반, 해당 시
 
 ```yaml
 AST_Pre_Analysis:
-  trigger: "--mode ast 지정 시 Phase 0.5 Binding 완료 후 실행"
+  trigger: "호스트 준비 단계에서 봉인된 소스 스냅샷에 대해 항상 실행"
   ownership: |
-    /ch015:run 오케스트레이션에서는 OffSec Lead가 Recon 직후, VA fanout 결정 전에
-    1회 실행한다. VA Agent별 중복 실행 금지.
-    /ch015:va direct 실행에서만 VA가 fallback으로 직접 실행할 수 있다.
-  skip_when: "기본 --mode llm 또는 AST 모드 미지정 시 건너뜀"
+    호스트가 AST/Semgrep 분석을 실행하고 결과를 evidenceIndex/evidenceDetails로 전달한다. 모델은 실행하지 않는다.
 
   execution: |
-    Bash로 lib/ch015/ast/context-builder.js를 실행한다:
-    node {ch015_root}/lib/ch015/ast/context-builder.js {target_path}
-
-    이 스크립트는:
+    호스트 AST 분석은:
     1. Tree-sitter로 소스 파일 파싱 (지원 언어 전체)
     2. Semgrep 정적 스캔 (설치된 경우)
     3. 콜 그래프 추출 (함수 정의, 호출 관계, 엔트리포인트)
     4. 구조적 데이터 흐름 추출 (함수 간 파라미터 전달 체인)
     5. source→sink taint 후보 경로 추출 (검증 전 후보)
-    6. 결과를 {target}/.ch015/ast-context.yaml에 저장
 
     ⚠️ 중요: AST 출력의 taint_paths는 후보 신호다.
     최종 보안 판단(취약점 확정, 심각도, 영향도, 악용 가능성)은
-    AST 계층이 아닌 LLM/Verifier가 코드 근거로 재검증하여 수행한다.
-
-  output: "{target}/.ch015/ast-context.yaml"
-  timeout: "120초"
+    AST 계층이 아닌 Analyzer/Reviewer가 코드 근거로 재검증하여 수행한다.
 
   fallback: |
-    실행 실패 시 (tree-sitter 미설치, 파싱 에러 등):
-    경고 메시지 출력 후 LLM-only로 자동 폴백하여 Phase 1 진행.
-    "⚠️ AST Pre-Analysis 실패 — LLM-only 모드로 폴백합니다."
-
-    폴백 시 Recon 출력의 ast_fallback_impact 필드에 잃어버린 데이터 유형을 기록:
+    파싱 실패·미지원 언어 파일은 호스트가 작업별 근거와 보고서에 기록하고 분석 범위에는 유지한다.
+    이런 파일은 아래 AST 데이터가 없으므로 유형별로 보완한다:
     - call_graph: "함수 호출 관계 미생성 → A1/A2 미들웨어 도달 경로를 Grep 기반으로 추적해야 함"
     - data_flows: "파라미터 전달 체인 미생성 → A3/A4 taint 추적을 LLM 코드 읽기로 수행해야 함"
     - entry_points: "라우트 핸들러 자동 추출 실패 → Recon V3 Entry Point Completeness로 보완"
     - semgrep_findings: "정적 스캔 결과 없음 → Phase 1-2에서 패턴 매칭을 수동 Grep으로 수행"
-    Phase 1 시작 시 이 필드를 참조하여 해당 차원에서 Grep/Read 보완 탐색을 강제한다.
+    Phase 1에서 해당 차원의 Grep/Read 보완 탐색을 강제한다.
 
   Phase_1_연계: |
-    ast-context.yaml이 존재하면 Phase 1 시작 시 VA 에이전트에게 다음을 지시:
-    "AST Pre-Analysis 결과가 .ch015/ast-context.yaml에 있습니다.
-     이 파일을 Read하여 구조적 사실을 확인하세요.
+    호스트가 AST 결과를 전달하면 Phase 1 시작 시 다음을 따른다:
+    "호스트가 전달한 evidenceIndex/evidenceDetails를 Read하여 구조적 사실을 확인하세요.
      이 데이터는 구조적 사실과 taint 후보 신호를 포함하며, 최종 보안 판단은 포함하지 않습니다.
      당신이 직접 보안 판단을 수행해야 합니다:
 
@@ -135,11 +118,6 @@ AST_Pre_Analysis:
      - semgrep_findings: Semgrep 정적 스캔 결과 (있는 경우).
 
      AST 데이터는 구조적 지도와 후보 신호이며, 보안 판단의 근거는 코드 자체입니다."
-
-  Agent_Fanout_불변식:
-    - "--mode ast는 Agent 수를 늘리지 않는다."
-    - "sequential VA 1개 또는 grouped VA 4개가 동일 ast_context_path를 공유한다."
-    - "'AST 기반 8차원 진단'은 AST 컨텍스트를 참고해 A1-A8을 분석한다는 뜻이며 VA 8개 실행이 아니다."
 
   AST_차원별_활용:
     A1_인증: "콜 그래프에서 핸들러 호출 경로에 인증 관련 함수 존재 여부 확인"
@@ -162,10 +140,10 @@ AST_Pre_Analysis:
 
 ```yaml
 Checklists:
-  Backend_API: "offsec/va/checklists/api.yaml → API 엔드포인트 보안 점검"
-  Web_Application: "offsec/va/checklists/web-app.yaml → 웹 앱 클라이언트 보안 점검"
-  Database_Layer: "offsec/va/checklists/db-layer.yaml → DB 접근 계층 보안 점검"
-  Native_Client: "offsec/va/checklists/native-client.yaml → 네이티브 클라이언트/게임 SDK 보안 점검"
+  Backend_API: "methodology/va/checklists/api.yaml → API 엔드포인트 보안 점검"
+  Web_Application: "methodology/va/checklists/web-app.yaml → 웹 앱 클라이언트 보안 점검"
+  Database_Layer: "methodology/va/checklists/db-layer.yaml → DB 접근 계층 보안 점검"
+  Native_Client: "methodology/va/checklists/native-client.yaml → 네이티브 클라이언트/게임 SDK 보안 점검"
   Loading_Rule: |
     Phase 0에서 탐지된 활성 도메인에 해당하는 체크리스트만 로드한다.
     - Backend 도메인 활성 → api.yaml 로드
@@ -212,7 +190,7 @@ Loading_Strategy:
 
 Staged_Loading: |
   ⚠️ 모든 모듈을 세션 시작 시 한 번에 로드하지 않는다.
-  common/context-loading.md의 Loading_Manifest에 따라
+  methodology/common/context-loading.md의 Loading_Manifest에 따라
   Phase 진입 시점에 해당 Phase의 모듈만 선택적으로 Read한다.
   완료된 Phase의 모듈 원문은 해제하고 결과(Finding)만 보존한다.
   이를 통해 컨텍스트 윈도우를 프로젝트 코드 분석에 집중시킨다.
@@ -307,7 +285,7 @@ Self_Verification:
       - "호출자 존재 → 호출 경로(entry point → ... → 취약 함수)를 기록"
       - "조건부 호출 → 조건의 현실적 트리거 가능성 평가"
     ast_보강: |
-      .ch015/ast-context.yaml이 존재하면, call_graph와 data_flows를 참조하여
+      호스트가 전달한 evidenceDetails에 흐름 정보가 있으면 이를 참조하여
       엔트리포인트 → Finding 위치까지 경로 존재 여부를 구조적으로 확인한다.
       콜 그래프에 경로 없음 + LLM 확인 → severity 1단계 하향 또는 INFO.
       주의: 동적 호출(eval, reflection)은 콜 그래프에 안 잡히므로 LLM 보완 필수.
@@ -493,7 +471,7 @@ Self_Verification:
         요구사항: |
           Step 1(도달 가능성)에서 확인한 호출 경로를 비즈니스 맥락으로 재해석한다.
           entry point → middleware chain → vulnerable function의 구체적 경로를 명시.
-          ast-context.yaml이 존재하면 call_graph/data_flows/taint_paths에서 경로를 확인한다.
+          호스트가 전달한 evidenceDetails에 흐름 정보가 있으면 이를 참조해 경로를 확인한다.
         판정: |
           도달성은 아래 순서로 판정한다 (혼동 시 진짜 취약점이 점수에서 사라지거나
           과소평가된다). ⚠️ "정적 콜그래프가 경로를 못 짚음"은 그 자체로 감점/제외 사유가
@@ -552,7 +530,7 @@ Self_Verification:
 
   Step_2_보상_제어_확인:
     설명: "다른 레이어에서 동일 위협을 차단하는 보상 제어가 있는가?"
-    프로토콜: "common/compensating-control.md의 4단계 프로토콜을 실행한다."
+    프로토콜: "methodology/common/compensating-control.md의 4단계 프로토콜을 실행한다."
     절차:
       - "Step 1: 위협 경로의 모든 레이어를 순회한다"
       - "Step 2: 각 레이어에서 후보 보상 제어를 식별한다"
@@ -567,7 +545,7 @@ Self_Verification:
   Step_2.5_검증_경로_분류:
     설명: "Unverifiable 보상 제어를 후속 검증 단계로 라우팅하기 위해 분류한다."
     조건: "Step 2에서 Unverifiable로 판정된 보상 제어가 1건 이상"
-    프로토콜: "common/compensating-control.md의 Verification_Routing 분류 기준을 적용한다."
+    프로토콜: "methodology/common/compensating-control.md의 Verification_Routing 분류 기준을 적용한다."
     절차:
       - "각 Unverifiable 보상 제어에 대해 Verification_Routing 질문을 실행"
       - "HTTP 요청으로 확인 가능 → Unverifiable_HTTP (verification_target: PENTEST)"
@@ -855,7 +833,7 @@ Excluded_Categories: |
 
 ```yaml
 Evidence_Verification:
-  프로토콜: "common/evidence-verification.md 참조"
+  프로토콜: "methodology/common/evidence-verification.md 참조"
   
   실행_절차:
     1_추출: |
@@ -871,11 +849,6 @@ Evidence_Verification:
       유지 불가한 Finding은 Unsubstantiated로 강등한다.
     4_재산출: |
       증거 조정으로 Finding이 변경되면 Security Score를 재산출한다.
-
-  별도_Agent_위임: |
-    Finding 15건 이상 또는 증거 50건 이상이면
-    경량 Agent로 위임하여 메인 컨텍스트를 보존한다.
-    common/evidence-verification.md의 Lightweight_Agent 참조.
 
   Gate: |
     Phase 5 진입 전 Evidence_Verification_Summary가 존재해야 한다.
@@ -898,7 +871,6 @@ Raw_Candidate_Ledger:
 
   생성_시점: "Phase 4.5 Evidence Verification 완료 직후, Phase 5 Report 진입 전"
   저장_경로: "engagement_dir/01_va_raw_findings_ledger-<round>.yaml"
-  스키마: "templates/raw-findings-ledger.template.yaml"
 
   기록_대상:
     - "최종 Finding으로 승격한 모든 후보"
@@ -963,7 +935,7 @@ Raw_Candidate_Ledger:
 
   발행_게이트:
     - "UNCLASSIFIED 후보가 1건이라도 있으면 Phase 5 최종 보고서 발행 금지"
-    - "PENDING_PENTEST 후보는 pentest-plan.template.yaml에 1:1 라우팅되어야 함 — 후보의 routing.pentest_plan_id에 plan scenario_id 기록"
+    - "PENDING_PENTEST 후보는 Pentest_Plan_초안에 1:1 라우팅되어야 함 — 후보의 routing.pentest_plan_id에 plan scenario_id 기록"
     - "PENDING_EXTERNAL 후보는 routing.required_access 또는 routing.external_system이 명시되어야 함"
     - "DOWNGRADED 후보는 final_mapping.downgrade_reason이 명시되어야 함"
     - "FOLDED_INTO 후보는 상위 finding_id가 명시되어야 함"
@@ -978,9 +950,8 @@ Pentest_Plan_초안:
   저장_경로: "engagement_dir/01_va_pentest_plan-<round>.yaml"
   # 라운드별 접두 규칙(va-auditor.md storage 기준): 1차(initial)=01_..-1st, 2차(feedback)=03_..-2nd
   # 예: 2차 라운드는 01_가 아니라 03_va_pentest_plan-2nd.yaml
-  스키마: "templates/pentest-plan.template.yaml"
   절차: |
-    ledger의 PENDING_PENTEST 후보를 pentest-plan.template.yaml 스키마로 1:1 라우팅한다.
+    ledger의 PENDING_PENTEST 후보를 plan scenario로 1:1 라우팅한다.
     각 scenario에 candidate_id를 기록하고, ledger 후보의 routing.pentest_plan_id에
     해당 scenario_id를 역기록한다(양방향 연결).
     Pentest가 실제 테스트 방법을 자율 결정하되,
@@ -991,8 +962,6 @@ Pentest_Plan_초안:
 ---
 
 ## Phase 5: 보고서 + 영향도 분석
-
-{project_root}/templates/va-report.template.md 참조
 
 ### Negative Findings (검토했으나 안전 판단 기록)
 
@@ -1065,8 +1034,6 @@ Findings_Index_Generation:
       예: 01_va_result-1st.md → 01_va_findings_index-1st.yaml
       grouped 모드: 01_va_result-1st-auth.md → 01_va_findings_index-1st-auth.yaml
 
-  스키마: "templates/findings-index.template.yaml, templates/va-handoff.template.yaml 참조"
-
   예상_크기: "Finding 20건 기준 ~2-3K 토큰 (전문 50K+ 대비 95% 절감)"
 
   소비자:
@@ -1120,7 +1087,7 @@ Baseline_Snapshot_Generation:
 
     3_저장: |
       engagement 디렉토리에 아래 2개 파일을 저장한다:
-      - 00_baseline_snapshot.yaml (templates/baseline-snapshot.template.yaml 스키마)
+      - 00_baseline_snapshot.yaml
       - 00_baseline_file_list.txt (분석 대상 파일의 정렬된 상대 경로, 줄당 1개)
 
   출력:
@@ -1254,7 +1221,7 @@ Finding_Structure:
     - 상태 설정: 미검증 입력에서 설정되는 내부 상태 변수를
       식별하고, 각 변수의 다운스트림 사용처(UI 표시, 보안 게이트,
       API 파라미터, 트랜잭션 등)를 추적하여 실제 영향 범위를 기록한다.
-    - 보상 제어: common/compensating-control.md 프로토콜을 실행한다.
+    - 보상 제어: methodology/common/compensating-control.md 프로토콜을 실행한다.
       (4단계: 레이어 순회 → 후보 식별 → 유효성 검증 → 기록)
 
     [증거 분류]

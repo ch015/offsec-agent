@@ -196,7 +196,7 @@ Representative_Healthy_Patterns:
   - "AI 에이전트 도구에 최소 권한 + 승인 절차"
 
 Supply_Chain_Cross_Reference:
-  module: "offsec/va/supply-chain.md"
+  module: "methodology/va/supply-chain.md"
   note: |
     A6은 "외부 통합 지점의 보안 경계"에 집중한다.
     공급망 전체(의존성 CVE, lock 파일, 빌드 파이프라인)는

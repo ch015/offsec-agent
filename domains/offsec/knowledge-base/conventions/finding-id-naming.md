@@ -101,7 +101,7 @@ final_findings:
 - 신규 접두사는 본 문서에 추가 등록 후 사용
 
 ### 외부 시스템 매핑
-- **Jira**: 티켓 summary에 `[F-{NNN}]` 접두사 (`commands/report.md` Step 2 Jira 통합)
+- **Jira**: 티켓 summary에 `[F-{NNN}]` 접두사
 - **Confluence**: 보고서 헤딩에 ID 명시
 - **Slack**: 알림 메시지 첫 줄에 ID
 
@@ -109,16 +109,10 @@ final_findings:
 
 ## 참조 위치
 
-본 규칙은 다음 위치에서 참조됩니ity:
+본 규칙은 다음 위치에서 참조됩니다:
 
 | 파일 | 참조 컨텍스트 |
 |------|--------------|
-| `skills/ch015/offsec/va/SKILL.md` | Finding Structure (L947+) |
-| `skills/ch015/offsec/pentest/SKILL.md` | Finding Structure + Sweep (L809) + Creative (L539) |
-| `skills/ch015/offsec/verifier/SKILL.md` | R0.5 Output (L168) + R4 Reconcile (L686) |
-| `skills/ch015/offsec/redteam/SKILL.md` | Finding Structure (L633+) |
-| `agents/offsec-lead.md` | Convergence (L519+) |
-| `templates/va-report.template.md` | Finding 표시 |
-| `commands/report.md` | Jira 통합 |
+| `methodology/va/index.md` | Finding Structure |
 
 새 ID 체계 추가 시 본 문서를 먼저 수정한 후 위 파일들에 반영.

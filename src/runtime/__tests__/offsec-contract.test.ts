@@ -65,9 +65,9 @@ describe('OffSec contract standard', () => {
   it('pins analysis methodology and overlays for source assessment', () => {
  const contract=loadOffsecContract();
  const files=resolvePhaseMethodologyFiles(getOffsecPhase('analyze'),contract);
- expect(files).toContain(join(OFFSEC_ROOT,'skills/ch015/offsec/va/depth/access-control.md'));
+ expect(files).toContain(join(OFFSEC_ROOT,'methodology/va/depth/access-control.md'));
  expect(files).toContain(join(OFFSEC_ROOT,'knowledge-base/tier2-overlays/commerce.md'));
- expect(files).toContain(join(OFFSEC_ROOT,'skills/ch015/common/evidence-verification.md'));
+ expect(files).toContain(join(OFFSEC_ROOT,'methodology/common/evidence-verification.md'));
 });
 
   it('keeps legacy CH015 limits aligned with the host contract', () => {
@@ -298,14 +298,14 @@ describe('OffSec session enforcement', () => {
     });
     expect(allowedMethod.hookSpecificOutput?.permissionDecision).toBeUndefined();
 
-    const legacySkill = join(REPO_ROOT, 'domains/offsec/skills/ch015/offsec/va/SKILL.md');
-    const allowedLegacySkill = await callback({
+    const methodologyDoc = join(REPO_ROOT, 'domains/offsec/methodology/va/index.md');
+    const allowedMethodologyDoc = await callback({
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
-      tool_input: { file_path: legacySkill },
+      tool_input: { file_path: methodologyDoc },
       agent_type: 'analyzer',
     });
-    expect(allowedLegacySkill.hookSpecificOutput?.permissionDecision).toBeUndefined();
+    expect(allowedMethodologyDoc.hookSpecificOutput?.permissionDecision).toBeUndefined();
 
     const escapingGlob = await callback({
       hook_event_name: 'PreToolUse',

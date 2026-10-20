@@ -35,7 +35,7 @@ function contract() {
     },
     roles: {
       reviewer: {
-        agentFile: 'contracts/roles/reviewer.md',
+        agentFile: 'roles/reviewer.md',
         description: 'review',
         tools: ['Read'],
         skills: ['review'],
@@ -57,7 +57,7 @@ function contract() {
         approvals: [],
       },
     ],
-    resources: [{ path: 'contracts/roles/reviewer.md', sha256: '0'.repeat(64) }],
+    resources: [{ path: 'roles/reviewer.md', sha256: '0'.repeat(64) }],
   };
 }
 

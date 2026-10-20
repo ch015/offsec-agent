@@ -5,69 +5,6 @@
 
 ---
 
-## 캐시 프로토콜 (Cache Protocol)
-
-```yaml
-Cache_Strategy:
-  ⚡ 목적: |
-    동일 프로젝트의 반복 진단 시 Phase 0을 재수행하지 않는다.
-    기술 스택/도메인/공격 표면은 의존성 파일 변경 없이는 동일하므로
-    캐시 재사용으로 수 초~수십 초 단축.
-
-  Cache_Key:
-    설명: "의존성/빌드 파일들의 SHA256 해시 조합을 fingerprint로 사용"
-    invalidation_files:
-      - package.json / package-lock.json
-      - go.mod / go.sum
-      - requirements.txt / pyproject.toml / Pipfile.lock
-      - Cargo.toml / Cargo.lock
-      - Dockerfile / docker-compose.yml
-    규칙: "위 파일 중 하나라도 해시 변경 시 캐시 무효화"
-
-  실행_순서:
-    Step_1_Cache_Check: |
-      Phase 0 진입 시 먼저 recon-cache를 확인한다:
-      [Bash]
-        node {plugin_root}/lib/ch015/recon-cache.js check {target}
-
-      HIT: 캐시된 recon_result.yaml을 Read로 로드하여 Phase 0 스킵
-      MISS: 정상 Phase 0 수행
-
-    Step_2_Normal_Recon: |
-      Cache MISS 또는 --force-refresh 시 정상 정찰 수행
-      (Phase 0-1 기술 스택 탐지부터 Phase 0-6 공격 표면 맵까지)
-
-    Step_3_Cache_Save: |
-      Phase 0 완료 후 결과를 캐시에 저장:
-      [Bash]
-        node -e "
-          const c = require('{plugin_root}/lib/ch015/recon-cache');
-          c.saveReconCache('{target}', {recon_result_yaml});
-        "
-
-  TTL: "기본 7일. ch015.config.json의 ch015.reconCache.ttl_days로 조정"
-  cache_dir: "ch015.config.json의 ch015.reconCache.cache_dir (기본 .ch015/cache/recon/)"
-
-  Force_Refresh: |
-    다음 경우 캐시를 무시하고 재수행:
-    - 사용자가 --force-refresh 플래그 지정
-    - git checkout으로 브랜치 변경 감지 (HEAD 해시 diff)
-    - engagement 디렉토리에 "recon_invalidated" 마커 파일 존재
-
-  병렬_실행_시: |
-    dimension_group 모드(4 병렬 Agent) 사용 시 각 Agent는
-    Phase 0을 실행하지 않는다. OffSec Lead가 캐시 또는 1회 실행으로
-    00_recon_result.yaml을 생성하고, 각 그룹 Agent에
-    recon_result_path로 전달하여 Read 재사용.
-
-  Anti_Patterns:
-    - "각 그룹 Agent가 독립적으로 Recon 수행 → 4중 중복"
-    - "캐시 무효화 없이 모든 실행에서 스킵 → 의존성 변경 반영 실패"
-    - "캐시 파일을 engagement 디렉토리에 저장 → 프로젝트 간 공유 안 됨 (플러그인 레벨 저장 필수)"
-```
-
----
-
 ## Extended Thinking Protocol
 
 정찰 단계에서 다음 사고 프로토콜을 따릅니다:
@@ -891,8 +828,8 @@ Recon_Self_Validation:
   V2_AST_Parse_Coverage:
     check: "AST 파싱 실패 파일 비율이 허용 임계치 이내인가?"
     method: |
-      --mode ast 사용 시, ast-context.yaml의 parse_errors 또는
-      context-builder.js 로그에서 실패 파일 수를 추출한다.
+      --mode ast 사용 시, 호스트가 전달한 evidenceIndex/evidenceDetails의
+      파싱 실패 기록에서 실패 파일 수를 추출한다.
       실패율 = 파싱 실패 파일 수 / 전체 소스 파일 수
     thresholds:
       warn: "> 20% 실패"
@@ -901,9 +838,8 @@ Recon_Self_Validation:
       경고 기록 + 실패 파일 목록을 Recon 출력에 포함.
       Phase 1에서 해당 파일들은 Grep/Read 기반 보완 탐색 대상으로 표시.
     on_fail: |
-      AST 모드 포기 → LLM-only 폴백.
-      폴백 시 잃어버린 데이터 유형(call_graph, data_flows, entry_points, semgrep)을
-      Recon 출력의 ast_fallback_impact 필드에 명시 기록.
+      실패 파일은 AST 데이터(call_graph, data_flows, entry_points, semgrep)가 없으므로
+      Grep/Read 기반 보완 탐색 대상으로 다룬다.
 
   V3_Entry_Point_Completeness:
     check: "발견된 엔트리포인트 수가 프로젝트 규모 대비 합리적인가?"
