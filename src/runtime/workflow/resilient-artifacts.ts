@@ -6,6 +6,10 @@ import { ArtifactIntegrityError, ArtifactReceiptSchema, FileSystemArtifactStore,
 import { atomicPrivateWrite, managedPath, privateDirectory, readManagedFile } from './storage-files.js';
 
 export type StorageHealth = { pendingReplication: number; errors: string[] };
+function acknowledge(path: string): void {
+  try { unlinkSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+}
 /** Local durable storage is authoritative; optional remote replication never discards local evidence. */
 export class ResilientArtifactStore implements ImmutableArtifactStore {
   private readonly local: FileSystemArtifactStore;
@@ -27,7 +31,7 @@ export class ResilientArtifactStore implements ImmutableArtifactStore {
     try {
       const actual = await this.remotePut(input);
       this.assertReceipt(actual, receipt);
-      unlinkSync(pending);
+      acknowledge(pending);
     } catch (error) { this.remoteAvailable = false; this.errors.add(String(error)); }
     return receipt;
   }
@@ -39,7 +43,14 @@ export class ResilientArtifactStore implements ImmutableArtifactStore {
       const path = managedPath(this.queue, join(this.queue, name));
       let localItem = true;
       try {
-        const receipt = ArtifactReceiptSchema.parse(JSON.parse(readManagedFile(this.queue, path).toString()));
+        let queued: Buffer;
+        try { queued = readManagedFile(this.queue, path); }
+        catch (error) {
+          // Another writer/flush may have acknowledged the same immutable URI.
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw error;
+        }
+        const receipt = ArtifactReceiptSchema.parse(JSON.parse(queued.toString()));
         if (name !== `${createHash('sha256').update(receipt.uri).digest('hex')}.json`) throw new SyntaxError('replication entry name does not match URI');
         const content = await this.local.get(receipt.uri);
         if (content.byteLength !== receipt.bytes || createHash('sha256').update(content).digest('hex') !== receipt.sha256) {
@@ -48,13 +59,17 @@ export class ResilientArtifactStore implements ImmutableArtifactStore {
         await this.local.put({ ...receipt, content });
         localItem = false;
         this.assertReceipt(await this.remotePut({ ...receipt, content }), receipt);
-        unlinkSync(path);
+        acknowledge(path);
       } catch (error) {
         this.errors.add(`${name}: ${String(error)}`);
         const code = (error as NodeJS.ErrnoException)?.code;
         const invalid = error instanceof SyntaxError || error instanceof ZodError || code === 'ENOENT'
           || error instanceof ArtifactIntegrityError;
-        if (localItem && invalid) { renameSync(path, `${path}.invalid`); continue; }
+        if (localItem && invalid) {
+          try { renameSync(path, `${path}.invalid`); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+          continue;
+        }
         unavailable = true; break;
       }
     }

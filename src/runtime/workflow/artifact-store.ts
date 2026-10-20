@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { mkdir, open, readFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, mkdir, open, readFile, unlink } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
@@ -16,8 +16,14 @@ export const ArtifactReceiptSchema = z.object({
 export class ArtifactIntegrityError extends Error {}
 
 async function writeImmutableFile(path: string, content: string | Uint8Array): Promise<void> {
-  const file = await open(path, 'wx', 0o600);
-  try { await file.writeFile(content); await file.sync(); } finally { await file.close(); }
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  const file = await open(temporary, 'wx', 0o600);
+  try {
+    try { await file.writeFile(content); await file.sync(); } finally { await file.close(); }
+    // Publish complete bytes exclusively, including across independent stores
+    // and processes. rename would overwrite an existing immutable artifact.
+    await link(temporary, path);
+  } finally { await unlink(temporary); }
 }
 
 export type ArtifactReceipt = z.infer<typeof ArtifactReceiptSchema>;
