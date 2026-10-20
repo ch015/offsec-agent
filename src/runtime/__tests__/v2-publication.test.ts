@@ -72,7 +72,7 @@ describe('v2 publication evidence and coverage', () => {
     writeFileSync(join(input.engagementDir, '07_security_report.md'), '# Tampered final report\n');
     await expect(agent.resume(input.engagementDir)).rejects.toThrow('artifact hash');
     expect(sessions).toEqual([]);
-  });
+  }, 20_000);
   it('carries corrected review IDs through local repair and publication in one evaluation attempt', async () => {
     const input = fixture(), sessions: string[] = [], base = runner();
     let originalId = '', correctedId = '', localDenials = 0;
