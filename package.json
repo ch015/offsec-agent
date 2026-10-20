@@ -13,6 +13,7 @@
     "assess": "tsx src/runtime/missions/assess.ts",
     "assess:v2": "tsx src/runtime/missions/assess.ts",
     "run:admin": "tsx scripts/run-admin.ts",
+    "results:admin": "tsx scripts/results-admin.ts",
     "generate:contract-resources": "tsx scripts/generate-contract-resources.ts",
     "db:local:start": "bash scripts/postgres/local-start.sh",
     "db:local:migrate": "bash scripts/postgres/local-migrate.sh",

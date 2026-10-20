@@ -15,6 +15,7 @@
 
 ## 현재 사용 문서
 
+- [results-review.md](results-review.md) — 읽기 전용 결과 감사, 수동 이견/해소 이력, 범위 대조, 오프라인 품질 계산과 구현 범위
 - [verification-handoff-20261008.md](verification-handoff-20261008.md) — 내부 진단 90% 목표, NodeGoat·DVWA 중지 상태, 알려진 문제, 새 세션 재검증 절차
 - [agent-autonomy.md](agent-autonomy.md)
 - [embedding.md](embedding.md)
