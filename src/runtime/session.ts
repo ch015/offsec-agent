@@ -21,6 +21,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { atomicPrivateWrite } from './workflow/storage-files.js';
 import { SHARED_KNOWLEDGE_TOOLS } from './shared-knowledge.js';
+import { DATABASE_KNOWLEDGE_TOOLS, KNOWLEDGE_BINDING } from './knowledge/runtime.js';
 
 import {
   query,
@@ -249,6 +250,9 @@ export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow
     (tool) =>
       !disabledTools.has(tool) &&
       !(SHARED_KNOWLEDGE_TOOLS.some(name => tool === `mcp__nunchi__${name}`) && !spec.sharedKnowledge) &&
+      !(DATABASE_KNOWLEDGE_TOOLS.some(name => tool === `mcp__nunchi__${name}`) && !spec.sharedKnowledge?.[KNOWLEDGE_BINDING]) &&
+      !(['mcp__nunchi__lookup_security_advisories', 'mcp__nunchi__get_security_advisory'].includes(tool) &&
+        (!spec.sharedKnowledge?.snapshotPath || !['review', 'evaluate', 'report'].includes(workflowPhase.id))) &&
       !(tool === 'mcp__nunchi__publish_shared_observation' && spec.sharedKnowledge?.snapshotPath),
   );
   const methodologyFiles = adapter.resolveMethodologyFiles?.(phase) ?? [];

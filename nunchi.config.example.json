@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "database": {
+    "host": "127.0.0.1",
+    "port": 5432,
+    "database": "secops_offsec",
+    "user": "YOUR_LOCAL_POSTGRES_USER",
+    "poolMax": 10,
+    "connectionTimeoutMs": 10000,
+    "statementTimeoutMs": 30000,
+    "ssl": false
+  },
+  "knowledge": { "backend": "postgres" },
+  "results": { "backend": "postgres" },
+  "runtime": { "backend": "file" }
+}

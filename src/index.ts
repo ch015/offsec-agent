@@ -3,6 +3,8 @@ export type { AgentExecutionOptions, AgentSessionOptions, SessionRunner } from '
 export type { SessionSpec, SessionOutcome } from './runtime/session.js';
 export type { PhaseMetrics, PhaseMetricsSink } from './runtime/workflow/phase-metrics.js';
 export type { MissionRuntimeOptions } from './runtime/workflow/mission-runtime.js';
+export { loadConfig, type AppConfig, type DatabaseConfig } from './runtime/config.js';
+export type { KnowledgeOptions } from './runtime/knowledge/runtime.js';
 // One runtime; assessV2 remains a source-compatible alias.
 export { assess, resumeAssess, type AssessInput, type AssessDependencies } from './runtime/missions/assess.js';
 export { resumeAssessV2, assessV2, type AssessV2Input, type AssessV2Dependencies, type AssessV2ResumeOptions } from './runtime/missions/assess-v2.js';

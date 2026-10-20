@@ -56,7 +56,9 @@
         "mcp__nunchi__lookup_shared_knowledge",
         "mcp__nunchi__get_shared_knowledge",
         "mcp__nunchi__publish_shared_observation",
-        "mcp__nunchi__read_source"
+        "mcp__nunchi__read_source",
+        "mcp__nunchi__lookup_finding_records",
+        "mcp__nunchi__get_finding_record"
       ],
       "elevatedTools": [],
       "skills": [
@@ -75,7 +77,11 @@
         "mcp__nunchi__submit_finding",
         "mcp__nunchi__lookup_shared_knowledge",
         "mcp__nunchi__get_shared_knowledge",
-        "mcp__nunchi__read_source"
+        "mcp__nunchi__read_source",
+        "mcp__nunchi__lookup_finding_records",
+        "mcp__nunchi__get_finding_record",
+        "mcp__nunchi__lookup_security_advisories",
+        "mcp__nunchi__get_security_advisory"
       ],
       "elevatedTools": [],
       "skills": [
@@ -93,7 +99,11 @@
         "Write",
         "mcp__nunchi__lookup_shared_knowledge",
         "mcp__nunchi__get_shared_knowledge",
-        "mcp__nunchi__read_source"
+        "mcp__nunchi__read_source",
+        "mcp__nunchi__lookup_finding_records",
+        "mcp__nunchi__get_finding_record",
+        "mcp__nunchi__lookup_security_advisories",
+        "mcp__nunchi__get_security_advisory"
       ],
       "elevatedTools": [],
       "skills": [
@@ -111,7 +121,11 @@
         "Write",
         "mcp__nunchi__lookup_shared_knowledge",
         "mcp__nunchi__get_shared_knowledge",
-        "mcp__nunchi__read_source"
+        "mcp__nunchi__read_source",
+        "mcp__nunchi__lookup_finding_records",
+        "mcp__nunchi__get_finding_record",
+        "mcp__nunchi__lookup_security_advisories",
+        "mcp__nunchi__get_security_advisory"
       ],
       "elevatedTools": [],
       "skills": [

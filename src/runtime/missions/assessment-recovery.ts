@@ -7,9 +7,11 @@ import { PhaseResultFailure, ProviderRuntimeFailure } from '../providers/provide
 import { atomicPrivateWrite, readManagedFile } from '../workflow/storage-files.js';
 import { reportDirectory } from '../workflow/run-location.js';
 import { SourceReadCoverageSchema } from '../workflow/scope-assurance.js';
+import { KnowledgeStorageError } from '../knowledge/postgres-knowledge.js';
 
 export class AnalysisInterruption extends Error {}
 export function recoverableFailure(error: unknown): boolean {
+  if (error instanceof KnowledgeStorageError) return true;
   if (error instanceof TerminationUnknownError || error instanceof AdmissionDeferredError || error instanceof PhaseResultFailure || error instanceof ProviderRuntimeFailure || error instanceof AnalysisInterruption || error instanceof MissionBudgetExhaustedError) return true;
   const code = (error as NodeJS.ErrnoException | null)?.code ?? '';
   return /^(EIO|ENOSPC|EDQUOT|EBUSY|EMFILE|ENFILE|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|08\w{3}|57P0[123]|53300|55P03)$/.test(code);

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -gt 0 || -n "${NUNCHI_CONFIG:-}" || -f nunchi.config.json ]]; then
+  exec pnpm db:migrate "$@"
+fi
+
 db_host="${NUNCHI_DB_HOST:-127.0.0.1}"
 db_port="${NUNCHI_DB_PORT:-55432}"
 db_name="${NUNCHI_DB_NAME:-nunchi_local}"
@@ -13,5 +17,7 @@ command -v psql >/dev/null 2>&1 || {
 }
 
 psql "$database_url" -v ON_ERROR_STOP=1 \
-  -f src/runtime/workflow/postgres-run-state.sql >/dev/null
+  -f src/runtime/workflow/postgres-run-state.sql \
+  -f src/runtime/knowledge/schema.sql \
+  -f src/runtime/review-notes.sql >/dev/null
 echo "PostgreSQL schema ready"

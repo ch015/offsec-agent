@@ -95,6 +95,8 @@ API는 `published | incomplete`, CLI는 완료 0·범위 미완료 2·입력/무
 
 기본 결과는 대상 밖 `~/.ch015/<repo>/<time>_<commit-or-nogit>_<UUID>/`의 `engagement/`, `report/`에 저장합니다. `CH015_STATE_HOME`으로 저장 루트를 지정할 수 있습니다. 파일 상태 저장소와 PostgreSQL 상태/lease/outbox, 선택적 artifact store를 지원합니다. 대상 소스는 수정하지 않습니다.
 
+공유 지식·Finding 버전·지시문·CVE 참고 정보는 `nunchi.config.json`의 PostgreSQL 연결로 저장·조회할 수 있습니다. `pnpm db:migrate`로 스키마를 준비하고 `pnpm assess ... --config ./nunchi.config.json`으로 사용합니다. CVE 원문은 `pnpm knowledge:import <file-or-directory>`로 갱신하며, 기존 실행은 참고한 버전을 유지합니다. [설정·갱신·격리와 복구 방법](docs/postgres-knowledge.md)을 참고하세요.
+
 ```sh
 pnpm build:library
 pnpm test:all

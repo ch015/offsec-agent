@@ -165,7 +165,8 @@ describe('OffSec session enforcement', () => {
     expect(options.systemPrompt).toMatchObject({ append: expect.stringContaining('# Analyzer') });
     expect(options.agents?.['analyzer']).toBeDefined();
     expect(options.outputFormat?.type).toBe('json_schema');
-    expect(options.tools).toEqual(loadOffsecContract().roles['analyzer']?.tools.filter(tool => !tool.includes('shared_')));
+    expect(options.tools).toEqual(loadOffsecContract().roles['analyzer']?.tools.filter(tool => !tool.includes('shared_') &&
+      !['mcp__nunchi__lookup_finding_records', 'mcp__nunchi__get_finding_record'].includes(tool)));
     expect(options.allowedTools).toEqual(options.tools);
     expect(options.disallowedTools).toEqual(['Agent']);
     expect(options.permissionMode).toBe('dontAsk');

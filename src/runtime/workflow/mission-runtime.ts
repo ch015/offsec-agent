@@ -22,6 +22,7 @@ import {
 } from './state-store.js';
 import { ResilientArtifactStore } from './resilient-artifacts.js';
 import type { TelemetrySink } from './telemetry.js';
+import type { DatabaseConfig } from '../config.js';
 
 type DatabasePool = SqlPool & { end(): Promise<void> };
 
@@ -35,6 +36,8 @@ export type MissionRuntimeOptions = {
   leaseTtlMs?: number;
   env?: NodeJS.ProcessEnv;
   sharedEngagementRoot?: string;
+  database?: DatabaseConfig;
+  artifactRoot?: string;
 };
 
 export type MissionRuntime = {
@@ -132,9 +135,9 @@ function postgresResources(options: MissionRuntimeOptions): {
   artifactStore: ImmutableArtifactStore;
 } {
   const env = options.env ?? process.env;
-  const pool = options.pool ?? createPostgresPool(env);
+  const pool = options.pool ?? createPostgresPool(env, options.database);
   const artifactStore = options.artifactStore ?? (() => {
-    const root = env.NUNCHI_ARTIFACT_ROOT;
+    const root = options.artifactRoot ?? env.NUNCHI_ARTIFACT_ROOT;
     if (!root) throw new Error('PostgreSQL mission에는 NUNCHI_ARTIFACT_ROOT가 필요하다');
     return new FileSystemArtifactStore(root);
   })();

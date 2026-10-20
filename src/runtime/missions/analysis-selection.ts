@@ -35,7 +35,7 @@ export function resolveAnalysisSelection(input: AnalysisSelectionInput): {
 
 const VALUE_FLAGS = new Set(['reuse-from', 'mode', 'tools', 'model', 'review-model', 'effort', 'max-turns', 'max-usd', 'cost-policy',
   'semgrep', 'work-units', 'max-concurrency', 'max-files-per-agent', 'max-source-tokens-per-agent',
-  'max-followup-hypotheses', 'engagement-dir']);
+  'max-followup-hypotheses', 'engagement-dir', 'config']);
 const BOOLEAN_FLAGS = new Set(['resume', 'no-cost-guard', 'help']);
 
 export function parseAssessV2Args(argv: readonly string[]): { flags: Map<string, string>; positional: string[] } {

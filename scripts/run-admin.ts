@@ -13,6 +13,7 @@ import {
 } from '../src/runtime/workflow/reconciliation.js';
 import { FileTelemetrySink, recordRunTelemetry } from '../src/runtime/workflow/telemetry.js';
 import { resumeAssessV2 } from '../src/runtime/missions/assess-v2.js';
+import { loadConfig } from '../src/runtime/config.js';
 
 type Parsed = { command: string; flags: Map<string, string> };
 
@@ -46,12 +47,14 @@ async function main(): Promise<void> {
   }
   const engagementDir = realpathSync(resolve(required(flags, 'engagement')));
   const runId = required(flags, 'run-id');
-  const backend = flags.get('backend') as MissionRuntimeOptions['backend'] | undefined;
+  const config = loadConfig(flags.get('config'));
+  const backend = (flags.get('backend') ?? process.env.NUNCHI_STATE_BACKEND ?? config.runtime.backend) as MissionRuntimeOptions['backend'];
+  const runtimeOptions: MissionRuntimeOptions = { ...config.runtime, backend, database: config.database };
   const telemetry = new FileTelemetrySink(resolve(flags.get('telemetry') ?? join(engagementDir, 'run-telemetry.jsonl')));
   if (command === 'recover-publication' || command === 'resume-assess') {
     const checkpoint = JSON.parse(await readFile(join(engagementDir, 'assess-v2-checkpoint-input.json'), 'utf8'));
     if (checkpoint.runId !== runId) throw new Error('--run-id does not match the stored run');
-    const result = await resumeAssessV2(engagementDir, { runtime: { ...(backend ? { backend } : {}) } });
+    const result = await resumeAssessV2(engagementDir, { runtime: runtimeOptions, knowledge: { ...config.knowledge, database: config.database } });
     process.stdout.write(`${JSON.stringify({ finalReport: result.finalReport, coverage: result.coverage }, null, 2)}\n`);
     if (!result.coverage.complete) process.exitCode = 2;
     return;
@@ -59,7 +62,7 @@ async function main(): Promise<void> {
   const release = command === 'inspect' ? () => {} : acquireRunLock(join(dirname(engagementDir), `.${basename(engagementDir)}.agent.lock`));
   let runtime: MissionRuntime | undefined;
   try {
-    runtime = await openMissionRuntime({ engagementDir, runId }, { ...(backend ? { backend } : {}), telemetry });
+    runtime = await openMissionRuntime({ engagementDir, runId }, { ...runtimeOptions, telemetry });
     if ((await runtime.read()).runId !== runId) throw new Error('--run-id does not match the stored run');
     if (command === 'inspect') {
       const inspection = await inspectRun(runtime.state);

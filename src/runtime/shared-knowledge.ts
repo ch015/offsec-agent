@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { validateEvidence, type StandardFinding } from './finding-contract.js';
 import { atomicPrivateWrite, managedPath, readManagedFile } from './workflow/storage-files.js';
+import { KNOWLEDGE_BINDING, type KnowledgeBinding } from './knowledge/binding.js';
 
 /** Host supplied, scoped to one sealed work plan. Never accepted as model input. */
 export type SharedKnowledgeContext = {
@@ -12,6 +13,7 @@ export type SharedKnowledgeContext = {
   sourceFiles: readonly string[];
   /** Root phases read the immutable analysis snapshot, including after resume. */
   snapshotPath?: string;
+  [KNOWLEDGE_BINDING]?: KnowledgeBinding;
 };
 
 const Evidence = z.object({

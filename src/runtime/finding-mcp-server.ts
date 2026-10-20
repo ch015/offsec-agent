@@ -1,6 +1,8 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { readSourceChunk } from './source-reader.js';
+import { KNOWLEDGE_BINDING, indexFinding, indexSharedRecord } from './knowledge/runtime.js';
+import { databaseKnowledgeTools } from './knowledge/tools.js';
 
 import { buildFindingContract, submitStandardFinding } from './finding-contract.js';
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
@@ -46,8 +48,12 @@ export function createFindingMcpServer(input: {
               finding: finding as Parameters<typeof submitStandardFinding>[0]['finding'],
               contract,
             });
-            if (input.sharedKnowledge && !input.sharedKnowledge.snapshotPath) {
-              publishSharedFinding(input.sharedKnowledge, input, accepted);
+            const record = input.sharedKnowledge && !input.sharedKnowledge.snapshotPath
+              ? publishSharedFinding(input.sharedKnowledge, input, accepted) : undefined;
+            if (input.sharedKnowledge) await indexFinding(input.sharedKnowledge, input.engagementDir, accepted);
+            if (input.sharedKnowledge && record) {
+              await indexSharedRecord(input.sharedKnowledge, record, { role: input.role, phase: input.phase,
+                round: input.round, engagementDir: input.engagementDir, findingId: accepted.id });
             }
             return { content: [{ type: 'text', text: JSON.stringify(accepted) }] };
           } catch (error) {
@@ -60,22 +66,35 @@ export function createFindingMcpServer(input: {
           query: z.string().max(500).optional(), paths: z.array(z.string().max(1_000)).max(40).optional(),
           offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(20).optional(),
         }, async options => {
-          try { return { content: [{ type: 'text' as const, text: JSON.stringify(lookupSharedKnowledge(input.sharedKnowledge!, options)) }] }; }
+          try {
+            const context = input.sharedKnowledge!, binding = context[KNOWLEDGE_BINDING];
+            const page = binding ? await binding.store.lookupShared(binding.scope, binding.view, options) : lookupSharedKnowledge(context, options);
+            return { content: [{ type: 'text' as const, text: JSON.stringify(page) }] };
+          }
           catch (error) { return toolError(error); }
         }),
         tool('get_shared_knowledge', '공통 정보 ID의 전체 주장과 검증된 소스 인용을 조회한다. 취약점 확정이나 담당 파일 읽기 완료를 뜻하지 않는다.', {
           id: z.string().regex(/^K-[a-f0-9]{64}$/),
         }, async ({ id }) => {
-          try { return { content: [{ type: 'text' as const, text: JSON.stringify(getSharedKnowledge(input.sharedKnowledge!, id)) }] }; }
+          try {
+            const context = input.sharedKnowledge!, binding = context[KNOWLEDGE_BINDING];
+            const record = binding ? await binding.store.getShared(binding.scope, binding.view, id) : getSharedKnowledge(context, id);
+            return { content: [{ type: 'text' as const, text: JSON.stringify(record) }] };
+          }
           catch (error) { return toolError(error); }
         }),
         ...(!input.sharedKnowledge.snapshotPath ? [tool('publish_shared_observation',
           '재사용 가능한 구조·인증·데이터 흐름 관측을 정확한 소스 인용과 함께 공통 저장소에 기록한다. 동일 내용은 하나로 합친다.',
           SharedObservationShape, async value => {
-            try { return { content: [{ type: 'text' as const, text: JSON.stringify(publishSharedObservation(input.sharedKnowledge!, input, input.target, value)) }] }; }
+            try {
+              const record = publishSharedObservation(input.sharedKnowledge!, input, input.target, value);
+              await indexSharedRecord(input.sharedKnowledge!, record, { role: input.role, phase: input.phase, round: input.round, engagementDir: input.engagementDir });
+              return { content: [{ type: 'text' as const, text: JSON.stringify(record) }] };
+            }
             catch (error) { return toolError(error); }
           })] : []),
       ] : []),
+      ...(input.sharedKnowledge ? databaseKnowledgeTools(input.sharedKnowledge, input.phase) : []),
     ].filter(entry => allowedTools.has(`mcp__nunchi__${entry.name}`)),
   });
 }

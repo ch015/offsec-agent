@@ -35,3 +35,5 @@ console.log(result.status, result.coverage, result.finalReport);
 `agent.resume(dir)`는 기존 스냅샷으로 미완료 작업만 재개합니다. 원본 작업 트리를 바꿔도 기존 스냅샷은 바뀌지 않습니다. 변경 소스를 분석하려면 새 결과 디렉터리로 `agent.run({ target, reuseFrom: dir })`을 사용합니다. 동일 계약·범위·근거와 변경 영향이 검증된 작업만 재사용하고 검토 단계는 새로 수행합니다. 기존 결과는 덮어쓰지 않습니다.
 
 기본 상태 저장소는 file입니다. `runtime: { backend: 'postgres', pool, artifactStore, sharedEngagementRoot }`로 PostgreSQL을 사용하며 재개 시 원래 backend를 유지합니다. [저장과 복구](analysis-storage-recovery.md)를 참고하세요. v1 실행과 `resumeAssessOwnerAuth`는 제거됐습니다. 과거 자료는 읽기 전용 역사 기록으로 유지합니다.
+
+공유 지식·Finding 이력·CVE 참고 정보만 PostgreSQL로 먼저 옮기려면 `configPath: '/absolute/nunchi.config.json'` 또는 `knowledge: { backend: 'postgres', database: { host, port, database, user, passwordEnv } }`를 설정합니다. 지식 저장 backend는 실행 상태 backend와 독립적이며, 연결 정보는 모델 입력/체크포인트에 포함되지 않습니다. [PostgreSQL 지식 저장소](postgres-knowledge.md)에 설정 예제와 갱신 명령이 있습니다.
