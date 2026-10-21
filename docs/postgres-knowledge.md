@@ -16,7 +16,7 @@ pnpm assess /absolute/path/to/project --config ./nunchi.config.json --mode ast -
 
 버전을 올린 뒤에도 `pnpm db:migrate`를 다시 실행한다. 스키마 SQL은 반복 실행해도 안전하다. 예를 들어 `nunchi_runs.status` 검사에 `incomplete`가 없는 기존 테이블은 이때 검사를 교체하며, migrate 트랜잭션이 끝날 때까지 `nunchi_runs`에 배타 락이 걸린다. 실행 중인 host가 없을 때 migrate한다. 이미 반영된 DB에서는 아무것도 바꾸지 않는다.
 
-CLI 설정 파일 선택 순서는 `--config`, `NUNCHI_CONFIG`, 현재 디렉터리의 `nunchi.config.json`이다. 파일을 명시했는데 읽을 수 없거나 알 수 없는 필드가 있으면 오류를 반환한다. 기본 파일이 없으면 기존 file backend를 유지한다. `nunchi.config.json`은 Git에서 제외한다. 설정 파일은 진단 대상 소스 밖에 두고, 민감한 설정에는 파일 권한 600을 사용한다.
+CLI 설정 파일은 `--config`, 없으면 `NUNCHI_CONFIG`로만 선택한다. 현재 디렉터리의 `nunchi.config.json`은 자동으로 읽지 않으므로 저장소 안에 둔 로컬 설정이 저장 위치나 migrate 대상을 바꾸지 않는다. 지정한 파일을 읽을 수 없거나 알 수 없는 필드가 있으면 오류를 반환한다. 아무 설정도 지정하지 않으면 file backend를 쓴다. `nunchi.config.json`은 Git에서 제외한다. 설정 파일은 진단 대상 소스 밖에 두고, 민감한 설정에는 파일 권한 600을 사용한다.
 
 `run:admin`도 같은 설정을 읽으며 명시적으로 지정할 때는 `--config=/absolute/path.json` 형식을 사용한다. `db:local:migrate`는 설정 파일이 있으면 공통 migration으로 연결하고, 없으면 기존 로컬 테스트 서버 환경변수 방식을 유지한다. `db:local:start/stop`은 별도로 소유한 개발용 PostgreSQL 프로세스 관리 명령이다.
 

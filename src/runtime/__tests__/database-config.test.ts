@@ -18,7 +18,9 @@ describe('host database configuration', () => {
     const value = { version: 1, database: { host: 'localhost', database: 'knowledge', user: 'test', ssl: { caFile: 'ca.pem' } },
       knowledge: { backend: 'postgres' }, results: { backend: 'postgres' }, runtime: { backend: 'postgres', artifactRoot: 'artifacts', sharedEngagementRoot: 'runs' } };
     writeFileSync(join(root, 'nunchi.config.json'), JSON.stringify(value));
-    const config = loadConfig(undefined, {}, root);
+    // A config file in the working directory is never read implicitly.
+    expect(loadConfig(undefined, {}, root).knowledge.backend).toBe('file');
+    const config = loadConfig('nunchi.config.json', {}, root);
     expect(config.database!.ssl).toEqual({ caFile: join(root, 'ca.pem') });
     expect(config.runtime.artifactRoot).toBe(join(root, 'artifacts'));
     expect(config.results.backend).toBe('postgres');
@@ -45,8 +47,8 @@ describe('host database configuration', () => {
     const root = mkdtempSync(join(tmpdir(), 'db-config-')); roots.push(root);
     for (const database of [{ password: 'never-print-me' }, { port: -1 }, { poolMax: 0 }, { ssl: { rejectUnauthorized: false } }]) {
       writeFileSync(join(root, 'nunchi.config.json'), JSON.stringify({ version: 1, database }));
-      expect(() => loadConfig(undefined, {}, root)).toThrow(/config 필드/);
-      try { loadConfig(undefined, {}, root); } catch (error) { expect(String(error)).not.toContain('never-print-me'); }
+      expect(() => loadConfig('nunchi.config.json', {}, root)).toThrow(/config 필드/);
+      try { loadConfig('nunchi.config.json', {}, root); } catch (error) { expect(String(error)).not.toContain('never-print-me'); }
     }
   });
 });

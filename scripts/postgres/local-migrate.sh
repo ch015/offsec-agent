@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -gt 0 || -n "${NUNCHI_CONFIG:-}" || -f nunchi.config.json ]]; then
+if [[ $# -gt 0 || -n "${NUNCHI_CONFIG:-}" ]]; then
   exec pnpm db:migrate "$@"
 fi
 

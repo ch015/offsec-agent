@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
@@ -23,11 +23,13 @@ const ConfigSchema = z.object({
 export type DatabaseConfig = z.input<typeof DatabaseConfigSchema>;
 export type AppConfig = z.infer<typeof ConfigSchema>;
 
-/** Host configuration only. Never include this object in a checkpoint or model prompt. */
+/** Host configuration only. Never include this object in a checkpoint or model prompt.
+ * Only an explicit path or NUNCHI_CONFIG selects a file: a nunchi.config.json in the working
+ * directory is not read implicitly, so a stray local file cannot redirect storage or migrations. */
 export function loadConfig(path?: string, env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {
   const requested = path ?? env.NUNCHI_CONFIG;
-  const file = resolve(cwd, requested ?? 'nunchi.config.json');
-  if (!requested && !existsSync(file)) return ConfigSchema.parse({ version: 1 });
+  if (!requested) return ConfigSchema.parse({ version: 1 });
+  const file = resolve(cwd, requested);
   let raw: unknown;
   try { raw = JSON.parse(readFileSync(file, 'utf8')); }
   catch { throw new Error('Nunchi config를 읽을 수 없다. 경로와 JSON 형식을 확인한다.'); }
