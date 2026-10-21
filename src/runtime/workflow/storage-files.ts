@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { chmodSync, closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 /** Managed paths must never traverse a link, including the configured root. */
@@ -36,6 +36,17 @@ export function atomicPrivateWrite(path: string, content: string | Uint8Array): 
   const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try { writeFileSync(fd, content); fsyncSync(fd); } finally { closeSync(fd); }
   try { renameSync(temporary, path); } finally { if (existsSync(temporary)) unlinkSync(temporary); }
+}
+
+/** Create-only counterpart of atomicPrivateWrite: readers never see partial bytes and an existing
+ * file is never replaced (throws EEXIST, like the `wx` flag). */
+export function atomicPrivateCreate(path: string, content: string | Uint8Array): void {
+  managedPath(dirname(path), path);
+  privateDirectory(dirname(path));
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { writeFileSync(fd, content); fsyncSync(fd); } finally { closeSync(fd); }
+  try { linkSync(temporary, path); } finally { unlinkSync(temporary); }
 }
 
 export function readManagedFile(root: string, path: string): Buffer {

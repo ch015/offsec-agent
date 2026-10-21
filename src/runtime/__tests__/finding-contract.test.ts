@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertStandardFindingsRepresented,
   countStandardFindings,
+  readStandardFindingRecordReceipts,
   readStandardFindings,
   submitStandardFinding,
 } from '../finding-contract.js';
@@ -65,6 +66,24 @@ describe('standard Finding contract', () => {
     expect(() => assertStandardFindingsRepresented(engagementDir, report)).toThrow(/소비하지 않았다/);
     writeFileSync(report, `finding ${finding.id}\n`);
     expect(assertStandardFindingsRepresented(engagementDir, report)).toBe(1);
+  });
+
+  it('writes records atomically and tolerates only a leftover staging file from an interrupted write', () => {
+    const { target, engagementDir, source } = fixture();
+    const submit = (severity: 'HIGH' | 'MEDIUM') => submitStandardFinding({
+      target, engagementDir, phase: 'va', role: 'va-auditor', finding: { ...supportedFinding(source), severity },
+    });
+    submit('HIGH');
+    submit('MEDIUM'); // upsert of the same identity replaces the record in place
+    const recordsDir = join(engagementDir, 'standard-findings');
+    const [record] = readdirSync(recordsDir);
+    expect(readdirSync(recordsDir)).toEqual([record]);
+    expect(readStandardFindingRecordReceipts(engagementDir)).toHaveLength(1);
+    expect(readStandardFindings(engagementDir).map(finding => finding.severity)).toEqual(['MEDIUM']);
+    writeFileSync(join(recordsDir, `${record}.123e4567-e89b-12d3-a456-426614174000.tmp`), '{"torn":');
+    expect(readStandardFindingRecordReceipts(engagementDir)).toHaveLength(1);
+    writeFileSync(join(recordsDir, 'notes.txt'), 'foreign');
+    expect(() => readStandardFindingRecordReceipts(engagementDir)).toThrow(/비계약 파일/);
   });
 
   it('rejects a quote that does not occur in the declared line range', () => {

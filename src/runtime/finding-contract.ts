@@ -5,7 +5,6 @@ import {
   readFileSync,
   realpathSync,
   readdirSync,
-  writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { relative, resolve, sep } from 'node:path';
@@ -13,7 +12,7 @@ import { relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
-import { atomicPrivateWrite, readManagedFile } from './workflow/storage-files.js';
+import { atomicPrivateCreate, atomicPrivateWrite, readManagedFile } from './workflow/storage-files.js';
 
 type StandardEvidence = {
   path: string;
@@ -251,10 +250,8 @@ export function submitStandardFinding(input: {
   const identity = `${finding.id}\0${finding.phase}\0${finding.role}\0${finding.round ?? ''}`;
   const recordName = `${createHash('sha256').update(identity).digest('hex')}.json`;
   // #10: upsert — 동일 identity의 finding 재제출 시 최신 버전으로 덮어쓰기 (보강된 evidence/severity 반영)
-  writeFileSync(resolve(recordsDir, recordName), `${JSON.stringify(finding)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+  // 원자적 교체: 중단돼도 이전 버전이나 새 버전 중 하나만 남고, 쓰다 만 JSON은 남지 않는다.
+  atomicPrivateWrite(resolve(recordsDir, recordName), `${JSON.stringify(finding)}\n`);
   return finding;
 }
 
@@ -289,7 +286,9 @@ export function readStandardFindingRecordReceipts(
 ): StandardFindingRecordReceipt[] {
   const recordsDir = resolve(engagementDir, FINDINGS_RECORDS);
   if (!existsSync(recordsDir)) return [];
-  const names = readdirSync(recordsDir).sort();
+  // Atomic record writes stage `<record>.json.<uuid>.tmp` beside the record; an interrupted write can
+  // leave one behind. Only that exact staging name is skipped; any other foreign file still fails.
+  const names = readdirSync(recordsDir).filter((name) => !/^[a-f0-9]{64}\.json\.[0-9a-f-]{36}\.tmp$/.test(name)).sort();
   if (names.some((name) => !/^[a-f0-9]{64}\.json$/.test(name))) {
     throw new Error('standard Finding record directory에 비계약 파일이 있다');
   }
@@ -329,7 +328,7 @@ export function promoteStandardFindingRecords(input: {
     const content = readFileSync(resolve(sourceDir, receipt.recordName));
     const destination = resolve(destinationDir, receipt.recordName);
     try {
-      writeFileSync(destination, content, { mode: 0o600, flag: 'wx' });
+      atomicPrivateCreate(destination, content);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const previous = readManagedFile(input.toEngagementDir, destination);
