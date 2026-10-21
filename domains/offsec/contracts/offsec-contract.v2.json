@@ -263,7 +263,6 @@
       "methodology/common/evidence-verification.md",
       "methodology/common/recon.md",
       "methodology/common/taint-analysis.md",
-      "knowledge-base/conventions/finding-id-naming.md",
       "knowledge-base/patterns/coverage-matrix.yaml",
       "knowledge-base/patterns/false_positive_patterns.yaml"
     ],
@@ -657,35 +656,31 @@
     },
     {
       "path": "methodology/common/compensating-control.md",
-      "sha256": "6c4ab62fdd1ff967660384afc8a97330d63db3abde495f96b0ef8447351bd929"
+      "sha256": "c53b0a10bcd2034e06e1eb723b96ff3e3cd21960e3249c96c59bf15fc03c7085"
     },
     {
       "path": "methodology/common/context-loading.md",
-      "sha256": "c349cc43aa765d07b5fd223a35fb97d64598e0b5480e0b30d05a438dfadc2fad"
+      "sha256": "115c267a47270314a61e3746ea9302bd3c95e026f9827bb1e9ff921a2df1468e"
     },
     {
       "path": "methodology/common/recon.md",
-      "sha256": "cdbbc53a1ba934dde65c4a9ce417bdebce56e09a25608971384774b2d8932508"
+      "sha256": "255406b39ad10d8ee5186e0fc1f2e7bb0e0c188893b13cee6abddf64ce56a929"
     },
     {
       "path": "methodology/common/taint-analysis.md",
-      "sha256": "b376b5796a2443842e17638cac33b18916be3169d1c44e7c324c0d155fdbeedb"
-    },
-    {
-      "path": "knowledge-base/conventions/finding-id-naming.md",
-      "sha256": "86e49255367583e8be5b77abb7be75e62421785e7b2d1045de495ecd4715943d"
+      "sha256": "115953df014aac879f62a5c1200e85eae710dc01ac70377599a600912bc25e49"
     },
     {
       "path": "knowledge-base/patterns/coverage-matrix.yaml",
-      "sha256": "1ff38bc4c2dfecc65d2cfc15bbc3b63e50ebbf57e2f0df7b607c6ee0ae313952"
+      "sha256": "2c5cb45603f3ead5aec32cbdf595ee70d97edcb5bb0a358c5f7e16e541068225"
     },
     {
       "path": "knowledge-base/patterns/false_positive_patterns.yaml",
-      "sha256": "d3ec841811d626437f579f54f8c4e29891e67b2217e66ce679e928baa60cd1cb"
+      "sha256": "9e1d530cc28bce7d15c8ffb988f6e447e5472bdce492ab874bf2e846406084bb"
     },
     {
       "path": "methodology/va/index.md",
-      "sha256": "a27baef701e3035cdc5c0b27ec7d25f9b185f9e53f4b0e3d7ccd329994748c66"
+      "sha256": "51b15614479bcf63e855963e629fae44bf83dd2aa856eebb6f52527a6b36b63c"
     },
     {
       "path": "methodology/va/checklists/api.yaml",
@@ -705,67 +700,67 @@
     },
     {
       "path": "methodology/va/compliance.md",
-      "sha256": "3b53944e681917f3c899df2192c3d2ac2e96ecaade1524aab3493101d411c9be"
+      "sha256": "11dae5ec1421e6c8f874ff5674b5ff03e1be97a4e92799193449e74413ceff8d"
     },
     {
       "path": "methodology/va/concurrency.md",
-      "sha256": "597ac0514c83ab663ca58b93a331a3881d6e3a5828a8ba41c64a2b780cc52711"
+      "sha256": "ecdafc88cc0eb244d45c4ed50ce7020874f794892c4c1aa430539d581c284879"
     },
     {
       "path": "methodology/va/deep-analysis.md",
-      "sha256": "105d273084e1d50538136695750b7b9fc8cad2b8cc882421bf1a9588ceb86a11"
+      "sha256": "a50a1baca52c041248286609e7adb81ea05d4793913a3cf21140be5cc7ab2878"
     },
     {
       "path": "methodology/va/depth/access-control.md",
-      "sha256": "b4831dd73f6b04f08da779f9df7d4192966ebb05a9c0ee6e199d73e2db3c0492"
+      "sha256": "bb7c65f07c78683841a4fe28ac06e1225bcbee270cb64a25797c9da087c24444"
     },
     {
       "path": "methodology/va/depth/auth-bypass.md",
-      "sha256": "ab776d9e6b5c6fcf5df318ddb4378d851268d351de64ed8355a0e29d473ae110"
+      "sha256": "2a1e3e2c58fbe7816efafd107831fb2fa4596f50a243242f684b5420e0636ecb"
     },
     {
       "path": "methodology/va/depth/concurrency.md",
-      "sha256": "dc029e80f0f926e788b19f1bdaac5bafd1497942d0e24b18d895b133a07c9ce2"
+      "sha256": "56af74f657943a63e2d69e0cc9f3603e927f534ac77e5e4409e3bb3e88141095"
     },
     {
       "path": "methodology/va/depth/crypto-misuse.md",
-      "sha256": "b85d7aeb0eba2ce2e277fe644a757324d0391ab2c9979dac532fc80aa2ddcd3d"
+      "sha256": "1a6ed8576bc894391c896e6e181fbeab679afaaa69327b51b8722315c4cd0d76"
     },
     {
       "path": "methodology/va/depth/data-flow.md",
-      "sha256": "0e1355cc75c329b86bfa3a632c339413ef4adeff7491bef6e5574e115d6cc310"
+      "sha256": "e99a22ac394cfe8e3b9aca0ac1dfc3d183c82a911ff0e75cb94f0aa00be5d33c"
     },
     {
       "path": "methodology/va/depth/injection.md",
-      "sha256": "451f03ffd87d79af4c47eebe8b20ee5e98a3889c394e890f3bfde0579238f41f"
+      "sha256": "6d217165f4d4cae61a47b799f563320525807a57453b8c52704448d107eac99a"
     },
     {
       "path": "methodology/va/depth/ssrf.md",
-      "sha256": "d77c0c08344ce343ee720a17a461a6858af4461df5093e726afec45aab30942e"
+      "sha256": "813b381ee65c9dc59dfe3c5766a10df9bf1060e12c152103693e898c7ef967fe"
     },
     {
       "path": "methodology/va/principles/baas-trust-boundary.md",
-      "sha256": "8d62d1378bd62594f6d61755923c30f1270fee050e32e26b64aed6596f08cf16"
+      "sha256": "911839a018bc17e7eb5e092686809e3b17c248053110027c25ace09ee5c7984d"
     },
     {
       "path": "methodology/va/principles/oauth-provider-misconfig.md",
-      "sha256": "035e0c03d9d9797177bd4976f5cfc5f0e35414432c18761fbc72ae0629c49504"
+      "sha256": "ef1903101b3e086671da558a83c4cb16ee3aa01f91e442e391f103900a9d7b21"
     },
     {
       "path": "methodology/va/principles/row-level-security.md",
-      "sha256": "68d6232014846b26c5d70b9d85dcc467197874a918ae3e470c2897ca74d7dacc"
+      "sha256": "e35f83f57216add1710514ad34039cd82193a1ac61c45d23fddae81703870696"
     },
     {
       "path": "methodology/va/principles/webhook-integrity.md",
-      "sha256": "f0bbec3a32aa15ab669258a1e61f06b188e07d087ef91343fbb31d100cee99c9"
+      "sha256": "dba75610e714eef2438d996b9b4dc0fd9c72427833e9b7df4f0bcb21dfc8ac73"
     },
     {
       "path": "methodology/va/regulatory.md",
-      "sha256": "6fa80c44fe7e09bb614e2b51fd33a7b7c618bee1b234f18d8e3e5ecbfdf29899"
+      "sha256": "6cb74f912ab0b40809672d4a984ff2a55b6e770a8a3d3afe86dbc6f67e198197"
     },
     {
       "path": "methodology/va/supply-chain.md",
-      "sha256": "e581b5c4ebd0e75a9f7cd5db52f879d2ff3ba0ad2719b30543beef899a027610"
+      "sha256": "ba70a967299931a5fb4e80c209f02d8aaec330ba97f2a78b5f08140aedfc36ad"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a1-auth.md",
@@ -789,7 +784,7 @@
     },
     {
       "path": "knowledge-base/tier1-dimensions/a6-deps.md",
-      "sha256": "2136642d0bbb1cc08313f78ec819083447e1c683d668087511efff3794b08649"
+      "sha256": "e30a94bff22311ed12a61ac2bbe90535617955eb874f8032b45dfcbd7464c982"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a7-error.md",
@@ -797,11 +792,11 @@
     },
     {
       "path": "knowledge-base/tier1-dimensions/a8-resource.md",
-      "sha256": "33b9aea2e8926a48efcd9458b1800592a46f50c0ca4cac493ce2fab8ff7df1a1"
+      "sha256": "f88e0a3b7e8d35f34dc46763de8476b460869763cb34bc1374b0c219288880eb"
     },
     {
       "path": "knowledge-base/tier2-overlays/registry.yaml",
-      "sha256": "8aa31d0fc25bd8e32fc7b8f1f559be34152215a2c1d03ccd8f536a8d9b8ed110"
+      "sha256": "851c12d7868d39c01e82e5e8497ca185be058c7d69a233196f893232557d79fc"
     },
     {
       "path": "knowledge-base/tier2-overlays/ai-agent.md",
@@ -809,11 +804,11 @@
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-aws.md",
-      "sha256": "54b63461b28e2bdd1c990839c5b27c21314739df6ed7414b6605ee004de42aa2"
+      "sha256": "2c67ba2a00405b2697a0d1e7fef303d9dbf1a0d0d7d287c7051388c8acc3b05c"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-k8s.md",
-      "sha256": "e4029521933d9ef75945ee6b882a258fc1828254dc07a501f4d4c1c552fd5c07"
+      "sha256": "43920c2319604323afcbb717ca6949ad7c044b22e2ddbd5bc35b81354c599b3d"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud.md",
@@ -837,7 +832,7 @@
     },
     {
       "path": "knowledge-base/tier2-overlays/web3-wallet.md",
-      "sha256": "065ce81e49f876b03957c5e77b48374f0dd1b0b3bb30be3703c2f0fd1bab1962"
+      "sha256": "a879e8d8f9d683a00df71b968830139722af66020d685c62ae09ab83d9810b70"
     },
     {
       "path": "knowledge-base/tier2-overlays/web3.md",

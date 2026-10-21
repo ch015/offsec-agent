@@ -1,22 +1,11 @@
 # 공통 정찰 절차 (Reconnaissance)
 
-> 모든 서비스(VA, Pentest, RedTeam)의 첫 번째 Phase로 실행됩니다.
+> 담당 범위의 기술 스택·공격 표면을 파악할 때 참조한다. 호스트가 전달한 정찰·AST 결과가 있으면 그것을 출발점으로 삼는다.
 > 대상 프로젝트를 처음 보는 것처럼 분석하여 기술 스택과 구조를 자동 식별합니다.
 
 ---
 
-## Extended Thinking Protocol
-
-정찰 단계에서 다음 사고 프로토콜을 따릅니다:
-
-- **Pause**: 프로젝트 구조가 완전히 이해될 때까지 분석 지속
-- **Decompose**: 기술 스택 → 도메인 → 공격 표면 순으로 분해
-- **Evaluate**: 각 도메인에서 보안 관련 컴포넌트 식별
-- **Verify**: 탐지 결과를 실제 코드/설정과 교차 검증
-
----
-
-## Phase 0-1. 기술 스택 탐지
+## 기술 스택 탐지
 
 아래는 **대표적 탐지 대상**이며, 프로젝트에 따라 AI가 자율적으로 추가 탐지를 수행합니다.
 
@@ -81,7 +70,7 @@ Detection_Methods:
       cloud_azure_detected: "true/false"
       cloud_k8s_detected: "true/false"
     로딩_트리거:
-      - "cloud_aws_detected=true → context-loading.md Phase_1 tier2_overlays에서 cloud-aws.md 로드"
+      - "cloud_aws_detected=true → cloud-aws.md 로드"
       - "cloud_k8s_detected=true → cloud-k8s.md 로드"
 
   vendor_flags:
@@ -119,13 +108,13 @@ Result_Variables:
 
 ---
 
-## Phase 0-2. 활성 도메인 판별 (Active Domain Determination)
+## 활성 도메인 판별 (Active Domain Determination)
 
 프로젝트 구조와 설정 파일을 분석하여 아래 도메인 중 활성 상태를 결정합니다.
 
 ### Tier 1 기술 레이어 (보편적 — 모든 프로젝트에서 해당 레이어 활성 여부 판별)
 
-각 레이어는 Phase 1 이후 차원별 리뷰의 **"어디를 볼 것인가"** 컨텍스트로 사용됩니다.
+각 레이어는 차원별 리뷰의 **"어디를 볼 것인가"** 컨텍스트로 사용됩니다.
 
 ```yaml
 Layer_Detection:
@@ -283,50 +272,9 @@ Tier2_Signal_Detection:
 
 ---
 
-## Phase 0-2.5. 프로젝트 레벨 판별 (Project Level Determination)
+## 공격 표면 맵 (Attack Surface Map)
 
-Phase 0-2에서 탐지된 활성 도메인과 기술 스택을 기반으로 프로젝트 레벨을 자동 판별합니다.
-
-```yaml
-Level_Determination:
-  regulated:
-    description: "금융/의료/규제 산업 — OWASP Top 10 + API Top 10 + Secure Coding + NIST 800-53"
-    criteria:
-      - "Web3 도메인 활성 (가상자산/지갑/서명/스마트 컨트랙트)"
-      - "금융 거래 처리 코드 존재 (결제, 정산, 출금, 자산 이전)"
-      - "TEE/Enclave/HSM 관련 코드 존재"
-      - "KMS/키 관리/암호화 키 라이프사이클 관련 코드 존재"
-      - "의료 데이터(PHI) 처리 코드 존재"
-      - "사용자에게 --level regulated가 명시된 경우"
-    match: "1개 이상 해당 시 regulated"
-
-  standard:
-    description: "BaaS/API 기반 서비스 — OWASP Top 10 + API Top 10 + Secure Coding"
-    criteria:
-      - "BaaS/DB 도메인 활성 (Supabase, Firebase 등 직접 DB 접근)"
-      - "Backend 도메인에서 API 엔드포인트 5개 이상"
-      - "AI/ML 도메인 활성 (LLM API 호출, 벡터 DB)"
-      - "SDK 도메인 활성 (외부 개발자 대상 라이브러리)"
-      - "멀티테넌시 구조 존재"
-      - "사용자에게 --level standard가 명시된 경우"
-    match: "1개 이상 해당 시 standard (regulated 미해당 시)"
-
-  basic:
-    description: "일반 웹/모바일 앱 — OWASP Top 10 중심"
-    criteria:
-      - "위 두 레벨의 조건에 해당하지 않는 모든 프로젝트"
-    match: "기본값"
-
-  override: |
-    사용자가 --level 옵션으로 강제 지정한 경우 자동 판별을 무시하고
-    지정된 레벨을 적용한다. 자동 판별 결과와 불일치 시 로그에 기록한다.
-```
-
----
-
-## Phase 0-3. 공격 표면 맵 (Attack Surface Map)
-
-Phase 1 이후 각 서비스의 차원별 리뷰에 입력으로 사용되는 공격 표면 맵을 생성합니다.
+차원별 리뷰에 입력으로 사용되는 공격 표면 맵을 생성합니다.
 
 ```yaml
 Attack_Surface_Map:
@@ -398,7 +346,7 @@ Attack_Surface_Map:
       - "upstream_targets (프록시 대상 서비스 출처 — 환경변수/Redis/DB/하드코딩)"
       - "response_passthrough (응답 헤더/바디 패스스루 방식 — allowlist/denylist/전체)"
     trigger: |
-      감지 시 Phase 1 A3 Upstream_Response_Reflection 및
+      감지 시 A3 Upstream_Response_Reflection 및
       A6 Proxy_Gateway_Response_Trust 분석을 필수 활성화한다.
       프록시 엔드포인트가 3개 이상이면 depth/data-flow.md 로딩을 권고한다.
 
@@ -433,7 +381,7 @@ Attack_Surface_Map:
       - "middleware_chain_order (보안 미들웨어 실행 순서)"
       - "auth_protected_routes (인증 적용 경로 그룹)"
       - "auth_unprotected_routes (인증 미적용 경로)"
-      - "auth_opt_out_routes (명시적 제외 경로 — Phase 1 A1 검토 후보)"
+      - "auth_opt_out_routes (명시적 제외 경로 — A1 검토 후보)"
       - "auth_fallback (인증 실패 시 동작 — anonymous 허용 여부)"
       - "token_lifecycle (발급~폐기 경로 요약)"
     note: |
@@ -478,7 +426,7 @@ Attack_Surface_Map:
 
 ---
 
-## Phase 0-3.5. Asset Identification (자산 식별)
+## Asset Identification (자산 식별)
 
 프로젝트의 핵심 보호 대상을 코드에서 식별하고 가치를 평가합니다.
 
@@ -518,7 +466,7 @@ Asset_Identification:
 
 ---
 
-## Phase 0-4. API 엔드포인트 인벤토리
+## API 엔드포인트 인벤토리
 
 프레임워크별 라우트 등록 패턴을 탐색하여 전체 API 엔드포인트 목록을 생성합니다.
 
@@ -544,22 +492,21 @@ Asset_Identification:
 ### 자동 노출 엔드포인트 추론 (Auto_Exposed_Endpoints)
 
 코드에 명시된 라우트 외에, **프레임워크/라이브러리/설정이 자동 노출하는 엔드포인트**를 추론합니다.
-이 추론 결과는 후속 Phase의 입력이 되며, 후속 Phase는 자체 추론하지 않습니다 (재현성 보장 + 책임 분리).
+이 추론 결과는 A2/A5 점검의 입력이 됩니다.
 
 ```yaml
 Auto_Exposed_Endpoints_Inference:
   목적: |
     프레임워크가 코드 명시 없이 자동 노출하는 엔드포인트를 추론한다.
     이 결과는 다음의 입력이 된다:
-    - VA Phase 1 A2(인가): 관리자/디버그 엔드포인트 보호 검토
-    - VA Phase 1 A5 Active_State_Management: 프로덕션 디버그/내부 비활성화 검토
+    - A2(인가): 관리자/디버그 엔드포인트 보호 검토
+    - A5 Active_State_Management: 프로덕션 디버그/내부 비활성화 검토
     - api.yaml API-INV-002: 문서화되지 않은 엔드포인트 검토
-    - Pentest Phase 6.0 Sweep_3: 라이브 검증 (--url 시)
 
   방법론:
     No_Pattern_List: |
       "고정 카탈로그를 외부 파일에서 로드하지 않는다.
-       Phase 0-1에서 감지된 프레임워크/의존성/설정에서 AI가 자율 추론한다.
+       기술 스택 탐지에서 감지된 프레임워크/의존성/설정에서 AI가 자율 추론한다.
        프레임워크 버전 변경 시 카탈로그 갱신 필요 없음."
 
     Evidence_Required: |
@@ -572,7 +519,7 @@ Auto_Exposed_Endpoints_Inference:
 
   탐색_차원:
     1_의존성_분석: |
-      Phase 0-1의 의존성 파일을 분석하여 자동 노출 라이브러리 식별:
+      기술 스택 탐지의 의존성 파일을 분석하여 자동 노출 라이브러리 식별:
       - 의존성 자체가 엔드포인트를 자동 등록하는가?
       - AI는 프레임워크 동작 원리에서 추론 (패턴 목록 아님)
       
@@ -615,8 +562,7 @@ Auto_Exposed_Endpoints_Inference:
         config_check: "기본 노출 (명시적 비활성화 없음)"
         sensitivity: "low (헬스만) — env/beans/mappings 추가 노출 시 high"
         downstream:
-          - "VA A5 Active_State_Management 입력"
-          - "Pentest Sweep_3 검증 대상"
+          - "A5 Active_State_Management 점검 입력"
 
       - path: "/swagger-ui/"
         framework: "Spring Boot + springdoc-openapi"
@@ -630,7 +576,7 @@ Auto_Exposed_Endpoints_Inference:
     출력: "Auto_Exposed_Endpoints: []"
     의미: |
       자동 노출 라이브러리 미감지 — 프레임워크가 자동 노출하지 않거나
-      ch015가 추론할 수 있는 증거 부재. 후속 Phase는 자체 추론하지 않음.
+      추론할 수 있는 증거 부재. 추론 근거가 없으면 [].
 
   Anti_Patterns:
     - "고정 카탈로그를 외부 파일에서 로드 (가변성 부담, 철학 위반)"
@@ -641,7 +587,7 @@ Auto_Exposed_Endpoints_Inference:
 
 ---
 
-## Phase 0-5. 환경 변수 참조 수집
+## 환경 변수 참조 수집
 
 코드 전체에서 환경 변수 참조를 수집하여 민감 정보 후보를 식별합니다.
 
@@ -658,7 +604,7 @@ Auto_Exposed_Endpoints_Inference:
 
 ---
 
-## Phase 0-6. 디렉토리 구조 분석
+## 디렉토리 구조 분석
 
 ```yaml
 분석_항목:
@@ -671,15 +617,15 @@ Auto_Exposed_Endpoints_Inference:
 
 ---
 
-## Context Binding: Phase 0 → Phase 1 Bridge
+## Context Binding
 
-Phase 0에서 탐지된 환경 변수와 도메인 정보는 Phase 1의 아키텍처 판단에 직접 영향을 미칩니다.
+탐지된 환경 변수와 도메인 정보는 차원별 아키텍처 판단에 직접 영향을 미칩니다.
 
 ```yaml
 Binding_Rules:
   DEPLOY_Cross_Judgment:
     description: |
-      Phase 0에서 탐지된 배포 환경(DEPLOY)은 Phase 1 모든 차원의
+      탐지된 배포 환경(DEPLOY)은 모든 차원의
       보안 메커니즘 적합성 판단에 교차 적용됩니다.
 
     principle: |
@@ -699,15 +645,15 @@ Binding_Rules:
   Domain_Knowledge_Injection:
     description: |
       활성 도메인에 대응하는 Tier 2 오버레이 파일이 knowledge-base/tier2-overlays/에
-      존재하는 경우, Phase 1~2 분석에 해당 체크리스트를 추가 적용합니다.
+      존재하는 경우, 차원 점검과 심층 분석에 해당 체크리스트를 추가 적용합니다.
     mechanism: |
-      1. Phase 0에서 Tier 1 레이어 + Tier 2 서비스 도메인 시그널이 결정되면
+      1. Tier 1 레이어 + Tier 2 서비스 도메인 시그널이 결정되면
          knowledge-base/tier2-overlays/registry.yaml을 참조한다.
       2. registry.yaml의 signal 패턴과 매칭되는 오버레이를 로드한다.
          - auto: 도메인 시그널 감지 즉시 로드
          - conditional: 세부 시그널 매칭 시에만 로드
-      3. 매칭된 오버레이의 8차원 체크를 Phase 1 해당 차원과
-         Phase 2 심층 분석에 추가 질문으로 주입한다.
+      3. 매칭된 오버레이의 8차원 체크를 해당 차원 점검과
+         심층 분석에 추가 질문으로 주입한다.
     available_overlays:
       auto:
         - "web3.md — Web3 공통 (DeFi, Wallet, DEX, DAO, NFT)"
@@ -729,192 +675,10 @@ Binding_Rules:
 
 ---
 
-## 정찰 결과 출력 포맷
+## 정찰 결과 자기 점검
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ PROJECT DISCOVERY REPORT                                    │
-├─────────────────────────────────────────────────────────────┤
-│ Language:   {LANG}                                          │
-│ Framework:  {FRAMEWORK}                                     │
-│ Auth:       {AUTH}                                           │
-│ DB:         {DB}                                             │
-│ Deployment: {DEPLOY}                                        │
-│ Active Domains: Backend ☐/☑  Frontend ☐/☑  BaaS/DB ☐/☑    │
-│                 Web3 ☐/☑    Infra ☐/☑                      │
-│                 Mobile ☐/☑  AI/ML ☐/☑    SDK ☐/☑           │
-│                 NativeClient ☐/☑                            │
-│ Level:      [basic / standard / regulated]                  │
-│ Domain KB:  [로드된 도메인 지식 파일 목록 또는 "none"]       │
-├─────────────────────────────────────────────────────────────┤
-│ API Count:   [엔드포인트 수]                                │
-│ Env Vars:    [환경 변수 수 / 민감 변수 후보 수]              │
-│ Entry Points: [인증 필요: X / 비인증: Y]                    │
-│ Data Stores:  [저장소 수]                                   │
-│ External Services: [외부 서비스 수]                         │
-├─────────────────────────────────────────────────────────────┤
-│ Auth Topology:                                              │
-│   Middleware Chain: [미들웨어 실행 순서]                      │
-│   Protected Routes: [인증 적용 경로 수]                      │
-│   Unprotected:      [인증 미적용 경로 수]                    │
-│   Opt-out:          [명시적 제외 경로 수] ← A1 검토 후보     │
-│   Fallback:         [인증 실패 시 동작]                      │
-├─────────────────────────────────────────────────────────────┤
-│ Shared State:                                               │
-│   Stores: [저장소 수]                                       │
-│   Concurrency Candidates: [동시 접근 후보 수]                │
-│   Cache-DB Pairs: [캐시-DB 쌍 수]                           │
-├─────────────────────────────────────────────────────────────┤
-│ Asset Register:                                             │
-│   CROWN_JEWEL: [수]  HIGH: [수]  MEDIUM: [수]  LOW: [수]   │
-│   Top Assets: [상위 자산명 나열]                             │
-├─────────────────────────────────────────────────────────────┤
-│ SDK Info (SDK 도메인 활성 시):                               │
-│   Platform:     [Client_Web / Client_iOS / ...]             │
-│   Distribution: [npm / Maven / CocoaPods / ...]             │
-│   Type:         [Client SDK / Server SDK / Utility]         │
-│   Public API:   [exported 클래스/함수 수]                    │
-│   Lifecycle:    [init → configure → use → teardown]         │
-│   Backend Comm: [엔드포인트 수 / 프로토콜]                   │
-│   Local Storage:[저장 항목 수 / 암호화 여부]                  │
-└─────────────────────────────────────────────────────────────┘
+정찰 결과를 분석의 출발점으로 쓰기 전에 다음을 확인하고, 불일치는 결과에 1줄로 남긴다.
 
-## Attack Surface Map
-| Protocol | Operation | Auth | Notes |
-|----------|-----------|------|-------|
-| ...      | ...       | ...  | ...   |
-
-## Active Domain Summary
-| Domain | Status | Key Components |
-|--------|--------|----------------|
-| ...    | ...    | ...            |
-
-## Auth Topology
-| Layer | Middleware | Applied To | Notes |
-|-------|-----------|------------|-------|
-| ...   | ...       | ...        | ...   |
-
-## Shared State Map
-| Store | Writers | Readers | Concurrency | Cache-DB |
-|-------|---------|---------|-------------|----------|
-| ...   | ...     | ...     | ...         | ...      |
-
-## Asset Register
-| Entity | Type | Value | Location |
-|--------|------|-------|----------|
-| ...    | ...  | ...   | ...      |
-
-[컴포넌트별 디렉토리 트리]
-```
-
----
-
-## Recon Self-Validation (Phase 0 완료 직후)
-
-Recon 결과는 하류 전체(체크리스트 로딩, depth 파일 선택, 차원별 분석 범위)를 결정하는 기초 데이터다.
-Phase 0.5 Binding 진입 전에 아래 7개 검증을 수행하고, FAIL 항목이 있으면 조치 후 진행한다.
-
-```yaml
-Recon_Self_Validation:
-
-  V1_Workspace_Boundary:
-    check: "target_source_path가 engagement에서 허용된 workspace 경계 안인가?"
-    method: |
-      target_source_path를 realpath로 해석하고,
-      AGENT_ENGAGEMENT_DIR 또는 사용자가 지정한 프로젝트 루트의 하위인지 확인한다.
-      심볼릭 링크가 경계 밖을 가리키면 FAIL.
-    on_fail: "Phase 0 중단. 경로 오류를 사용자에게 보고."
-
-  V2_AST_Parse_Coverage:
-    check: "AST 파싱 실패 파일 비율이 허용 임계치 이내인가?"
-    method: |
-      --mode ast 사용 시, 호스트가 전달한 evidenceIndex/evidenceDetails의
-      파싱 실패 기록에서 실패 파일 수를 추출한다.
-      실패율 = 파싱 실패 파일 수 / 전체 소스 파일 수
-    thresholds:
-      warn: "> 20% 실패"
-      fail: "> 50% 실패"
-    on_warn: |
-      경고 기록 + 실패 파일 목록을 Recon 출력에 포함.
-      Phase 1에서 해당 파일들은 Grep/Read 기반 보완 탐색 대상으로 표시.
-    on_fail: |
-      실패 파일은 AST 데이터(call_graph, data_flows, entry_points, semgrep)가 없으므로
-      Grep/Read 기반 보완 탐색 대상으로 다룬다.
-
-  V3_Entry_Point_Completeness:
-    check: "발견된 엔트리포인트 수가 프로젝트 규모 대비 합리적인가?"
-    method: |
-      1. 라우트 파일 수 기반 기대치 산출:
-         Glob으로 라우트/컨트롤러 패턴 파일 수를 센다
-         (예: **/route.ts, **/controller.*, **/api/**/*.go)
-      2. Recon이 발견한 Entry Points 수와 비교
-      3. 발견 수 < 라우트 파일 수 × 0.5 이면 누락 의심
-    on_fail: |
-      누락 의심 프레임워크/디렉토리를 식별하여 추가 탐색 수행.
-      재탐색 후에도 차이가 크면 recon_gaps 필드에 기록하고 Phase 1 진행.
-
-  V4_Language_Framework_Cross_Check:
-    check: "감지된 언어/프레임워크가 실제 import문·코드 패턴과 일치하는가?"
-    method: |
-      1. 의존성 파일 기반 탐지 결과 (Language, Framework)
-      2. 실제 소스 파일의 import/require/use 문에서 프레임워크 시그널 Grep
-      3. 불일치 감지:
-         - 의존성에 express 있는데 import문에 fastify만 있으면 → 프레임워크 오탐
-         - import에 django 있는데 의존성 파일에 없으면 → 의존성 파일 불완전
-    on_fail: |
-      import 기반 재판별 수행. 양쪽 결과를 병기하고 import 기반을 우선.
-
-  V5_Scale_Metrics_Recording:
-    check: "프로젝트 규모 수치(source_file_count, LOC, subproject_count)가 측정·기록되었는가?"
-    method: |
-      Recon 완료 시 아래를 반드시 산출하여 출력에 포함:
-      - source_file_count: find로 소스 파일 수 (제외 디렉터리 적용 후)
-      - loc_estimate: wc -l 또는 cloc 기반 추정치
-      - subproject_count: 독립 빌드 파일(package.json, go.mod 등) 기준
-    on_fail: "수치 산출 실패 시 'unknown'으로 기록. Large Scale Flow 판별을 보수적(full)으로 적용."
-    cross_check: |
-      source_file_count < 10 이면 경로 오류 또는 제외 규칙 과다 의심 → V6 재확인.
-
-  V6_Exclusion_Audit:
-    check: "제외된 디렉터리 규칙이 소스 코드를 과도하게 배제하지 않았는가?"
-    method: |
-      1. 제외 적용된 디렉터리 목록을 기록:
-         기본 제외: node_modules, vendor, dist, build, .git, __pycache__, .next, .nuxt
-      2. 제외 디렉터리 내 소스 파일 존재 여부 샘플 확인:
-         예: vendor/ 안에 프로젝트 자체 코드가 있으면 (monorepo vendor 패턴) 과다 제외
-      3. 제외 후 남은 소스 파일 수가 V5의 기대치와 현저히 다르면 FAIL
-    on_fail: |
-      과다 제외 의심 디렉터리를 제외 목록에서 복원하고 Recon 재수행.
-      복원 불가 시 exclusion_overrides 필드에 사유 기록.
-
-  V7_Empty_Result_Gate:
-    check: "Recon 핵심 필드가 빈 값이 아닌가?"
-    method: |
-      아래 필드 중 하나라도 빈 값(null, empty, 0)이면 FAIL:
-      - Language
-      - Framework (unknown 허용, empty 불가)
-      - Entry Points (0이면 FAIL)
-      - Active Domains (최소 1개)
-    on_fail: |
-      Phase 0.5 진입 차단.
-      "⛔ Recon 결과가 불완전합니다. 대상 경로와 프로젝트 구조를 확인하세요."
-      target_source_path, 실행된 Glob/Grep 패턴, 결과를 사용자에게 보고.
-
-Validation_Output:
-  형식: |
-    Recon 출력 말미에 검증 결과 섹션 추가:
-
-    ## Recon Self-Validation
-    | Check | Result | Detail |
-    |-------|--------|--------|
-    | V1 Workspace Boundary | PASS/FAIL | ... |
-    | V2 AST Parse Coverage | PASS/WARN/FAIL/SKIP | 실패율 N%, 실패 파일 수 |
-    | V3 Entry Point Completeness | PASS/WARN | 발견 N / 기대 M |
-    | V4 Language/Framework | PASS/WARN | ... |
-    | V5 Scale Metrics | PASS | files: N, LOC: ~M, subprojects: K |
-    | V6 Exclusion Audit | PASS/WARN | 제외 디렉터리 N개, 복원 M개 |
-    | V7 Empty Result Gate | PASS/FAIL | ... |
-
-  차단_조건: "V1 FAIL 또는 V7 FAIL → Phase 0.5 진입 불가"
-  경고_조건: "V2-V6 WARN/FAIL → 기록 후 진행 (하류 Phase에서 보완 탐색)"
-```
+- 진입점 수: 식별한 엔트리포인트 수가 라우트·핸들러 정의 파일 수와 크게 어긋나지 않는가.
+- 프레임워크: manifest에 선언된 프레임워크와 실제 import·사용 코드가 일치하는가.
+- 과잉 제외: `vendor/`·생성 코드·테스트로 제외한 경로에 프로젝트 자체 코드가 섞여 있지 않은가.

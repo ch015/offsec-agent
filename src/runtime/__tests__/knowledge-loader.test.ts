@@ -14,7 +14,7 @@ describe('knowledge/loader', () => {
   describe('scanKnowledgeBase', () => {
     it('returns entries with correct paths, phases, and keywords', () => {
       const entries = scanKnowledgeBase('offsec');
-      expect(entries.length).toBeGreaterThanOrEqual(20);
+      expect(entries.length).toBeGreaterThanOrEqual(19);
 
       const a1 = entries.find((e) => e.path.includes('a1-auth.md'));
       expect(a1).toBeDefined();
@@ -51,14 +51,12 @@ describe('knowledge/loader', () => {
   });
 
   describe('resolveKnowledgeFiles', () => {
-    it('va phase includes tier1, tier2, conventions, and README', () => {
+    it('va phase includes tier1, tier2, and README', () => {
       const files = resolveKnowledgeFiles('offsec', 'va');
       // tier1 — all 8 files
       expect(files.filter((f) => f.includes('tier1-dimensions/'))).toHaveLength(8);
       // tier2 — all 10 overlays
       expect(files.filter((f) => f.includes('tier2-overlays/'))).toHaveLength(10);
-      // conventions
-      expect(files).toContain(join(KB_ROOT, 'conventions', 'finding-id-naming.md'));
       // README (no phases = all phases)
       expect(files).toContain(join(KB_ROOT, 'README.md'));
     });
@@ -73,11 +71,10 @@ describe('knowledge/loader', () => {
       expect(files).toContain(join(KB_ROOT, 'README.md'));
     });
 
-    it('converge phase includes tier1 and conventions but NOT tier2', () => {
+    it('converge phase includes tier1 but NOT tier2', () => {
       const files = resolveKnowledgeFiles('offsec', 'converge');
       expect(files.filter((f) => f.includes('tier1-dimensions/'))).toHaveLength(8);
       expect(files.filter((f) => f.includes('tier2-overlays/'))).toHaveLength(0);
-      expect(files).toContain(join(KB_ROOT, 'conventions', 'finding-id-naming.md'));
     });
 
     it('verify phase includes tier1 and tier2', () => {

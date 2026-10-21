@@ -1,4 +1,4 @@
-# Phase 1 확장: Supply Chain Analysis (공급망 분석)
+# Supply Chain Analysis (공급망 분석)
 
 > 프로젝트의 소프트웨어 공급망을 분석하여 의존성 취약점,
 > 무결성 위험, 빌드 파이프라인 보안을 평가합니다.
@@ -68,7 +68,7 @@ Lock_File_Integrity:
 Dependency_Scan:
   절차:
     1_정적_분석_우선: |
-      기본 경로는 manifest와 lock 파일 정적 분석이다. va-auditor의 Bash는
+      기본 경로는 manifest와 lock 파일 정적 분석이다. analyzer의 Bash는
       네트워크·패키지 설치·source write가 금지된 격리 환경에서만 사용할 수 있다.
       lock 파일(package-lock.json, go.sum, poetry.lock, Cargo.lock 등)을 Read하여
       고정 버전과 사용 위치를 확인한다.
@@ -83,11 +83,6 @@ Dependency_Scan:
       - CVE의 영향 범위(예: 특정 함수)가 프로젝트에서 사용되는가?
       - 미사용이면 심각도 하향 (코드 내 사용 증거 없음)
     
-    3_보고서_출력: |
-      SBOM 요약:
-      - 직접 의존성 수 + 전이 의존성 수
-      - CRITICAL/HIGH CVE 수 (사용 확인/미확인 구분)
-      - 최신 패치 대비 버전 지연 현황
   
   질문:
     - "알려진 CVE가 있는 의존성이 실제로 사용되는가?"
@@ -157,11 +152,4 @@ Finding_Tagging:
     - "supply-chain-postinstall"
     - "supply-chain-pipeline"
 
-SBOM_Summary:
-  위치: "보고서 부록"
-  내용:
-    - "직접 의존성 수 + 전이 의존성 수"
-    - "알려진 CVE 수 (CRITICAL/HIGH/MEDIUM)"
-    - "Lock 파일 상태 (존재/무결/불일치)"
-    - "CI/CD 보안 요약"
 ```

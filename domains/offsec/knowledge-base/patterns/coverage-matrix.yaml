@@ -1,5 +1,5 @@
 # CWE/OWASP ↔ 8차원 Coverage Matrix
-# 목적: Verifier Phase R4에서 CWE/OWASP 커버리지를 역추적 검증하는 데 사용
+# 목적: analyze/review에서 CWE/OWASP 커버리지 누락을 점검하는 데 사용
 # 갱신 기준: CWE Top 25 (2024), OWASP Top 10 (2021), OWASP API Top 10 (2023)
 
 cwe_top25:
@@ -385,7 +385,7 @@ cwe_extensions_p1_6:
     methodology_anchor: "va/depth/injection.md#api-쿼리-언어-남용-graphql-등"
 
 # ─────────────────────────────────────────────────────────────
-# 차원 × 도메인 그리드 (Verifier R4: 도메인별 차원 교차 누락 점검)
+# 차원 × 도메인 그리드 (analyze/review: 도메인별 차원 교차 누락 점검)
 # CWE/OWASP 축만으로는 "A4×web3 정수 오버플로", "A1×ai-agent 프롬프트 인증"처럼
 # 도메인 특화 교차를 놓친다. 활성 도메인마다 아래 우선 교차 셀이 리뷰됐는지 확인한다.
 # ─────────────────────────────────────────────────────────────

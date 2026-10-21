@@ -1,8 +1,8 @@
-# False Positive / Severity Overstatement Patterns — CH015
-# Extracted from engagement verification objections and convergence records
+# False Positive / Severity Overstatement Patterns
+# analyze/review의 심각도 재검토 참고 패턴 (과거 engagement 검증 이력에서 추출)
 # Updated: 2026-04-10
 #
-# VA Self-Verify (Phase 3.5)에서 아래 패턴에 해당하는 Finding을 식별하면
+# analyze/review에서 아래 패턴에 해당하는 Finding을 식별하면
 # 심각도를 재검토한다. 패턴 매칭으로 자동 하향하지 않는다 — 코드 증거 기반 재평가.
 #
 # Provenance: occurrences가 인용하는 dex_20260323, embedded_20260325 engagement는
@@ -55,7 +55,7 @@ severity_overstatement_patterns:
   - pattern_id: FP-003
     name: "Effective 보상 제어 인정 후 심각도 미하향"
     description: |
-      VA Self-Verify에서 보상 제어를 Effective_Complete 또는
+      분석·검토에서 보상 제어를 Effective_Complete 또는
       Effective_Narrow로 판정했음에도 심각도를 하향하지 않는 과대 평가.
       compensating-control.md Step 4(정본)에서 Effective_Complete는
       1단계, Effective_Narrow는 0.5단계 하향이 허용됨에도 미적용.
@@ -150,13 +150,13 @@ severity_overstatement_patterns:
   - pattern_id: FP-009
     name: "비즈니스 영향 미입증 구조적 약점"
     description: |
-      기술적으로 취약하나 Step 1.8 Impact Proof Gate에서
-      What/So_What/How 중 하나 이상을 입증하지 못한 Finding.
+      코드 결함은 확인되나 비즈니스 영향 증명(va/index.md Step_1.8)에서
+      What 또는 So_What을 입증하지 못한 Finding.
       코드에 구조적 약점은 존재하나 현재 서비스 맥락에서
       구체적 공격 시나리오를 구성할 수 없는 경우.
     trigger: |
-      Finding의 Step 1.8 Gate_Result가 FAIL이고,
-      Classification이 Structural_Weakness인 경우.
+      What 또는 So_What 증명이 실패해 severity INFO로 제출하는 경우
+      (severityRationale에 미입증 항목과 원래 판단했을 심각도를 남긴다).
     self_verify_action: |
       1. 서비스 컨텍스트 변경 시 (신규 기능, 자산 가치 변동) 재평가
       2. 이행점검(Remediation Verification) 시 추적 대상으로 유지

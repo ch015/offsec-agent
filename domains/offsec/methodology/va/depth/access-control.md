@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 1 A2에서 소유권 미검증, 역할 미확인, IDOR 후보가 감지된 경우"
+Trigger: "A2 점검 중 소유권 미검증, 역할 미확인, IDOR 후보가 감지된 경우"
 ```
 
 ## IDOR / BOLA (Object Level)

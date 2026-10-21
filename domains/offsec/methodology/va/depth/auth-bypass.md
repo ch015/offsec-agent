@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 1 A1에서 인증 미들웨어 미적용, 인증 분기, fallback 경로가 감지된 경우"
+Trigger: "A1 점검 중 인증 미들웨어 미적용, 인증 분기, fallback 경로가 감지된 경우"
 ```
 
 ## JWT / Token 검증

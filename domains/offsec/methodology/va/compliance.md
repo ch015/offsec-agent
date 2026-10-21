@@ -1,4 +1,6 @@
-# Phase 3: 보안 표준 준수 점검
+# 보안 표준 준수 점검
+
+결과는 Finding `standards`에 기록한다.
 
 ### OWASP Top 10 (2021) 매핑
 

@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 0에서 OAuth/OIDC 제공자 SDK 또는 인증 서비스 사용이 감지된 경우"
+Trigger: "담당 범위에서 OAuth/OIDC 제공자 SDK 또는 인증 서비스 사용이 확인된 경우"
 ```
 
 ## 핵심 원칙

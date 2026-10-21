@@ -13,9 +13,6 @@ knowledge-base/
 │   ├── registry.yaml                          #   로딩 조건 (auto/conditional)
 │   └── web3.md, payment.md, ...               #   도메인별 8차원 추가 질문
 │
-├── conventions/                               # 조직 컨벤션
-│   └── finding-id-naming.md                   #   Finding ID 네이밍 규칙
-│
 ├── engagements/                               # 원본 CH015 이력 예시; 현재 host 출력 아님
 │   └── {project}_{YYYYMMDD}/                  #   프로젝트명_날짜
 │       ├── 00_recon_result.yaml               #     정찰 결과

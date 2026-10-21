@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 1 A5 또는 Phase 2 Cryptography에서 해싱/암호화/서명/난수 사용이 감지된 경우"
+Trigger: "A5 점검 또는 심층 분석 Cryptography 중 해싱/암호화/서명/난수 사용이 감지된 경우"
 ```
 
 ## 해싱

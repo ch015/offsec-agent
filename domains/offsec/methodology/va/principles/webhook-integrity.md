@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 0에서 webhook endpoint 또는 서명 검증 패턴이 감지된 경우"
+Trigger: "담당 범위에서 webhook endpoint 또는 서명 검증 패턴 사용이 확인된 경우"
 ```
 
 ## 핵심 원칙

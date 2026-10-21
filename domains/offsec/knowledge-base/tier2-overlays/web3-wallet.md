@@ -5,7 +5,7 @@ keywords: [wallet, web3, blockchain, crypto]
 # Domain Knowledge: Web3 Wallet / Key Management
 
 > Web3 도메인이 활성이고, 지갑 생성/서명/키 관리 기능이 감지된 경우
-> Phase 1~2 분석에서 추가로 적용해야 하는 도메인 특화 체크리스트.
+> 해당 차원 점검과 심층 분석에서 추가로 적용해야 하는 도메인 특화 체크리스트.
 
 ---
 

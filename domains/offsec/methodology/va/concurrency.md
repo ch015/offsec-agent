@@ -1,4 +1,4 @@
-# Phase 2 확장: Concurrency Analysis (동시성 분석)
+# Concurrency Analysis (동시성 분석)
 
 > 동시 요청, 분산 트랜잭션, 비동기 처리에서 발생하는
 > 무결성/일관성 위반을 체계적으로 탐색합니다.
@@ -10,7 +10,7 @@
 ```yaml
 Auto_Load_Trigger:
   설명: |
-    Phase 0 Recon에서 아래 중 하나 이상 감지 시 자동 로드:
+    담당 범위에서 아래 중 하나 이상 감지 시 자동 로드:
   조건:
     - "금융/결제/자산 관련 트랜잭션 코드 존재 (payment, wallet, balance, transfer, withdraw)"
     - "메시지 큐 사용 (AMQP, Kafka, SQS, Redis Pub/Sub, NATS)"

@@ -4,7 +4,7 @@ keywords: [aws, s3, lambda, iam, ec2]
 ---
 # AWS Cloud Attack Primitives (P2-3)
 
-> Red Team / Pentest가 AWS 환경을 대상으로 할 때 체크해야 하는
+> 소스·IaC 정적 검토에서 아래 프리미티브가 성립하는 설정 조건을 확인한다. 라이브 실행은 v2 범위 밖이다.
 > 고신뢰 공격 프리미티브 목록. MITRE ATT&CK 매핑 포함.
 
 ## 1. Metadata / Credential Primitives

@@ -201,5 +201,5 @@ Supply_Chain_Cross_Reference:
     A6은 "외부 통합 지점의 보안 경계"에 집중한다.
     공급망 전체(의존성 CVE, lock 파일, 빌드 파이프라인)는
     supply-chain.md에서 분석한다.
-    A6과 supply-chain.md의 분석 결과는 Phase 1 완료 시 통합한다.
+    A6 결론에 supply-chain 점검 결과를 함께 반영한다.
 ```

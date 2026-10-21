@@ -8,7 +8,7 @@
 ## 적용 조건
 
 ```yaml
-Trigger: "Phase 0에서 행 수준 접근 제어 메커니즘 사용이 감지된 경우 (DB rules, RLS policies, security rules 등)"
+Trigger: "담당 범위에서 행 수준 접근 제어 메커니즘 사용이 확인된 경우 (DB rules, RLS policies, security rules 등)"
 ```
 
 ## 핵심 원칙

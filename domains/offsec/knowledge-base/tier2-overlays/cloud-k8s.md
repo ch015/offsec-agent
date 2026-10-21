@@ -4,7 +4,7 @@ keywords: [kubernetes, k8s, container, pod, helm]
 ---
 # Kubernetes Attack Primitives (P2-3)
 
-> K8s / EKS / GKE / AKS 환경에서의 Red Team 공격 프리미티브.
+> K8s / EKS / GKE / AKS 환경의 공격 프리미티브. 소스·IaC 정적 검토에서 아래 프리미티브가 성립하는 설정 조건을 확인한다. 라이브 실행은 v2 범위 밖이다.
 
 ## 1. Service Account Token 탈취 → RBAC Escalation (TA0006)
 

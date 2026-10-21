@@ -97,12 +97,12 @@ Step_4_Sanitization_Verification:
 
 ```yaml
 Integration:
-  Phase_1_A3: "데이터 흐름 분석 시 Trust Boundary 교차 지점에서 이 프로토콜 적용"
-  Phase_1_A4: "입출력 경계 분석 시 모든 외부 입력 경로에 이 프로토콜 적용"
-  Phase_2_Deep: "Phase 1에서 후보가 발견되면 전체 체인을 이 프로토콜로 정밀 추적"
+  A3: "데이터 흐름 분석 시 Trust Boundary 교차 지점에서 이 프로토콜 적용"
+  A4: "입출력 경계 분석 시 모든 외부 입력 경로에 이 프로토콜 적용"
+  Deep: "A3/A4 점검에서 후보가 발견되면 전체 체인을 이 프로토콜로 정밀 추적"
   Depth_Files: "특정 Sink 유형의 심층 분석 필요 시 depth/ 파일과 결합"
   
-  로딩: "Phase 1 진입 시 A3/A4 차원과 함께 로드. Phase 2 완료 후 해제."
+  로딩: "A3/A4 source→sink 추적이 필요할 때 읽는다."
   
   note: |
     이 프로토콜은 A3/A4 차원의 Review Perspective를 대체하지 않는다.

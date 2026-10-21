@@ -17,7 +17,7 @@ Review_Perspectives:
       methodology: |
         1. Rate Limiting: 요청 빈도 제한 메커니즘 존재?
            - 상태 저장 방식이 배포 환경에 적합한가?
-             (※ Phase 0의 DEPLOY 변수와 교차 참조)
+             (※ 배포 환경(DEPLOY)과 교차 참조)
            - Serverless에서 인메모리 저장이 인스턴스 비공유로 무력화되는가?
         2. Pagination: 대량 데이터 쿼리에 페이지네이션/리밋 존재?
         3. 파일/페이로드 크기 제한 설정?
