@@ -8,4 +8,6 @@
 
 `hooks/report-gate-hook.js`는 명시적으로 선언된 host draft 작성을 발행과 구분합니다. 최종 발행은 호스트의 분류·Finding·범위·무결성 게이트를 통과해야 합니다. 0개 Finding의 보고서도 실제 원장과 평가 결과가 일치해야 발행합니다.
 
+`hooks/mark-untrusted-output.js`는 소스 읽기 도구(Read/Grep/Glob, `read_source`)의 출력을 원문 그대로 둡니다. 출력에 모델 지시나 대화 경계처럼 보이는 문자열이 있으면 진단 대상 데이터라는 안내만 덧붙입니다. 원문을 바꾸면 file:line 증거가 원문 대조에서 어긋나고, LLM 앱의 프롬프트 템플릿처럼 정상 코드도 변형되기 때문입니다.
+
 현재 사용법은 [프로젝트 README](../../README.md), 저장·복구는 [안내](../../docs/analysis-storage-recovery.md)를 따릅니다.

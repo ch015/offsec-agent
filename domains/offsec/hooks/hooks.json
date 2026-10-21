@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/sanitize-tool-output.js",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/mark-untrusted-output.js",
             "timeout": 5
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/sanitize-tool-output.js",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/mark-untrusted-output.js",
             "timeout": 5
           }
         ]
@@ -49,7 +49,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/sanitize-tool-output.js",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/mark-untrusted-output.js",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__nunchi__read_source",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/mark-untrusted-output.js",
             "timeout": 5
           }
         ]

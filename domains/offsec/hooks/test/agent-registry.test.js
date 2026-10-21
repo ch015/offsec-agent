@@ -16,7 +16,8 @@ test('active role registry has no v1 roles or model-owned orchestration', () => 
   for (const name of ['offsec-lead', 'va-auditor', 'verifier', 'pentester']) assert.equal(fs.existsSync(path.join(ROOT, 'agents', name + '.md')), false);
 });
 test('hooks.json covers every built-in tool a role can receive', () => {
-  // hooks.json wires the report gate only to Write and output sanitizing only to Read/Grep/Glob.
+  // hooks.json wires the report gate only to Write and the untrusted-output notice only to the
+  // source-reading tools (Read/Grep/Glob and mcp__nunchi__read_source).
   // Granting another built-in tool (Edit, Bash, ...) must fail here so the hooks are reviewed with it.
   const contract = JSON.parse(fs.readFileSync(path.join(ROOT, 'contracts/offsec-contract.v2.json'), 'utf8'));
   const builtin = new Set(['Read', 'Grep', 'Glob', 'Write']);
@@ -31,8 +32,8 @@ test('hooks.json covers every built-in tool a role can receive', () => {
   const commands = (event, matcher) =>
     hooks[event].filter((entry) => entry.matcher === matcher).flatMap((entry) => entry.hooks.map((hook) => hook.command));
   assert.ok(commands('PreToolUse', 'Write').some((command) => command.endsWith('/hooks/report-gate-hook.js')));
-  for (const matcher of ['Read', 'Grep', 'Glob']) {
-    assert.ok(commands('PostToolUse', matcher).some((command) => command.endsWith('/hooks/sanitize-tool-output.js')));
+  for (const matcher of ['Read', 'Grep', 'Glob', 'mcp__nunchi__read_source']) {
+    assert.ok(commands('PostToolUse', matcher).some((command) => command.endsWith('/hooks/mark-untrusted-output.js')), matcher);
   }
   for (const entries of Object.values(hooks)) {
     for (const hook of entries.flatMap((entry) => entry.hooks)) {
