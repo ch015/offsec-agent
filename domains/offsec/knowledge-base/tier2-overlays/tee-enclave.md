@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [tee, enclave, sgx, trustzone]
 ---
 # 도메인 지식: TEE/Enclave 기반 서비스 (Trusted Execution Environment)

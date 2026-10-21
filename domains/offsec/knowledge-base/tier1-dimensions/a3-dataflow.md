@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A3: 데이터 흐름과 신뢰 경계 (Data Flow and Trust Boundary)
 

@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A8: 리소스 소비 및 가용성 제어 (Resource Consumption and Availability)
 

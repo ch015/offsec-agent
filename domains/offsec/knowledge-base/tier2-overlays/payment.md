@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [payment, pci, stripe, card]
 ---
 # Tier 2 Overlay: 결제 플랫폼 (Payment Platform)

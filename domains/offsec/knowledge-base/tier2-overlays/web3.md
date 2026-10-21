@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [web3, defi, smart-contract, blockchain]
 ---
 # Tier 2 Overlay: Web3 공통

@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [e-commerce, payment, cart, order]
 ---
 # Tier 2 Overlay: 커머스 (Commerce / E-Commerce)

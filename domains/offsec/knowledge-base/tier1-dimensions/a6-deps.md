@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A6: 의존성 및 외부 통합 (Dependency and External Integration)
 

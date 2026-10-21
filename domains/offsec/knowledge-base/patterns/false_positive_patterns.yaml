@@ -53,20 +53,18 @@ severity_overstatement_patterns:
         context: "테이블명 내부 상수, ORDER BY 화이트리스트 유효"
 
   - pattern_id: FP-003
-    name: "Effective 보상 제어 인정 후 심각도 미하향"
+    name: "Effective_Complete 보상 제어 인정 후 심각도 미하향"
     description: |
-      분석·검토에서 보상 제어를 Effective_Complete 또는
-      Effective_Narrow로 판정했음에도 심각도를 하향하지 않는 과대 평가.
-      compensating-control.md Step 4(정본)에서 Effective_Complete는
-      1단계, Effective_Narrow는 0.5단계 하향이 허용됨에도 미적용.
+      분석·검토에서 보상 제어를 Effective_Complete로 판정했음에도
+      심각도를 하향하지 않는 과대 평가. compensating-control.md Step 4(정본)에서
+      Effective_Complete는 1단계 하향이 허용된다. Effective_Narrow는 심각도를 유지한다.
     trigger: |
-      Self-Verify에서 compensating_control = Effective_Complete 또는
-      Effective_Narrow로 판정했으나 심각도가 원래 수준으로 유지된 Finding.
+      보상 제어를 Effective_Complete로 판정했으나 심각도가 원래 수준으로 유지된 Finding.
     self_verify_action: |
       1. Effective_* 판정의 5개 질문 통과 여부 재확인
          (Observed 증거 2개 미만이면 Effective_Narrow로 강등)
-      2. Effective_Complete 확인 시 심각도 1단계 하향 검토,
-         Effective_Narrow 확인 시 0.5단계 하향 + narrow/config-dependent 태그
+      2. Effective_Complete 확인 시 심각도 1단계 하향 검토.
+         Effective_Narrow는 심각도를 유지하고 제약(narrow/config-dependent)을 severityRationale에 기록
       3. 하향하지 않는 경우 명시적 사유 기록 (예: config-dependent → prod=worst-case 가정)
     occurrences:
       - engagement: embedded_20260325

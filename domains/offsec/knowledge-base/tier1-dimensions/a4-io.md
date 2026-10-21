@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A4: 입출력 경계 (Input/Output Boundary)
 

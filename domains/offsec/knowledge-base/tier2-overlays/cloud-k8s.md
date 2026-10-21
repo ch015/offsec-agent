@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [kubernetes, k8s, container, pod, helm]
 ---
 # Kubernetes Attack Primitives (P2-3)

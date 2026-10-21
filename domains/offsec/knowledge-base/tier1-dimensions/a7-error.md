@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A7: 에러 처리 및 관찰 가능성 (Error Handling and Observability)
 

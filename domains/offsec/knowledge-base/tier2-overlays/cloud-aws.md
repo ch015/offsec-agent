@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [aws, s3, lambda, iam, ec2]
 ---
 # AWS Cloud Attack Primitives (P2-3)

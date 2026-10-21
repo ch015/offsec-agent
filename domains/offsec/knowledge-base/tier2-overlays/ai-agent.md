@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [llm, prompt-injection, ai, agent, ml]
 ---
 # Tier 2 Overlay: AI/Agent 플랫폼

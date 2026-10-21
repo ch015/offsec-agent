@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [sdk, library, api-client]
 ---
 # Tier 2 Overlay: SDK 전 플랫폼 통합

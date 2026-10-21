@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [wallet, web3, blockchain, crypto]
 ---
 # Domain Knowledge: Web3 Wallet / Key Management

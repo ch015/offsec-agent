@@ -656,7 +656,7 @@
     },
     {
       "path": "methodology/common/compensating-control.md",
-      "sha256": "c53b0a10bcd2034e06e1eb723b96ff3e3cd21960e3249c96c59bf15fc03c7085"
+      "sha256": "19aeaf7675cb1382f96fdb7edda78b8f768d527a800ad8f194fa3cef3993a2ba"
     },
     {
       "path": "methodology/common/context-loading.md",
@@ -676,7 +676,7 @@
     },
     {
       "path": "knowledge-base/patterns/false_positive_patterns.yaml",
-      "sha256": "9e1d530cc28bce7d15c8ffb988f6e447e5472bdce492ab874bf2e846406084bb"
+      "sha256": "b2b85cc3d5a8353c3743a9c933c0a6a512eccbdbaf54f065beb322c5d654fca2"
     },
     {
       "path": "methodology/va/index.md",
@@ -764,35 +764,35 @@
     },
     {
       "path": "knowledge-base/tier1-dimensions/a1-auth.md",
-      "sha256": "a50a7a36eeecdba9a0a4e39e7faa6366ac05c2e47d984996d0c540a6115a1666"
+      "sha256": "240eee59c1021710d9a4e5089b5661aa4a94c009604ca38dc55e681be62aeebf"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a2-authz.md",
-      "sha256": "67c43f07d0402358095439dfcc42c2bf4a45e9cb15d9d60100b396d7815d7f14"
+      "sha256": "a847c7ec8ffe16d63728e3baaf41ec03bc7cbd642f8c9f60f2c7c3a6bcf93816"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a3-dataflow.md",
-      "sha256": "4969ef483c9f218a2c885905ef71a1509b43839d5ef3e03b9a3035dc0641f603"
+      "sha256": "f1d110d31c1f7f2890f51386cbd865c16702772f93e1643ab8fb6edb2e70a488"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a4-io.md",
-      "sha256": "d0cc624271cec8cdaa3c13ffabcd369f6393835a08d83c8bf4f6b2fd1645a316"
+      "sha256": "40d8c86427b9b3f87250257432e2d8f8811ad810bf2d327e13b877794737124f"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a5-secret.md",
-      "sha256": "8554356df5bcda16c260755e78052ec3eedf137ecc12099d3b9bf3c6843ff62f"
+      "sha256": "6d3ce0ecadffad5c41e2a37b36df286473aea5351d1af58cabfee985f402bd0d"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a6-deps.md",
-      "sha256": "e30a94bff22311ed12a61ac2bbe90535617955eb874f8032b45dfcbd7464c982"
+      "sha256": "75c0e677b5c6bcd53ed707edeee57dd440a488fd66a6f92ed53fb1c44a6d2e6d"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a7-error.md",
-      "sha256": "cc0ed1cc19f5f49fd8943d58c82ffb33d04dc262b116f05b24514b9cf1f63fae"
+      "sha256": "9245c9df1ce1d7feaab148b81088142da31975347226b1e023d54d84d3b077df"
     },
     {
       "path": "knowledge-base/tier1-dimensions/a8-resource.md",
-      "sha256": "f88e0a3b7e8d35f34dc46763de8476b460869763cb34bc1374b0c219288880eb"
+      "sha256": "67835a37a15c0ca802ac0c56cb47c882dc8345cb9ac4ec81bd596b608cc9ab62"
     },
     {
       "path": "knowledge-base/tier2-overlays/registry.yaml",
@@ -800,43 +800,43 @@
     },
     {
       "path": "knowledge-base/tier2-overlays/ai-agent.md",
-      "sha256": "6ed540af599af534c9b42dc54e85cc214d7f1ab3298f89db1fc3e197853aedfa"
+      "sha256": "2dc53bea110f1ae1ccbf400bfd1aa509de74b784bcb5133d41fd31ec3c1579a2"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-aws.md",
-      "sha256": "2c67ba2a00405b2697a0d1e7fef303d9dbf1a0d0d7d287c7051388c8acc3b05c"
+      "sha256": "95a3415535548de38b56a5110bd8cec63b3b9af2521a23d4f100a5aa1c0047ea"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud-k8s.md",
-      "sha256": "43920c2319604323afcbb717ca6949ad7c044b22e2ddbd5bc35b81354c599b3d"
+      "sha256": "0471f57f898b26e6311358b084a7d0c24c44ea5ec42ece03dce7059cc88c56ce"
     },
     {
       "path": "knowledge-base/tier2-overlays/cloud.md",
-      "sha256": "98a08128fcdfff3bbe24cd9ea70f05b884672ebb7e86ff23bf3ff91872973fd0"
+      "sha256": "32d0bb60ce447d1ea14997d996c87602f4c23d0bbf6f7fa839d5f28441e8e5b8"
     },
     {
       "path": "knowledge-base/tier2-overlays/commerce.md",
-      "sha256": "a5610f3235ac5e3e5188d62a38035fd4df244181f5106e2bcc31867fb4e27275"
+      "sha256": "c02686a88ab882fdf04503fb740d1a2647ba463e92e8bfad88b6fd6f1b3bc169"
     },
     {
       "path": "knowledge-base/tier2-overlays/payment.md",
-      "sha256": "d0e283956b64d39e17780058c0662e077c3a5f1e70b029fe9357f6854fd4411d"
+      "sha256": "9e9fc4ca2e16a2e5b926a9f7b7a6578e7393325f15333d8592d9794ec534ccc9"
     },
     {
       "path": "knowledge-base/tier2-overlays/sdk.md",
-      "sha256": "210921e9e2484b0adbb94e1ace5f2bfbb654300d6f9f656b218267c12f4d976c"
+      "sha256": "181404c1d283940a679b4c63759856c1a86dd16841fb3e79ed04a6f2505db5fd"
     },
     {
       "path": "knowledge-base/tier2-overlays/tee-enclave.md",
-      "sha256": "66b440a79bfcb0c4b31b86b41861e1322121732066b697a739826e61b9d4a66b"
+      "sha256": "7aded704ae171a14ccfd31e40fcd6d8c69c837a61bd5093d10ebddd02c6e3dd6"
     },
     {
       "path": "knowledge-base/tier2-overlays/web3-wallet.md",
-      "sha256": "a879e8d8f9d683a00df71b968830139722af66020d685c62ae09ab83d9810b70"
+      "sha256": "32346cf4f4c8f6e4ba3fac69f06213fe07dcd124b10ea632c9b376be435e969a"
     },
     {
       "path": "knowledge-base/tier2-overlays/web3.md",
-      "sha256": "b8dfc6de8726772678c056aa7ddcf1c833e517ce6f6472a14bc20154d55ef434"
+      "sha256": "13ad676ff71017e892ad32b3bd077abb1f13846086505e4fb4431ba89c807a5a"
     },
     {
       "path": "rules/semgrep/manifest.json",

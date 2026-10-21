@@ -32,7 +32,7 @@ Principles:
   Conservative_Default: |
     검증이 불완전하면 보수적으로 판단한다.
     - 유효성 미확인 → 원래 심각도 유지
-    - 부분 유효 → 심각도 조정은 보수적으로 (1단계 이하)
+    - 부분 유효(Effective_Narrow·Partial) → 원래 심각도 유지, 차단 범위와 제약을 severityRationale에 기록
     - 완전 유효 → 심각도 조정 근거로 사용 가능
 ```
 
@@ -147,7 +147,7 @@ Step_4:
         예: rate limit 10 rpm이 자동화는 막되 저속 수동 시도는 허용.
         예: 프로덕션에만 적용되고 staging/preview는 제외.
         예: config-dependent (env var로 끄면 사라짐).
-      영향: "심각도 0.5단계 하향 + 'narrow/time-limited/config-dependent' 태그"
+      영향: "심각도 유지 — 심각도는 이산 단계이므로 부분 차단을 반 단계로 반영하지 않는다. 제약(narrow/time-limited/config-dependent)과 차단 범위를 severityRationale에 기록한다"
       기록: "severityRationale에 Effective_Narrow 판정과 제약 조건을 기록"
       규칙: |
         - config-dependent인 경우 prod=worst-case 가정

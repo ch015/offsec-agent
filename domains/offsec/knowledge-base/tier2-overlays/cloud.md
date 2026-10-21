@@ -1,5 +1,5 @@
 ---
-phases: [va, pentest, verify]
+phases: [analyze, review]
 keywords: [cloud, infrastructure, iaas]
 ---
 # Tier 2 Overlay: 클라우드 공통 (Cloud Infrastructure)

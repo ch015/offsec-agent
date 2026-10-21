@@ -1,5 +1,5 @@
 ---
-phases: [va, verify, pentest, converge, report]
+phases: [analyze, review]
 ---
 # A5: 시크릿 및 설정 관리 (Secret and Configuration Management)
 
