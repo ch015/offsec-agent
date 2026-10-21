@@ -45,7 +45,7 @@ import { OffsecDomainAdapter } from '../domains/offsec.js';
 import { ReviewFinalizationError } from '../v2-review-resolution.js';
 import { REVIEW_PATCH_GUIDANCE } from '../review-artifact-patch.js';
 import { loadReviewProgress, mergeReviewReuse, stageReviewReopen, finishReviewReopen, reviewProgressAdvance, type ReviewReuse } from '../review-progress.js';
-import { readStandardFindings } from '../finding-contract.js';
+import { anchoredRevisions, readStandardFindings } from '../finding-contract.js';
 import { ReviewSourceDeliveryError, validateV2ReviewSourceReads, validateV2EvaluationArtifact } from '../v2-evaluation.js';
 import { EVALUATION_CLASSIFICATION, readEvaluationProjection, writeEvaluationProjection } from '../evaluation-projection.js';
 import { canonicalFindingAppendix } from '../report-appendix.js';
@@ -748,6 +748,13 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
         mkdirSync(unitDir, { recursive: true, mode: 0o700 });
         const ownedSourceFiles = candidate.ownedSources.map((file) => resolve(target, file.path));
         const contextSourceFiles = unit.contextFiles.map((file) => resolve(target, file.path));
+        // A retry may continue (and retitle) its own earlier claims with `revises`; nothing else.
+        const taskRoot = join(workRoot, candidate.unitKey);
+        const priorClaims = [...new Map((existsSync(taskRoot) ? readdirSync(taskRoot, { withFileTypes: true }) : [])
+          .filter(entry => entry.isDirectory() && /^attempt-\d+$/.test(entry.name) && join(taskRoot, entry.name) !== unitDir)
+          .sort((a, b) => Number(a.name.slice(8)) - Number(b.name.slice(8)))
+          .flatMap(entry => readStandardFindings(join(taskRoot, entry.name)))
+          .map(finding => [finding.id, finding] as const)).values()]; // latest attempt wins per ID
         const prerequisiteResults = Object.values((await missionRuntime.read()).attempts)
           .filter(attempt => attempt.phase === 'analyze' && !attempt.superseded && attempt.status === 'completed' && candidate.prerequisiteTaskIds?.includes(attempt.round ?? ''))
           .flatMap(attempt => attempt.artifacts ?? []);
@@ -829,6 +836,10 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
             preanalysis: evidence.summary,
             unresolvedCrossUnitEdges: unit.unresolvedEdges,
             typedDependencyEdges: getUnitTypedEdges(dependencyGraph, unit),
+            ...(priorClaims.length ? { priorClaims: {
+              claims: priorClaims.map(finding => ({ id: finding.id, title: finding.title, path: finding.evidence[0]?.path ?? null, lineStart: finding.evidence[0]?.lineStart ?? null })),
+              instruction: 'Claims an earlier attempt of this task submitted. Re-verify each against the source. To keep one with a new title, resubmit with revises: <its id>; same title needs no revises. Do not submit a claim you no longer support.',
+            } } : {}),
             ...(graphRag ? {
               graphContext: serializeGraphContextForUnit(graphRag, unit.ownedFiles.map((f) => f.path)),
             } : {}),
@@ -842,6 +853,7 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
             readScope: 'exact',
             workUnit,
             sharedKnowledge,
+            revisableFindings: anchoredRevisions(priorClaims),
             contractPath: V2_CONTRACT_PATH,
           },
         });
@@ -1064,6 +1076,9 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
           readScope: 'exact',
           contractPath: V2_CONTRACT_PATH,
           sharedKnowledge: rootSharedKnowledge,
+          // Review corrects a claim in place with `revises` instead of minting a new ID.
+          ...(options.id === 'review' ? { revisableFindings: anchoredRevisions(readStandardFindings(engagementDir)
+            .filter(finding => finding.role !== 'reviewer')) } : {}),
           abortController,
         },
       }); } catch (error) {

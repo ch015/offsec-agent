@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "id": "nunchi.offsec.assessment",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "executionMode": "host-bounded-workers",
   "leadRole": "reporter",
   "forbiddenModelTools": [
@@ -545,6 +545,64 @@
             }
           }
         }
+      },
+      "revises": {
+        "type": "string",
+        "pattern": "^F-[0-9]{12}$"
+      },
+      "fingerprint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme",
+          "path",
+          "anchor",
+          "ordinal",
+          "span",
+          "evidence",
+          "weakness",
+          "digest"
+        ],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "fp1"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "anchor": {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "span": {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "weakness": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
       }
     }
   },
@@ -579,11 +637,11 @@
     },
     {
       "path": "methods/analyze.md",
-      "sha256": "46ccac10b867c8a289f9f4962db378b08e220c95593c40374a1fcc85bb245355"
+      "sha256": "76adf70b764dfd3a9fb57711a0171d9bd6cef448126c3287bbf1ba0f1f596232"
     },
     {
       "path": "methods/review.md",
-      "sha256": "9538f45e25c9ccb7e4661fd4da4ce7e185ee76ea401e2fec8fe705d992b0b4e9"
+      "sha256": "357c53403fc966ff964df0ce89b0e86348b5bd185919ba672f4aabc6feb10876"
     },
     {
       "path": "methodology/common/evidence-verification.md",
@@ -827,7 +885,7 @@
     },
     {
       "path": "contracts/offsec-finding-schema.v2.json",
-      "sha256": "87ec13f765f372c88985bc865671ba4137478dd06369a5dd4eead880493bb6b6"
+      "sha256": "84978d154b913097beb7a19e6b8cb98714bcdbefa32905755c650d090aa40b46"
     }
   ]
 }

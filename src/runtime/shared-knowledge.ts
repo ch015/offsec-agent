@@ -77,7 +77,7 @@ export function publishSharedObservation(context: SharedKnowledgeContext, produc
 
 /** Reuse the already validated finding; sharing never promotes it to a reviewed verdict. */
 export function publishSharedFinding(context: SharedKnowledgeContext, producer: Producer, finding: StandardFinding): SharedKnowledgeRecord {
-  const { id: _id, phase: _phase, role: _role, round: _round, ...claim } = finding;
+  const { id: _id, phase: _phase, role: _role, round: _round, fingerprint: _fingerprint, revises: _revises, ...claim } = finding;
   return publish(context, { ...producer, findingId: finding.id }, { kind: 'finding', summary: finding.title, tags: finding.standards,
     evidence: finding.evidence, finding: claim });
 }

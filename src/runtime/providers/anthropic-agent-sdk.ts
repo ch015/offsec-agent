@@ -24,6 +24,7 @@ export type AnthropicPhaseOptions = {
   disabledTools?: readonly string[];
   workUnit?: SessionSpec['workUnit'];
   sharedKnowledge?: SessionSpec['sharedKnowledge'];
+  revisableFindings?: SessionSpec['revisableFindings'];
   /** Current assessment contract path; omission selects the bundled contract. */
   contractPath?: string;
   /** #9: verify-feedback에서 초기 verify의 tool ledger carry-forward */
@@ -83,6 +84,7 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         disabledTools: request.options?.disabledTools,
         workUnit: request.options?.workUnit,
         sharedKnowledge: request.options?.sharedKnowledge,
+        revisableFindings: request.options?.revisableFindings,
         priorToolLedger: request.options?.priorToolLedger,
         onProgress: event => request.onEvent?.({ at: new Date().toISOString(), event: 'ProviderProgress',
           ...(event.kind === 'tool' ? { tool: event.detail } : {}) }),

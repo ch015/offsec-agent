@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { DatabaseConfig } from '../config.js';
 import { createPostgresPool } from '../workflow/database.js';
 import { atomicPrivateWrite, readManagedFile } from '../workflow/storage-files.js';
-import { readStandardFindingRecordReceipts, type StandardFinding } from '../finding-contract.js';
+import { readStandardFindingRecordReceipts, standardFindingRecordName, type StandardFinding } from '../finding-contract.js';
 import { readSharedKnowledge, type SharedKnowledgeContext, type SharedKnowledgeRecord } from '../shared-knowledge.js';
 import { KnowledgeIntegrityError, KnowledgeStorageError, PostgresKnowledgeStore, type KnowledgePin } from './postgres-knowledge.js';
 import { KNOWLEDGE_BINDING, type KnowledgeBinding } from './binding.js';
@@ -92,7 +92,7 @@ export async function indexSharedRecord(context: SharedKnowledgeContext, record:
 export async function indexFinding(context: SharedKnowledgeContext, directory: string, finding: StandardFinding) {
   const binding = context[KNOWLEDGE_BINDING];
   if (!binding) return;
-  const name = hash(`${finding.id}\0${finding.phase}\0${finding.role}\0${finding.round ?? ''}`) + '.json';
+  const name = standardFindingRecordName(finding);
   const key = relative(context.engagementDir, join(directory, 'standard-findings', name));
   // Capture this exact submission, even if a concurrent resubmission changes the file.
   const bytes = JSON.stringify(finding) + '\n';

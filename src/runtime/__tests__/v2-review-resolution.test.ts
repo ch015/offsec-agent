@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { submitStandardFinding, type StandardFinding } from '../finding-contract.js';
+import { anchoredRevisions, revisableFindings, submitStandardFinding, type StandardFinding } from '../finding-contract.js';
 import { loadOffsecContract } from '../offsec-contract.js';
 import { canonicalV2Findings, resolveV2Review, ReviewFinalizationError } from '../v2-review-resolution.js';
 import { validateV2EvaluationArtifact } from '../v2-evaluation.js';
@@ -126,6 +126,20 @@ describe('host projection of reviewed findings', () => {
     const result = resolveV2Review(f.engagementDir);
     expect(result.severityDistribution.MEDIUM).toBe(1);
     expect(result.dispositions.find(d => d.id === inconclusive.id)?.finalStatus).toBe('BACKLOG');
+  });
+  it('keeps the original ID when the reviewer retitles a claim through revises', () => {
+    const f = fixture(), original = f.submit('Hard-coded credential');
+    const retitled = submitStandardFinding({ contract, target: f.target, engagementDir: f.engagementDir, role: 'reviewer', phase: 'review',
+      revisableIds: revisableFindings(anchoredRevisions([original])),
+      finding: { title: 'Hard-coded credential in shared module', revises: original.id, verdict: original.verdict, severity: original.severity,
+        evidenceClass: original.evidenceClass, reachability: original.reachability, preconditions: original.preconditions,
+        severityRationale: original.severityRationale, confidence: original.confidence, impact: original.impact,
+        remediation: original.remediation, standards: original.standards, unresolved: original.unresolved, evidence: original.evidence } });
+    expect(retitled.id).toBe(original.id);
+    f.row(original.id, 'corrected', { correctedFindingId: original.id }); f.save();
+    const result = resolveV2Review(f.engagementDir);
+    expect(result.dispositions.find(d => d.id === original.id)?.finalStatus).toBe('CONFIRMED');
+    expect(canonicalV2Findings(f.engagementDir).get(original.id)?.title).toBe('Hard-coded credential in shared module');
   });
   it('folds an explicit single duplicate without inventing a representative for multi-cause aggregates', () => {
     const f = fixture(), a = f.submit('Cause A'), b = f.submit('Cause B'), duplicate = f.submit('Duplicate A'), aggregate = f.submit('Aggregate AB');

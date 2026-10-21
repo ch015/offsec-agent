@@ -38,6 +38,8 @@ export type SessionSpec = {
   maxTurns?: number;
   maxBudgetUsd?: number;
   sharedKnowledge?: import('./shared-knowledge.js').SharedKnowledgeContext;
+  /** Host allowlist of Finding IDs (with their primary locations) this session may continue with `revises`. */
+  revisableFindings?: readonly import('./finding-contract.js').AnchoredRevision[];
   networkAllowedDomains?: readonly string[];
   liveTestTarget?: string;
   liveTestPlan?: { path: string; sha256: string };

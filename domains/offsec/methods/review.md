@@ -26,7 +26,9 @@
 
 4. 판정을 부여한다:
    - **retained**: 증거 정확, 도달 가능, 보상 제어 없음
-   - **corrected**: 증거/severity/분류를 보정 — `submit_finding`으로 재제출
+   - **corrected**: 증거/severity/분류를 보정 — `submit_finding`으로 재제출. 같은 claim의 보정은
+     `revises: <originalFindingId>`로 제출해 ID를 유지한다(correctedFindingId = originalFindingId,
+     제자리 확정). 다른 claim으로 바꿀 때만 `revises` 없이 새 ID를 받는다.
    - **rejected**: 구체적 반증 증거로 false positive 확인. 단순 "증거 미발견"은 rejected가 아님
    - **inconclusive**: 도달성 판단 불가, 파일 접근 불가, 동적 실행 필요 — 미해결 위험으로 보존
 
@@ -148,7 +150,7 @@ analyzer가 제출한 모든 finding을 **실제 소스 코드에서 독립적�
 마지막 응답은 호스트 JSON schema만 사용하고, `metrics.findingCount`는
 이번 review phase에서 `submit_finding`으로 **실제 수락된** 건수와 일치시킨다.
 (retained finding은 재제출하지 않으므로 카운트에 포함되지 않는다.
-corrected + new = submit_finding 호출 수. 호스트가 최종 findingCount를
+corrected + new = 수락된 서로 다른 record 수. 같은 ID 재제출은 한 record를 갱신한다. 호스트가 최종 findingCount를
 실측값으로 자동 보정하므로 에이전트는 최선 추정치를 제출하면 된다.)
 
 ## 독립 취약점 집계 계약

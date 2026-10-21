@@ -32,6 +32,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 
 import { createFindingMcpServer } from './finding-mcp-server.js';
+import { revisableFindings } from './finding-contract.js';
 import {
   DOMAINS,
   SessionExecutionError,
@@ -348,6 +349,7 @@ export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow
           mcpServers: {
             nunchi: createFindingMcpServer({
               sharedKnowledge: spec.sharedKnowledge,
+              revisableIds: revisableFindings(spec.revisableFindings ?? []),
               target: spec.target,
               engagementDir: spec.engagementDir,
               phase: workflowPhase.id,

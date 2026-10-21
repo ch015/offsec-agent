@@ -29,7 +29,7 @@ describe('v2 full integration', () => {
   const contract = loadOffsecContract(V2_PATH);
 
   it('v2 contract loads with correct structure', () => {
-    expect(contract.version).toBe('2.1.0');
+    expect(contract.version).toBe('2.2.0');
     expect(Object.keys(contract.roles)).toEqual(['scanner', 'analyzer', 'reviewer', 'evaluator', 'reporter']);
     expect(contract.phases.map(p => p.id)).toEqual(['recon', 'plan', 'analyze', 'review', 'evaluate', 'report']);
   });
@@ -46,12 +46,12 @@ describe('v2 full integration', () => {
     const adapter = new OffsecDomainAdapter(contract);
     expect(adapter.domain).toBe('offsec');
     expect(adapter.mission).toBe('assessment');
-    expect(adapter.contract.version).toBe('2.1.0');
+    expect(adapter.contract.version).toBe('2.2.0');
   });
 
   it('v2 finding contract has no runtimeEvidence', () => {
     const fc = buildFindingContract(contract);
-    expect(fc.contractVersion).toBe('2.1.0');
+    expect(fc.contractVersion).toBe('2.2.0');
     // v2 schema should parse a finding without runtimeEvidence
     const validFinding = {
       id: 'AUTH-001', contractVersion: '2.0.0', phase: 'analyze', role: 'analyzer',

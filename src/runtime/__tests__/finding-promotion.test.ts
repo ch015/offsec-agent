@@ -42,7 +42,9 @@ describe('finding promotion across analysis revisions', () => {
     for (const attempt of attempts) submit(f.target, join(f.engagementDir, 'work-units', taskId, `attempt-${attempt}`), taskId, `Attempt ${attempt}`);
     const snapshot = failedAttempts(taskId, attempts);
     const first = retainFailedTaskClaims(f.engagementDir, [taskId], snapshot);
-    expect(first.claims).toHaveLength(3);
+    // One stable ID across retries is one claim, recorded from the latest attempt.
+    expect(first.claims).toHaveLength(1);
+    expect(first.claims[0]!.attemptDirectory).toMatch(/attempt-10$/);
     expect(readStandardFindings(f.engagementDir).map(finding => finding.impact)).toEqual(['Attempt 10']);
     expect(retainFailedTaskClaims(f.engagementDir, [taskId], snapshot).claims).toEqual(first.claims);
     expect(readStandardFindings(f.engagementDir).map(finding => finding.impact)).toEqual(['Attempt 10']);
@@ -171,7 +173,17 @@ describe('finding promotion across analysis revisions', () => {
     const different = submit(f.target, newDir, 'task', 'Different observation');
     writeFileSync(join(newDir, 'standard-findings', superseded[0]!.recordName), JSON.stringify({ ...different, title: 'Different finding with a colliding ID' }));
     expect(() => promoteStandardFindingRecords({ fromEngagementDir: newDir, toEngagementDir: f.engagementDir,
-      expected: readStandardFindingRecordReceipts(newDir), superseded })).toThrow('root record');
+      expected: readStandardFindingRecordReceipts(newDir), superseded })).toThrow('identity 규칙');
+    expect(readStandardFindings(f.engagementDir)).toEqual([original]);
+  });
+
+  it('rejects a changed root record of the same fp1 claim unless the host lists it as superseded', () => {
+    const f = fixture(), oldDir = join(f.root, 'old'), newDir = join(f.root, 'new');
+    const original = submit(f.target, oldDir, 'task', 'Original');
+    promoteStandardFindingRecords({ fromEngagementDir: oldDir, toEngagementDir: f.engagementDir, expected: readStandardFindingRecordReceipts(oldDir) });
+    expect(submit(f.target, newDir, 'task', 'Revised impact').id).toBe(original.id);
+    expect(() => promoteStandardFindingRecords({ fromEngagementDir: newDir, toEngagementDir: f.engagementDir,
+      expected: readStandardFindingRecordReceipts(newDir), superseded: [] })).toThrow('root record');
     expect(readStandardFindings(f.engagementDir)).toEqual([original]);
   });
 
@@ -211,10 +223,13 @@ describe('finding promotion across analysis revisions', () => {
 
   it('resumes two failed runs with evolving findings through a successful retry and publication', async () => {
     const f = fixture(); let failed = true, findingId = '', analyses = 0; const calls: string[] = [];
+    const allowed: Array<{ phase: string; ids: string[]; prior: number }> = [];
     const agent = createOffsecAgent({ astBuilder: async () => ({ ok: false }),
       scheduler: { resourceCapacity: () => 100, controlIntervalMs: 1, retryBaseMs: 1 },
       sessionRunner: async spec => {
         calls.push(spec.phase!);
+        allowed.push({ phase: spec.phase!, ids: (spec.revisableFindings ?? []).map(entry => entry.id),
+          prior: ((spec.taskData as { priorClaims?: { claims: unknown[] } } | undefined)?.priorClaims?.claims ?? []).length });
         const outcome = syntheticOutcome(spec);
         if (spec.workUnit) {
           findingId = submit(spec.target, spec.engagementDir, spec.phaseRound!, `Assessment ${++analyses}`).id;
@@ -235,6 +250,12 @@ describe('finding promotion across analysis revisions', () => {
     expect((await agent.resume(f.engagementDir)).status).toBe('published');
     expect(analyses).toBe(3);
     expect(readStandardFindings(f.engagementDir).map(finding => finding.impact)).toEqual(['Assessment 3']);
+    // Retries may continue only this task's earlier claim; the first attempt and other phases get nothing.
+    const analyze = allowed.filter(entry => entry.phase === 'analyze');
+    expect(analyze[0]).toMatchObject({ ids: [], prior: 0 });
+    expect(analyze.slice(1).map(entry => [entry.ids, entry.prior])).toEqual(analyze.slice(1).map(() => [[findingId], 1]));
+    expect(allowed.filter(entry => entry.phase === 'review').at(-1)?.ids).toEqual([findingId]);
+    expect(allowed.filter(entry => !['analyze', 'review'].includes(entry.phase)).every(entry => entry.ids.length === 0)).toBe(true);
     calls.length = 0;
     expect((await agent.resume(f.engagementDir)).status).toBe('published');
     expect(calls).toEqual([]);

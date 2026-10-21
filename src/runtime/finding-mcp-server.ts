@@ -4,7 +4,7 @@ import { readSourceChunk } from './source-reader.js';
 import { KNOWLEDGE_BINDING, indexFinding, indexSharedRecord } from './knowledge/runtime.js';
 import { databaseKnowledgeTools } from './knowledge/tools.js';
 
-import { buildFindingContract, submitStandardFinding } from './finding-contract.js';
+import { buildFindingContract, submitStandardFindingWithNotices, type RevisableFindings } from './finding-contract.js';
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
 import { getSharedKnowledge, sharedKindFilter, lookupSharedKnowledge, publishSharedFinding, publishSharedObservation,
   SharedObservationShape, type SharedKnowledgeContext } from './shared-knowledge.js';
@@ -19,6 +19,8 @@ export function createFindingMcpServer(input: {
   sourceReadFiles?: readonly string[];
   contract?: OffsecContract;
   sharedKnowledge?: SharedKnowledgeContext;
+  /** Host allowlist for `revises`; without it no submission may continue an earlier ID. */
+  revisableIds?: RevisableFindings;
 }): McpSdkServerConfigWithInstance {
   const contract = input.contract ?? loadOffsecContract();
   const { SubmitFindingShape } = buildFindingContract(contract);
@@ -39,13 +41,13 @@ export function createFindingMcpServer(input: {
       }),
       tool(
         'submit_finding',
-        '검증 가능한 보안 Finding을 표준 계약으로 제출한다.',
+        '검증 가능한 보안 Finding을 표준 계약으로 제출한다. evidence[0]은 취약 문장(sink 또는 결정 지점)부터 시작한다. 같은 claim을 고쳐 다시 내면 같은 제목을 쓰거나, 제목을 바꿀 때는 호스트가 허용한 이전 ID를 revises로 지정한다.',
         SubmitFindingShape,
         async (finding) => {
           try {
-            const accepted = submitStandardFinding({
+            const { finding: accepted, notices } = submitStandardFindingWithNotices({
               ...input,
-              finding: finding as Parameters<typeof submitStandardFinding>[0]['finding'],
+              finding: finding as Parameters<typeof submitStandardFindingWithNotices>[0]['finding'],
               contract,
             });
             const record = input.sharedKnowledge && !input.sharedKnowledge.snapshotPath
@@ -55,7 +57,12 @@ export function createFindingMcpServer(input: {
               await indexSharedRecord(input.sharedKnowledge, record, { role: input.role, phase: input.phase,
                 round: input.round, engagementDir: input.engagementDir, findingId: accepted.id });
             }
-            return { content: [{ type: 'text', text: JSON.stringify(accepted) }] };
+            const hostNotices = {
+              ...(notices.possibleDuplicates.length ? { possibleDuplicates: notices.possibleDuplicates,
+                duplicateHint: 'Same primary evidence as these IDs. If this is the same claim, resubmit with the earlier title or revises (when allowed); keep separate only for a distinct issue.' } : {}),
+              ...(notices.replaced ? { replacedPreviousVersion: notices.replaced } : {}),
+            };
+            return { content: [{ type: 'text', text: JSON.stringify(Object.keys(hostNotices).length ? { ...accepted, hostNotices } : accepted) }] };
           } catch (error) {
             return toolError(error);
           }

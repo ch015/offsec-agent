@@ -148,6 +148,64 @@
           }
         }
       }
+    },
+    "revises": {
+      "type": "string",
+      "pattern": "^F-[0-9]{12}$"
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheme",
+        "path",
+        "anchor",
+        "ordinal",
+        "span",
+        "evidence",
+        "weakness",
+        "digest"
+      ],
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "fp1"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "anchor": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64})?$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "span": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64})?$"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weakness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
     }
   }
 }

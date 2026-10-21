@@ -21,6 +21,36 @@ type StandardEvidence = {
   quote: string;
 };
 
+/** Host-computed content anchor (scheme fp1). It proposes matches across runs and duplicate
+ * warnings only; it never merges or overwrites findings on its own. */
+export type FindingFingerprint = {
+  scheme: 'fp1';
+  path: string;
+  anchor: string;
+  ordinal: number;
+  span: string;
+  evidence: string[];
+  weakness: string | null;
+  digest: string;
+};
+
+/** Host allowlist for `revises`: each continuable ID with the primary locations it was filed at. */
+export type RevisableFindings = ReadonlyMap<string, ReadonlyArray<Pick<FindingFingerprint, 'path' | 'anchor'>>>;
+
+export type AnchoredRevision = { id: string; path: string; anchor: string };
+
+/** JSON-safe allowlist entries (session specs cross a serialization boundary). */
+export function anchoredRevisions(findings: readonly Pick<StandardFinding, 'id' | 'fingerprint'>[]): AnchoredRevision[] {
+  return findings.flatMap(finding => finding.fingerprint
+    ? [{ id: finding.id, path: finding.fingerprint.path, anchor: finding.fingerprint.anchor }] : []);
+}
+
+export function revisableFindings(entries: readonly AnchoredRevision[]): RevisableFindings {
+  const map = new Map<string, Array<Pick<FindingFingerprint, 'path' | 'anchor'>>>();
+  for (const { id, path, anchor } of entries) map.set(id, [...map.get(id) ?? [], { path, anchor }]);
+  return map;
+}
+
 export type StandardFinding = {
   id: string;
   contractVersion: string;
@@ -49,6 +79,9 @@ export type StandardFinding = {
     observedImpact: string;
     inferredImpact: string;
   };
+  /** Host-allowed earlier ID this submission continues (same claim, possibly retitled). */
+  revises?: string;
+  fingerprint?: FindingFingerprint;
 };
 
 type SubmitFinding = Pick<
@@ -67,6 +100,7 @@ type SubmitFinding = Pick<
   | 'unresolved'
   | 'evidence'
   | 'runtimeEvidence'
+  | 'revises'
 >;
 
 type JsonSchemaInput = Parameters<typeof z.fromJSONSchema>[0];
@@ -117,6 +151,8 @@ export function buildFindingContract(contract: OffsecContract): FindingContract 
     ).optional();
   }
 
+  if (properties?.revises) SubmitFindingShapeLocal.revises = findingField<string>('revises').optional();
+
   return {
     StandardFindingSchema: StandardFindingSchemaLocal,
     SubmitFindingShape: SubmitFindingShapeLocal,
@@ -149,10 +185,84 @@ function isWithin(filePath: string, root: string): boolean {
   return filePath === root || filePath.startsWith(`${root}${sep}`);
 }
 
-function stableFindingId(path: string, lineStart: number, title: string): string {
-  const digest = createHash('sha256').update(`${path}:${lineStart}:${title}`).digest('hex');
+const sha256 = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+function displayId(digest: string): string {
   const numeric = BigInt(`0x${digest.slice(0, 15)}`) % 1_000_000_000_000n;
   return `F-${numeric.toString().padStart(12, '0')}`;
+}
+
+// Whitespace-only differences never change identity. Case and comments are kept: code is case
+// sensitive and comment syntax is language specific.
+const normLine = (line: string) => line.normalize('NFC').replace(/\r$/, '').replace(/\s+/g, ' ').trim();
+const normBlock = (quote: string) => quote.split('\n').map(normLine).filter(Boolean).join('\n');
+const normTitle = (title: string) => title.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!?;:,。]+$/u, '');
+
+function fingerprintBody(evidence: readonly StandardEvidence[], standards: readonly string[], ordinal: number) {
+  const first = evidence[0];
+  const key = first ? normBlock(first.quote).split('\n')[0] ?? '' : '';
+  const cwe = standards.map(value => /CWE-(\d+)/i.exec(value)?.[1]).find(Boolean);
+  return {
+    scheme: 'fp1' as const,
+    path: first ? first.path.normalize('NFC') : 'unresolved',
+    anchor: key ? sha256(key) : '',
+    ordinal: key ? ordinal : 0,
+    span: first ? sha256(normBlock(first.quote)) : '',
+    evidence: [...new Set(evidence.map(item => `${item.path.normalize('NFC')}:${sha256(normBlock(item.quote))}`))].sort(),
+    weakness: cwe ? `CWE-${cwe}` : null,
+  };
+}
+
+/** Evidence must already be validated: paths are target-relative and quotes match the source. */
+export function computeFindingFingerprint(target: string, evidence: readonly StandardEvidence[],
+  standards: readonly string[]): FindingFingerprint {
+  const first = evidence[0];
+  let ordinal = 0;
+  if (first) {
+    // Which occurrence of the key line this is, so repeated statements in one file stay distinct.
+    const key = normBlock(first.quote).split('\n')[0] ?? '';
+    const lines = readFileSync(resolve(realpathSync(target), first.path), 'utf8').split('\n').map(normLine);
+    const at = lines.findIndex((line, index) => index >= first.lineStart - 1 && line === key);
+    ordinal = at < 0 ? 0 : lines.slice(0, at + 1).filter(line => line === key).length;
+  }
+  const body = fingerprintBody(evidence, standards, ordinal);
+  return { ...body, digest: sha256(JSON.stringify(body)) };
+}
+
+/** Line moves, range-end changes and title spelling differences keep the ID; a rewritten title
+ * gets a new ID unless the submission names the earlier one through `revises`. */
+export function deriveFindingId(fingerprint: Pick<FindingFingerprint, 'path' | 'anchor' | 'ordinal'>, title: string): string {
+  return displayId(sha256(`fid2\0${fingerprint.path}\0${fingerprint.anchor}\0${fingerprint.ordinal}\0${normTitle(title)}`));
+}
+
+export function standardFindingRecordName(finding: Pick<StandardFinding, 'id' | 'phase' | 'role' | 'round'>): string {
+  return `${sha256(`${finding.id}\0${finding.phase}\0${finding.role}\0${finding.round ?? ''}`)}.json`;
+}
+
+const versionAtLeast = (version: string, minimum: string) => {
+  const [a, b] = [version, minimum].map(value => value.split('.').map(Number));
+  for (let index = 0; index < 3; index++) if ((a![index] ?? 0) !== (b![index] ?? 0)) return (a![index] ?? 0) > (b![index] ?? 0);
+  return true;
+};
+
+/** Records written by 2.2.0+ must carry a consistent fp1 identity. Earlier records keep their
+ * legacy ID (path:lineStart:title) and are read unchanged; there is no migration. */
+export function assertFindingIdentity(finding: StandardFinding): void {
+  const fingerprint = finding.fingerprint;
+  if (!fingerprint) {
+    if (versionAtLeast(finding.contractVersion, '2.2.0')) throw new Error(`Finding identity fingerprint가 없다: ${finding.id}`);
+    return;
+  }
+  const expected = fingerprintBody(finding.evidence, finding.standards, fingerprint.ordinal);
+  // Compare in the canonical field order, independent of how the record's keys were serialized.
+  const stored = Object.fromEntries(Object.keys(expected).map(key => [key, fingerprint[key as keyof typeof expected]]));
+  if (Object.keys(fingerprint).length !== Object.keys(expected).length + 1
+    || JSON.stringify(stored) !== JSON.stringify(expected) || fingerprint.digest !== sha256(JSON.stringify(expected))) {
+    throw new Error(`Finding fingerprint가 기록 내용과 일치하지 않는다: ${finding.id}`);
+  }
+  if (finding.id !== (finding.revises ?? deriveFindingId(fingerprint, finding.title))) {
+    throw new Error(`Finding ID가 identity 규칙과 일치하지 않는다: ${finding.id}`);
+  }
 }
 
 export function validateEvidence(input: {
@@ -194,7 +304,22 @@ export function submitStandardFinding(input: {
   evidenceAllowedFiles?: readonly string[];
   finding: SubmitFinding;
   contract?: OffsecContract;
+  /** IDs this session may continue with `revises` (earlier attempts of the task, review targets). */
+  revisableIds?: RevisableFindings;
 }): StandardFinding {
+  return submitStandardFindingWithNotices(input).finding;
+}
+
+export type FindingSubmissionNotices = {
+  /** Same primary anchor, different ID: maybe the same claim retitled without `revises`. */
+  possibleDuplicates: Array<{ id: string; title: string }>;
+  /** Earlier bytes of this record that the submission replaced; they are kept in finding-history. */
+  replaced?: { title: string; sha256: string };
+};
+
+export function submitStandardFindingWithNotices(input: Parameters<typeof submitStandardFinding>[0]): {
+  finding: StandardFinding; notices: FindingSubmissionNotices;
+} {
   const contract = input.contract ?? loadOffsecContract();
   const findingContract = input.contract
     ? buildFindingContract(input.contract)
@@ -231,15 +356,27 @@ export function submitStandardFinding(input: {
   if (input.finding.confidence > 0.9 && input.finding.reachability !== 'confirmed') {
     throw new Error('0.9 초과 confidence에는 confirmed reachability가 필요하다');
   }
-  const first = evidence[0];
+  const { revises, ...claim } = input.finding;
+  const fingerprint = computeFindingFingerprint(input.target, evidence, claim.standards);
+  if (revises !== undefined) {
+    const anchors = input.revisableIds?.get(revises);
+    if (!anchors) throw new Error(`revises 대상은 이 세션에서 이어 쓸 수 있는 Finding ID가 아니다: ${revises}`);
+    // A revision keeps the claim's primary location; a claim elsewhere is a different claim with its own ID.
+    if (!anchors.some(anchor => anchor.path === fingerprint.path && anchor.anchor === fingerprint.anchor)) {
+      throw new Error(`revises는 같은 주 근거 문장(evidence[0])의 claim에만 쓸 수 있다: ${revises}`);
+    }
+  }
+  // Host-owned fields come last so a caller can never supply its own ID, role or fingerprint.
   const finding = findingSchema.parse({
-    id: stableFindingId(first?.path ?? 'unresolved', first?.lineStart ?? 0, input.finding.title),
+    ...claim,
+    id: revises ?? deriveFindingId(fingerprint, claim.title),
     contractVersion: contract.version,
     phase: input.phase,
     role: input.role,
     round: input.round ?? null,
-    ...input.finding,
     evidence,
+    ...(revises !== undefined ? { revises } : {}),
+    fingerprint,
   });
   if (new Set(finding.standards).size !== finding.standards.length) {
     throw new Error('standards 항목이 중복됐다');
@@ -247,12 +384,33 @@ export function submitStandardFinding(input: {
   mkdirSync(input.engagementDir, { recursive: true, mode: 0o700 });
   const recordsDir = resolve(input.engagementDir, FINDINGS_RECORDS);
   mkdirSync(recordsDir, { recursive: true, mode: 0o700 });
-  const identity = `${finding.id}\0${finding.phase}\0${finding.role}\0${finding.round ?? ''}`;
-  const recordName = `${createHash('sha256').update(identity).digest('hex')}.json`;
-  // #10: upsert — 동일 identity의 finding 재제출 시 최신 버전으로 덮어쓰기 (보강된 evidence/severity 반영)
+  const recordName = standardFindingRecordName(finding);
+  const recordPath = resolve(recordsDir, recordName);
+  const bytes = `${JSON.stringify(finding)}\n`;
+  const notices: FindingSubmissionNotices = { possibleDuplicates: [] };
+  for (const name of readdirSync(recordsDir).filter(entry => /^[a-f0-9]{64}\.json$/.test(entry) && entry !== recordName)) {
+    // Advisory only: an unreadable sibling never blocks the submission.
+    let other: StandardFinding | undefined;
+    try { other = JSON.parse(readManagedFile(input.engagementDir, resolve(recordsDir, name)).toString('utf8')) as StandardFinding; } catch { continue; }
+    if (other?.fingerprint && other.id !== finding.id && other.fingerprint.path === fingerprint.path
+      && other.fingerprint.anchor === fingerprint.anchor && other.fingerprint.ordinal === fingerprint.ordinal) {
+      notices.possibleDuplicates.push({ id: other.id, title: other.title });
+    }
+  }
+  // Upsert: resubmitting the same identity replaces the record (richer evidence or severity).
+  // The replaced bytes are archived first so a revision never silently drops a claim.
+  if (existsSync(recordPath)) {
+    const previous = readManagedFile(input.engagementDir, recordPath);
+    if (previous.toString('utf8') !== bytes) {
+      const digest = sha256(previous);
+      const archived = resolve(input.engagementDir, '.recovery', 'finding-history', recordName, `${digest}.json`);
+      if (!existsSync(archived)) atomicPrivateWrite(archived, previous);
+      notices.replaced = { title: (JSON.parse(previous.toString('utf8')) as StandardFinding).title, sha256: digest };
+    }
+  }
   // 원자적 교체: 중단돼도 이전 버전이나 새 버전 중 하나만 남고, 쓰다 만 JSON은 남지 않는다.
-  atomicPrivateWrite(resolve(recordsDir, recordName), `${JSON.stringify(finding)}\n`);
-  return finding;
+  atomicPrivateWrite(recordPath, bytes);
+  return { finding, notices };
 }
 
 function joinLedger(engagementDir: string): string {
@@ -275,8 +433,7 @@ export function readStandardFindings(engagementDir: string): StandardFinding[] {
   }
   const unique = new Map<string, StandardFinding>();
   for (const finding of findings) {
-    const key = `${finding.id}\0${finding.phase}\0${finding.role}\0${finding.round ?? ''}`;
-    unique.set(key, finding);
+    unique.set(standardFindingRecordName(finding), finding);
   }
   return [...unique.values()];
 }
@@ -298,6 +455,7 @@ export function readStandardFindingRecordReceipts(
       if (!lstatSync(recordPath).isFile()) throw new Error('standard Finding record가 일반 파일이 아니다');
       const content = readFileSync(recordPath);
       const finding = StandardFindingSchema.parse(JSON.parse(content.toString('utf8')));
+      assertFindingIdentity(finding);
       return {
         recordName,
         findingId: finding.id,
@@ -336,8 +494,12 @@ export function promoteStandardFindingRecords(input: {
         const sha256 = createHash('sha256').update(previous).digest('hex');
         const identity = (bytes: Buffer) => {
           const finding = StandardFindingSchema.parse(JSON.parse(bytes.toString('utf8')));
-          return JSON.stringify([finding.id, finding.contractVersion, finding.phase, finding.role, finding.round,
-            finding.title, finding.evidence[0]?.path, finding.evidence[0]?.lineStart]);
+          // fp1 IDs already bind the anchor and title (or an allowed `revises`), so a retitled
+          // revision of the same ID is the same claim. Legacy records keep the stricter tuple.
+          return JSON.stringify(finding.fingerprint
+            ? [finding.id, finding.contractVersion, finding.phase, finding.role, finding.round]
+            : [finding.id, finding.contractVersion, finding.phase, finding.role, finding.round,
+              finding.title, finding.evidence[0]?.path, finding.evidence[0]?.lineStart]);
         };
         if (identity(previous) !== identity(content) || !input.superseded?.some(old => old.recordName === receipt.recordName && old.findingId === receipt.findingId
           && old.bytes === previous.byteLength && old.sha256 === sha256)) {
