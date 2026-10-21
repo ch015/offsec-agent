@@ -811,7 +811,7 @@ async function executeAssessV2(input: AssessV2Input, dependencies: AssessV2Depen
             taskRequest: analysisTaskRequest(candidate, { runId: engagementId, snapshotId: frozen.snapshot.id, planRevision: workPlan.workPlanSha256, attempt: unitAttempt, contextRefs: contextSourceFiles, toolPolicy: { mode: input.mode, tools: input.tools } }),
             sharedKnowledge: {
               tools: ['lookup_shared_knowledge', 'get_shared_knowledge', 'publish_shared_observation'],
-              instruction: 'Query shared context for dependencies before repeating investigation. Publish reusable observations with exact evidence. Accepted findings are shared automatically. Reuse K- IDs in analysis/handoff; do not resubmit identical claims. Shared claims remain unreviewed and do not complete your owned-file coverage.',
+              instruction: 'Query shared context for dependencies before repeating investigation. Publish reusable observations with exact evidence. Findings from other units are not visible here: share facts, reach conclusions independently. Reuse K- IDs in analysis/handoff. Shared claims remain unreviewed and do not complete your owned-file coverage.',
             },
             assignedFiles: candidate.ownedSources.map((file) => file.path),
             dependencyContextFiles: unit.contextFiles.map((file) => file.path),

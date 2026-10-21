@@ -124,6 +124,28 @@ describe.skipIf(!url)('PostgreSQL knowledge integration', () => {
     await expect(KnowledgeRuntime.open(f.context.engagementDir, { backend: 'postgres', pool })).rejects.toThrow(/catalog/);
   });
 
+  it('hides findings from live unit lookups but keeps them in the review snapshot view', async () => {
+    const f = fixture(), runtime = (await KnowledgeRuntime.open(f.context.engagementDir, { backend: 'postgres', pool }))!;
+    const context = await runtime.bind(f.context), binding = context[KNOWLEDGE_BINDING]!;
+    const finding = { title: 'Configuration review example', verdict: 'abstain', severity: 'INFO', evidenceClass: 'configuration',
+      reachability: 'unconfirmed', preconditions: [], severityRationale: 'Impact is unknown pending independent verification.', confidence: 0.5,
+      impact: 'Unknown', remediation: 'Review configuration.', standards: [], unresolved: ['Need configuration context'], evidence: f.observation.evidence };
+    expect((await f.tools(context).find(tool => tool.name === 'submit_finding')!.handler(finding)).isError).not.toBe(true);
+    const id = (await store.lookupShared(binding.scope, 'live')).records[0].id;
+    const fact = publishSharedObservation(context, f.producer, f.target, f.observation);
+    await indexSharedRecord(context, fact, f.producer);
+    const unit = f.tools(context);
+    const live = JSON.parse((await unit.find(tool => tool.name === 'lookup_shared_knowledge')!.handler({})).content[0]!.text);
+    expect(live.total).toBe(1); expect(live.records[0].id).toBe(fact.id);
+    const hidden = await unit.find(tool => tool.name === 'get_shared_knowledge')!.handler({ id });
+    expect(hidden.isError).toBe(true); expect(hidden.content[0]!.text).toMatch(/Unknown shared knowledge ID/);
+    const frozen = await runtime.bind({ ...context, snapshotPath: snapshotSharedKnowledge(context) });
+    const review = f.tools(frozen, 'reviewer', 'review');
+    expect(JSON.parse((await review.find(tool => tool.name === 'lookup_shared_knowledge')!.handler({})).content[0]!.text).total).toBe(2);
+    expect(JSON.parse((await review.find(tool => tool.name === 'get_shared_knowledge')!.handler({ id })).content[0]!.text).kind).toBe('finding');
+    await runtime.close();
+  });
+
   it('preserves same-ID finding versions and replays a durable submission after DB failure', async () => {
     const f = fixture(), runtime = (await KnowledgeRuntime.open(f.context.engagementDir, { backend: 'postgres', pool }))!;
     const context = await runtime.bind(f.context), binding = context[KNOWLEDGE_BINDING]!;

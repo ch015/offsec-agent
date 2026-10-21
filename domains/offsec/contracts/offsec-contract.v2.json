@@ -56,9 +56,7 @@
         "mcp__nunchi__lookup_shared_knowledge",
         "mcp__nunchi__get_shared_knowledge",
         "mcp__nunchi__publish_shared_observation",
-        "mcp__nunchi__read_source",
-        "mcp__nunchi__lookup_finding_records",
-        "mcp__nunchi__get_finding_record"
+        "mcp__nunchi__read_source"
       ],
       "elevatedTools": [],
       "skills": [
@@ -581,7 +579,7 @@
     },
     {
       "path": "methods/analyze.md",
-      "sha256": "6738b5732d2b7081953639c21fe208aa9beb9e065b811c80275a4880f37d2720"
+      "sha256": "46ccac10b867c8a289f9f4962db378b08e220c95593c40374a1fcc85bb245355"
     },
     {
       "path": "methods/review.md",

@@ -67,7 +67,7 @@ describe('shared knowledge MCP transport', () => {
       expect((await reader.handler({ file_path: outside })).isError).toBe(true);
     }
   });
-  it('automatically shares accepted findings with other live analyzers, without double-storing identical claims', async () => {
+  it('hides accepted findings from other live analyzers, shares only facts, and gives review the full snapshot', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'shared-tools-'))); roots.push(root);
     const target = join(root, 'source'); mkdirSync(target);
     const source = join(target, 'app.ts'); writeFileSync(source, 'return sink(input);\n');
@@ -85,14 +85,21 @@ describe('shared knowledge MCP transport', () => {
     const first = tools('unit-a'), second = tools('unit-b');
     const submit = (list: TestTool[]) => list.find(tool => tool.name === 'submit_finding')!.handler(finding);
     expect((await submit(first)).isError).not.toBe(true);
-    const lookup = await second.find(tool => tool.name === 'lookup_shared_knowledge')!.handler({ paths: ['app.ts'] });
-    const page = JSON.parse(lookup.content[0]!.text);
-    expect(page.total).toBe(1); expect(page.records[0].id).toMatch(/^K-/);
+    const findingId = readSharedKnowledge(context)[0]!.id;
+    const lookup = async (list: TestTool[]) => JSON.parse((await list.find(tool => tool.name === 'lookup_shared_knowledge')!.handler({ paths: ['app.ts'] })).content[0]!.text);
+    expect((await lookup(second)).total).toBe(0);
+    expect((await second.find(tool => tool.name === 'get_shared_knowledge')!.handler({ id: findingId })).isError).toBe(true);
+    expect((await first.find(tool => tool.name === 'publish_shared_observation')!.handler({
+      summary: 'Sink receives caller input', tags: [], evidence: [{ path: source, lineStart: 1, lineEnd: 1, quote: 'return sink(input);' }],
+    })).isError).not.toBe(true);
+    const facts = await lookup(second);
+    expect(facts.total).toBe(1); expect(facts.records[0].kind).toBe('observation');
     expect((await submit(second)).isError).not.toBe(true);
-    expect(readSharedKnowledge(context)).toHaveLength(1);
+    expect(readSharedKnowledge(context)).toHaveLength(2);
     const frozen = tools('review', { ...context, snapshotPath: snapshotSharedKnowledge(context) });
     expect(frozen.some(tool => tool.name === 'publish_shared_observation')).toBe(false);
-    const result = await frozen.find(tool => tool.name === 'get_shared_knowledge')!.handler({ id: page.records[0].id });
+    expect((await lookup(frozen)).total).toBe(2);
+    const result = await frozen.find(tool => tool.name === 'get_shared_knowledge')!.handler({ id: findingId });
     const shared = JSON.parse(result.content[0]!.text);
     expect(shared.finding.verdict).toBe('supported');
     expect(shared.contributors).toHaveLength(2);
@@ -100,6 +107,6 @@ describe('shared knowledge MCP transport', () => {
     const unsupported = await first.find(tool => tool.name === 'publish_shared_observation')!.handler({
       summary: 'Fake observation', tags: [], evidence: [{ path: source, lineStart: 1, lineEnd: 1, quote: 'not in source' }],
     });
-    expect(unsupported.isError).toBe(true); expect(readSharedKnowledge(context)).toHaveLength(1);
+    expect(unsupported.isError).toBe(true); expect(readSharedKnowledge(context)).toHaveLength(2);
   });
 });

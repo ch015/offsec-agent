@@ -6,7 +6,7 @@ import { databaseKnowledgeTools } from './knowledge/tools.js';
 
 import { buildFindingContract, submitStandardFinding } from './finding-contract.js';
 import { loadOffsecContract, type OffsecContract } from './offsec-contract.js';
-import { getSharedKnowledge, lookupSharedKnowledge, publishSharedFinding, publishSharedObservation,
+import { getSharedKnowledge, sharedKindFilter, lookupSharedKnowledge, publishSharedFinding, publishSharedObservation,
   SharedObservationShape, type SharedKnowledgeContext } from './shared-knowledge.js';
 
 export function createFindingMcpServer(input: {
@@ -62,13 +62,13 @@ export function createFindingMcpServer(input: {
         },
       ),
       ...(input.sharedKnowledge ? [
-        tool('lookup_shared_knowledge', '다른 작업의 공통 근거와 발견 사항을 검색한다. 미검토 주장으로 취급하고 ID로 재사용한다.', {
+        tool('lookup_shared_knowledge', '공통 근거를 검색한다. 단위 분석에서는 다른 작업의 관측(사실)만 보이고 Finding은 보이지 않는다. 미검토 주장으로 취급하고 ID로 재사용한다.', {
           query: z.string().max(500).optional(), paths: z.array(z.string().max(1_000)).max(40).optional(),
           offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(20).optional(),
         }, async options => {
           try {
             const context = input.sharedKnowledge!, binding = context[KNOWLEDGE_BINDING];
-            const page = binding ? await binding.store.lookupShared(binding.scope, binding.view, options) : lookupSharedKnowledge(context, options);
+            const page = binding ? await binding.store.lookupShared(binding.scope, binding.view, { ...options, kind: sharedKindFilter(context) }) : lookupSharedKnowledge(context, options);
             return { content: [{ type: 'text' as const, text: JSON.stringify(page) }] };
           }
           catch (error) { return toolError(error); }
@@ -78,7 +78,7 @@ export function createFindingMcpServer(input: {
         }, async ({ id }) => {
           try {
             const context = input.sharedKnowledge!, binding = context[KNOWLEDGE_BINDING];
-            const record = binding ? await binding.store.getShared(binding.scope, binding.view, id) : getSharedKnowledge(context, id);
+            const record = binding ? await binding.store.getShared(binding.scope, binding.view, id, { kind: sharedKindFilter(context) }) : getSharedKnowledge(context, id);
             return { content: [{ type: 'text' as const, text: JSON.stringify(record) }] };
           }
           catch (error) { return toolError(error); }

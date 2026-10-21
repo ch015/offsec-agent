@@ -5,6 +5,7 @@ import { parseCve, REFERENCE_NOTICE } from './cve.js';
 
 export type KnowledgePin = { catalogId: string; referenceRevision: string };
 export type KnowledgePage = { query?: string; paths?: string[]; offset?: number; limit?: number };
+export type SharedKindFilter = { kind?: 'observation' };
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export class KnowledgeStorageError extends Error { override name = 'KnowledgeStorageError'; }
 /** A stored run no longer matches what it pinned. Retrying or resuming repeats the same failure. */
@@ -69,31 +70,33 @@ export class PostgresKnowledgeStore {
     });
   }
 
-  async lookupShared(scope: string, view: string, options: KnowledgePage = {}) {
+  async lookupShared(scope: string, view: string, options: KnowledgePage & SharedKindFilter = {}) {
     const { offset, limit } = page(options);
     return this.guarded(async () => {
       const result = await this.pool.query(`WITH matches AS (
         SELECT record_id,body FROM nunchi_shared_records WHERE scope_id=$1 AND view_id=$2
         AND ($3='' OR search_vector @@ websearch_to_tsquery('simple',$3))
         AND (cardinality($4::text[])=0 OR paths && $4::text[])
+        AND ($7='' OR body->>'kind'=$7)
       ), selected AS (SELECT * FROM matches ORDER BY record_id OFFSET $5 LIMIT $6)
       SELECT (SELECT count(*)::int FROM matches) AS total,
         COALESCE((SELECT jsonb_agg((body - 'finding' - 'evidence' - 'summary') || jsonb_build_object(
           'summary',left(body->>'summary',600),'evidence',(SELECT jsonb_agg(e - 'quote') FROM jsonb_array_elements(body->'evidence') e)) ORDER BY record_id) FROM selected),'[]'::jsonb) AS records`,
-        [scope, view, options.query ?? '', options.paths ?? [], offset, limit]);
+        [scope, view, options.query ?? '', options.paths ?? [], offset, limit, options.kind ?? '']);
       const row = result.rows[0];
       return { total: row.total as number, nextOffset: offset + limit < row.total ? offset + limit : null,
         notice: 'Shared claims are unreviewed context, not proof of task completion or vulnerability confirmation. Reuse by ID; inspect conflicting evidence.', records: row.records };
     });
   }
 
-  async getShared(scope: string, view: string, id: string): Promise<SharedKnowledgeRecord> {
+  async getShared(scope: string, view: string, id: string, filter: SharedKindFilter = {}): Promise<SharedKnowledgeRecord> {
     if (!/^K-[a-f0-9]{64}$/.test(id)) throw new KnowledgeStorageError('Invalid shared knowledge ID');
     return this.guarded(async () => {
       const result = await this.pool.query(`SELECT body || jsonb_build_object('contributors',
         COALESCE((SELECT jsonb_agg(o.body ORDER BY digest) FROM nunchi_shared_origins o
           WHERE o.scope_id=r.scope_id AND o.view_id=r.view_id AND o.record_id=r.record_id),'[]'::jsonb)) AS record
-        FROM nunchi_shared_records r WHERE scope_id=$1 AND view_id=$2 AND record_id=$3`, [scope, view, id]);
+        FROM nunchi_shared_records r WHERE scope_id=$1 AND view_id=$2 AND record_id=$3
+        AND ($4='' OR body->>'kind'=$4)`, [scope, view, id, filter.kind ?? '']);
       if (!result.rowCount) throw new KnowledgeStorageError('Unknown shared knowledge ID in this scope');
       return result.rows[0].record;
     });

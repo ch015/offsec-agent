@@ -165,8 +165,12 @@ describe('OffSec session enforcement', () => {
     expect(options.systemPrompt).toMatchObject({ append: expect.stringContaining('# Analyzer') });
     expect(options.agents?.['analyzer']).toBeDefined();
     expect(options.outputFormat?.type).toBe('json_schema');
-    expect(options.tools).toEqual(loadOffsecContract().roles['analyzer']?.tools.filter(tool => !tool.includes('shared_') &&
-      !['mcp__nunchi__lookup_finding_records', 'mcp__nunchi__get_finding_record'].includes(tool)));
+    expect(options.tools).toEqual(loadOffsecContract().roles['analyzer']?.tools.filter(tool => !tool.includes('shared_')));
+    // Analysis stays independent: finding history is for review, evaluation and reporting only.
+    for (const history of ['mcp__nunchi__lookup_finding_records', 'mcp__nunchi__get_finding_record']) {
+      expect(loadOffsecContract().roles['analyzer']?.tools).not.toContain(history);
+      for (const role of ['reviewer', 'evaluator', 'reporter']) expect(loadOffsecContract().roles[role]?.tools).toContain(history);
+    }
     expect(options.allowedTools).toEqual(options.tools);
     expect(options.disallowedTools).toEqual(['Agent']);
     expect(options.permissionMode).toBe('dontAsk');

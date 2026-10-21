@@ -100,10 +100,16 @@ export function readSharedKnowledge(context: SharedKnowledgeContext): SharedKnow
   });
 }
 
+/** Unit analysis reads the live store and sees facts only: another unit's finding is a conclusion
+ * that would anchor independent analysis. Root phases read the snapshot, findings included. */
+export function sharedKindFilter(context: SharedKnowledgeContext): 'observation' | undefined {
+  return context.snapshotPath ? undefined : 'observation';
+}
+
 export function lookupSharedKnowledge(context: SharedKnowledgeContext,
   options: { query?: string; paths?: string[]; offset?: number; limit?: number } = {}) {
-  const query = (options.query ?? '').toLocaleLowerCase();
-  const records = readSharedKnowledge(context).filter(record =>
+  const query = (options.query ?? '').toLocaleLowerCase(), kind = sharedKindFilter(context);
+  const records = readSharedKnowledge(context).filter(record => (!kind || record.kind === kind) &&
     (!query || `${record.summary}\n${record.tags.join(' ')}`.toLocaleLowerCase().includes(query)) &&
     (!options.paths?.length || record.evidence.some(evidence => options.paths!.includes(evidence.path))));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
@@ -117,7 +123,8 @@ export function lookupSharedKnowledge(context: SharedKnowledgeContext,
 
 export function getSharedKnowledge(context: SharedKnowledgeContext, id: string): SharedKnowledgeRecord {
   if (!/^K-[a-f0-9]{64}$/.test(id)) throw new Error('invalid shared knowledge ID');
-  const record = readSharedKnowledge(context).find(record => record.id === id);
+  const kind = sharedKindFilter(context);
+  const record = readSharedKnowledge(context).find(record => record.id === id && (!kind || record.kind === kind));
   if (!record) throw new Error(`unknown shared knowledge ID: ${id}`);
   return record;
 }

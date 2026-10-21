@@ -67,8 +67,8 @@ Read 결과가 잘리거나 `sourceCapacity.oversizedFilesRequiringRangeReads`�
 공통 저장소 도구가 제공되면 의존성·공통 인증·설정 등을 다시 조사하기 전에
 `lookup_shared_knowledge`로 관련 파일/키워드를 찾고 `get_shared_knowledge`로 근거를 확인한다.
 재사용 가능한 관측은 `publish_shared_observation`으로 정확한 소스 인용과 함께 기록한다.
-수락된 Finding은 자동 공유된다. 같은 주장은 재제출하지 않고 분석 결과나 handoff에 K- ID를 인용한다.
-새 공격 경로·별도 영향·상충 근거가 있으면 구분해 기록한다. 공통 정보는 검토 전 주장이다.
+단위 분석 중에는 다른 작업의 Finding이 보이지 않는다. 사실만 공유하고 결론은 각 작업이 독립적으로 내린다.
+관측을 재사용했으면 분석 결과나 handoff에 K- ID를 인용한다. 상충 근거가 있으면 구분해 기록한다. 공통 정보는 검토 전 주장이다.
 다른 작업의 공유 결과를 담당 파일 읽기 완료나 취약점 확정으로 간주하지 않는다.
 
 판정과 confidence를 분리한다. 심각도는 영향·도달 가능성·권한 경계를 근거로 정하며,
