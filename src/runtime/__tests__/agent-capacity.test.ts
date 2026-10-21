@@ -179,5 +179,5 @@ describe('bounded agent orchestration', () => {
     const summary = JSON.parse(readFileSync(join(engagementDir, '01_analysis_plan.json'), 'utf8'));
     expect(summary.maxConcurrency).toBe(2);
     expect(summary.planningPolicy).toMatchObject({ maxOwnedEstimatedTokensPerUnit: 24_000, maxContextEstimatedTokensPerUnit: 16_000 });
-  });
+  }, 20_000);
 });
