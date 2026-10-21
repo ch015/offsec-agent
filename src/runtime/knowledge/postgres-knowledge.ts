@@ -7,6 +7,8 @@ export type KnowledgePin = { catalogId: string; referenceRevision: string };
 export type KnowledgePage = { query?: string; paths?: string[]; offset?: number; limit?: number };
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export class KnowledgeStorageError extends Error { override name = 'KnowledgeStorageError'; }
+/** A stored run no longer matches what it pinned. Retrying or resuming repeats the same failure. */
+export class KnowledgeIntegrityError extends KnowledgeStorageError { override name = 'KnowledgeIntegrityError'; }
 
 /** Only the host owns this pool. Model calls receive a pre-bound scope, never SQL or credentials. */
 export class PostgresKnowledgeStore {
@@ -41,13 +43,13 @@ export class PostgresKnowledgeStore {
       // includes an uncommitted import that could arrive later below its watermark.
       const catalog = (await client.query('SELECT catalog_id::text, revision::text FROM nunchi_knowledge_catalog WHERE singleton')).rows[0];
       if (expected && (catalog.catalog_id !== expected.catalogId || BigInt(catalog.revision) < BigInt(expected.referenceRevision))) {
-        throw new KnowledgeStorageError('Knowledge catalog does not match the pinned run; restore the original database snapshot.');
+        throw new KnowledgeIntegrityError('Knowledge catalog does not match the pinned run; restore the original database snapshot.');
       }
       await client.query(`INSERT INTO nunchi_knowledge_runs(scope_id,catalog_id,reference_revision) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,
         [scope, catalog.catalog_id, expected?.referenceRevision ?? catalog.revision]);
       const row = (await client.query('SELECT catalog_id::text,reference_revision::text FROM nunchi_knowledge_runs WHERE scope_id=$1', [scope])).rows[0];
       const pin = { catalogId: row.catalog_id as string, referenceRevision: row.reference_revision as string };
-      if (pin.catalogId !== catalog.catalog_id || (expected && JSON.stringify(pin) !== JSON.stringify(expected))) throw new KnowledgeStorageError('Knowledge run snapshot mismatch');
+      if (pin.catalogId !== catalog.catalog_id || (expected && JSON.stringify(pin) !== JSON.stringify(expected))) throw new KnowledgeIntegrityError('Knowledge run snapshot mismatch');
       return pin;
     });
   }
@@ -59,7 +61,7 @@ export class PostgresKnowledgeStore {
         VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(scope_id,view_id,record_id) DO UPDATE SET body=nunchi_shared_records.body
         WHERE nunchi_shared_records.body=EXCLUDED.body RETURNING record_id`,
         [scope, view, record.id, body, `${record.summary}\n${record.tags.join(' ')}`, [...new Set(record.evidence.map(e => e.path))]]);
-      if (!result.rowCount) throw new KnowledgeStorageError('Shared knowledge identity conflict; preserve both source records for inspection.');
+      if (!result.rowCount) throw new KnowledgeIntegrityError('Shared knowledge identity conflict; preserve both source records for inspection.');
       for (const origin of contributors) await client.query(`INSERT INTO nunchi_shared_origins(scope_id,view_id,record_id,digest,body)
         VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [scope, view, record.id, digest(JSON.stringify({
           role: origin.role, phase: origin.phase, round: origin.round, engagementDir: origin.engagementDir, findingId: origin.findingId,
@@ -113,7 +115,7 @@ export class PostgresKnowledgeStore {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [scope, key]);
       const conflict = await client.query(`SELECT 1 FROM nunchi_knowledge_documents
         WHERE scope_id=$1 AND kind='instruction' AND record_key=$2 AND digest<>$3 LIMIT 1`, [scope, key, sha]);
-      if (conflict.rowCount) throw new KnowledgeStorageError('Pinned run instructions changed; restore their original revision or start a new run.');
+      if (conflict.rowCount) throw new KnowledgeIntegrityError('Pinned run instructions changed; restore their original revision or start a new run.');
       await client.query(`INSERT INTO nunchi_knowledge_documents(scope_id,kind,record_key,digest,body)
         VALUES($1,'instruction',$2,$3,$4) ON CONFLICT DO NOTHING`, [scope, key, sha, body]);
       return sha;
@@ -139,7 +141,7 @@ export class PostgresKnowledgeStore {
       const result = await this.pool.query('SELECT body FROM nunchi_knowledge_documents WHERE scope_id=$1 AND kind=$2 AND record_key=$3 AND digest=$4', [scope, kind, key, sha]);
       if (!result.rowCount) throw new KnowledgeStorageError('Unknown document revision in this scope');
       const body = result.rows[0].body as string;
-      if (digest(body) !== sha) throw new KnowledgeStorageError('Document revision integrity mismatch');
+      if (digest(body) !== sha) throw new KnowledgeIntegrityError('Document revision integrity mismatch');
       return body;
     });
   }
@@ -182,7 +184,7 @@ export class PostgresKnowledgeStore {
       const result = await this.pool.query(`SELECT cve_id,digest,state,source_url,source_modified_at,ingested_at,normalized,raw_text,import_origin
         FROM nunchi_advisory_revisions WHERE cve_id=$1 AND digest=$2 AND catalog_revision <= $3`, [id, sha, pin.referenceRevision]);
       if (!result.rowCount) throw new KnowledgeStorageError('Unknown advisory revision in this snapshot');
-      if (digest(result.rows[0].raw_text) !== sha) throw new KnowledgeStorageError('Advisory revision integrity mismatch');
+      if (digest(result.rows[0].raw_text) !== sha) throw new KnowledgeIntegrityError('Advisory revision integrity mismatch');
       return { ...result.rows[0], snapshot: pin, notice: REFERENCE_NOTICE };
     });
   }

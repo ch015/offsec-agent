@@ -8,7 +8,7 @@ import { createPostgresPool } from '../workflow/database.js';
 import { atomicPrivateWrite, readManagedFile } from '../workflow/storage-files.js';
 import { readStandardFindingRecordReceipts, type StandardFinding } from '../finding-contract.js';
 import { readSharedKnowledge, type SharedKnowledgeContext, type SharedKnowledgeRecord } from '../shared-knowledge.js';
-import { KnowledgeStorageError, PostgresKnowledgeStore, type KnowledgePin } from './postgres-knowledge.js';
+import { KnowledgeIntegrityError, KnowledgeStorageError, PostgresKnowledgeStore, type KnowledgePin } from './postgres-knowledge.js';
 import { KNOWLEDGE_BINDING, type KnowledgeBinding } from './binding.js';
 export { KNOWLEDGE_BINDING, type KnowledgeBinding } from './binding.js';
 
@@ -70,14 +70,14 @@ export class KnowledgeRuntime {
       const match = /^([a-f0-9]{64})-([a-f0-9]{64})\.json$/.exec(name);
       if (!match) continue;
       const bytes = readManagedFile(this.root, join(history, name)).toString('utf8');
-      if (hash(bytes) !== match[2]) throw new KnowledgeStorageError('Finding history digest mismatch');
+      if (hash(bytes) !== match[2]) throw new KnowledgeIntegrityError('Finding history digest mismatch');
       await this.store.putDocument(this.scope, 'finding', relative(this.root, join(directory, 'standard-findings', `${match[1]}.json`)), bytes, JSON.parse(bytes));
     }
   }
   async saveInstruction(key: string, body: string, pinned = false): Promise<string> {
     const digest = pinned ? await this.store.pinInstruction(this.scope, key, body) : await this.store.putDocument(this.scope, 'instruction', key, body);
     const stored = await this.store.getDocument(this.scope, 'instruction', key, digest);
-    if (hash(stored) !== digest) throw new KnowledgeStorageError('Instruction revision integrity mismatch');
+    if (hash(stored) !== digest) throw new KnowledgeIntegrityError('Instruction revision integrity mismatch');
     return stored;
   }
   async close() { if (this.ownsPool) await this.pool.end(); }
@@ -103,5 +103,5 @@ export async function indexFinding(context: SharedKnowledgeContext, directory: s
 function archiveFindingVersion(directory: string, name: string, bytes: string) {
   const path = join(directory, '.recovery', 'knowledge-finding-versions', `${name.replace(/\.json$/, '')}-${hash(bytes)}.json`);
   if (!existsSync(path)) atomicPrivateWrite(path, bytes);
-  else if (readManagedFile(directory, path).toString('utf8') !== bytes) throw new KnowledgeStorageError('Finding history digest collision');
+  else if (readManagedFile(directory, path).toString('utf8') !== bytes) throw new KnowledgeIntegrityError('Finding history digest collision');
 }

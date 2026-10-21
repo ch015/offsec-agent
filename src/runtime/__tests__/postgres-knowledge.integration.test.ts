@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
 import { createPostgresPool } from '../workflow/database.js';
-import { PostgresKnowledgeStore } from '../knowledge/postgres-knowledge.js';
+import { KnowledgeIntegrityError, PostgresKnowledgeStore } from '../knowledge/postgres-knowledge.js';
+import { recoverableFailure } from '../missions/assessment-recovery.js';
 import { KnowledgeRuntime, KNOWLEDGE_BINDING, indexSharedRecord } from '../knowledge/runtime.js';
 import { publishSharedObservation, snapshotSharedKnowledge, type SharedKnowledgeContext } from '../shared-knowledge.js';
 import { cveFixture } from './fixtures/cve.js';
@@ -147,7 +148,10 @@ describe.skipIf(!url)('PostgreSQL knowledge integration', () => {
     expect(await runtime.saveInstruction('reviewer', instruction)).toBe(instruction);
     expect(await runtime.saveInstruction('reviewer', instruction + 'New revision.')).toContain('New revision');
     expect(await runtime.saveInstruction('mandatory-policy', instruction, true)).toBe(instruction);
-    await expect(runtime.saveInstruction('mandatory-policy', 'Changed mid-run', true)).rejects.toThrow(/Pinned run instructions changed/);
+    const changed = await runtime.saveInstruction('mandatory-policy', 'Changed mid-run', true).catch((error: unknown) => error);
+    expect(changed).toBeInstanceOf(KnowledgeIntegrityError);
+    expect(String(changed)).toMatch(/Pinned run instructions changed/);
+    expect(recoverableFailure(changed)).toBe(false); // resuming would repeat the same mismatch
     expect((await pool.query("SELECT count(*)::int count FROM nunchi_knowledge_documents WHERE scope_id=$1 AND kind='instruction' AND record_key='reviewer'", [binding.documentScope])).rows[0].count).toBe(2);
     await runtime.close();
   });

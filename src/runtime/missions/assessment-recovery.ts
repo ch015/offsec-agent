@@ -7,10 +7,15 @@ import { PhaseResultFailure, ProviderRuntimeFailure } from '../providers/provide
 import { atomicPrivateWrite, readManagedFile } from '../workflow/storage-files.js';
 import { reportDirectory } from '../workflow/run-location.js';
 import { SourceReadCoverageSchema } from '../workflow/scope-assurance.js';
-import { KnowledgeStorageError } from '../knowledge/postgres-knowledge.js';
+import { KnowledgeIntegrityError, KnowledgeStorageError } from '../knowledge/postgres-knowledge.js';
 
 export class AnalysisInterruption extends Error {}
 export function recoverableFailure(error: unknown): boolean {
+  // Connection-level knowledge failures can be retried on resume; a pin or digest mismatch cannot,
+  // even when a session wrapper (ProviderRuntimeFailure) carries it as the cause.
+  for (let current: unknown = error, depth = 0; current && depth < 8; current = (current as { cause?: unknown }).cause, depth += 1) {
+    if (current instanceof KnowledgeIntegrityError) return false;
+  }
   if (error instanceof KnowledgeStorageError) return true;
   if (error instanceof TerminationUnknownError || error instanceof AdmissionDeferredError || error instanceof PhaseResultFailure || error instanceof ProviderRuntimeFailure || error instanceof AnalysisInterruption || error instanceof MissionBudgetExhaustedError) return true;
   const code = (error as NodeJS.ErrnoException | null)?.code ?? '';
