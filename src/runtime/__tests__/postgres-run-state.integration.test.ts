@@ -4,7 +4,7 @@ import { createOffsecAgent } from '../../index.js';
 import { committedBudget, increaseResumeBudget } from '../missions/assessment-budget.js';
 import { syntheticOutcome } from './resumption-fixture.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -377,6 +377,63 @@ suite('PostgresRunStateStore', () => {
         await database.query('DELETE FROM nunchi_run_events WHERE run_id = $1', [runId]);
         await database.query('DELETE FROM nunchi_runs WHERE run_id = $1', [runId]);
       }
+    }
+  });
+
+  it('persists an incomplete run status on PostgreSQL', async () => {
+    const database = pool!;
+    const runId = `itest-incomplete-${randomUUID()}`;
+    const leases = new PostgresRunLeaseBackend(database);
+    try {
+      const store = await PostgresRunStateStore.create(database, {
+        runId, contractId: 'itest', contractVersion: '1.0.0', domain: 'soc', mission: 'report',
+      });
+      const lease = await leases.acquire({ runId, ownerId: 'itest-incomplete', ttlMs: 30_000 });
+      await store.append({ type: 'run.incomplete', eventId: `${runId}:incomplete`, reason: 'coverage remains incomplete' }, 1, lease.fencingToken);
+      await leases.release(lease);
+      expect((await new PostgresRunStateStore(database, runId).read()).status).toBe('incomplete');
+      const row = await database.query('SELECT status FROM nunchi_runs WHERE run_id = $1', [runId]);
+      expect(row.rows[0]?.status).toBe('incomplete');
+    } finally {
+      await database.query('DELETE FROM nunchi_run_leases WHERE run_id = $1', [runId]);
+      await database.query('DELETE FROM nunchi_run_events WHERE run_id = $1', [runId]);
+      await database.query('DELETE FROM nunchi_runs WHERE run_id = $1', [runId]);
+    }
+  });
+
+  it.each([
+    ['the default inline name', 'check'],
+    ['a custom name', 'constraint legacy_runs_status check'],
+  ])('migrates a run table whose pre-incomplete status check has %s, then leaves it untouched', async (_label, check) => {
+    const sql = readFileSync(new URL('../workflow/postgres-run-state.sql', import.meta.url), 'utf8');
+    // The nunchi_runs table as created before the 'incomplete' status existed.
+    const legacy = `create table nunchi_runs (
+      run_id text primary key, contract_id text not null, contract_version text not null,
+      domain text not null, mission text not null,
+      status text not null ${check} (status in ('running', 'awaiting-input', 'completed', 'blocked')),
+      max_budget_usd numeric, total_cost_usd numeric not null default 0, last_seq bigint not null default 0,
+      state jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now())`;
+    const schema = `itest_status_${randomUUID().replaceAll('-', '')}`;
+    const insert = "INSERT INTO nunchi_runs (run_id, contract_id, contract_version, domain, mission, status, state) VALUES ('r', 'c', '1', 'soc', 'report', 'incomplete', '{}')";
+    const checks = "SELECT oid, conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid = 'nunchi_runs'::regclass AND contype = 'c'";
+    const client = await pool!.connect();
+    try {
+      await client.query(`CREATE SCHEMA ${schema}`);
+      await client.query(`SET search_path TO ${schema}`);
+      await client.query(legacy);
+      await expect(client.query(insert)).rejects.toThrow(/check constraint/);
+      await client.query(sql);
+      const migrated = (await client.query(checks)).rows;
+      expect(migrated).toHaveLength(1);
+      expect(migrated[0]).toMatchObject({ conname: 'nunchi_runs_status_check' });
+      expect(migrated[0].def).toContain('incomplete');
+      await client.query(sql);
+      expect((await client.query(checks)).rows.map(row => row.oid)).toEqual([migrated[0].oid]);
+      await client.query(insert);
+    } finally {
+      await client.query('RESET search_path');
+      await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      client.release();
     }
   });
 });

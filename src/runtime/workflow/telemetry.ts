@@ -4,6 +4,11 @@ import { dirname, resolve } from 'node:path';
 
 import type { RunSnapshot } from './state-store.js';
 
+// Every run status must be reportable; the type check fails if RunSnapshot gains a status.
+const RUN_STATUSES = ['running', 'awaiting-input', 'completed', 'blocked', 'incomplete'] as const satisfies readonly RunSnapshot['status'][];
+const coversRunStatuses: RunSnapshot['status'] extends (typeof RUN_STATUSES)[number] ? true : never = true;
+void coversRunStatuses;
+
 export const TelemetryEventSchema = z.object({
   eventId: z.string().min(1),
   at: z.string().datetime(),
@@ -13,7 +18,7 @@ export const TelemetryEventSchema = z.object({
   contractVersion: z.string().min(1),
   domain: z.string().min(1),
   mission: z.string().min(1),
-  status: z.enum(['running', 'awaiting-input', 'completed', 'blocked']),
+  status: z.enum(RUN_STATUSES),
   lastSeq: z.number().int().nonnegative(),
   totalCostUsd: z.number().nonnegative(),
   completedPhaseCount: z.number().int().nonnegative(),

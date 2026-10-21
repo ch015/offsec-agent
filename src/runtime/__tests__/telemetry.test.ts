@@ -4,7 +4,25 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { FileTelemetrySink } from '../workflow/telemetry.js';
+import { FileRunStateStore } from '../workflow/state-store.js';
+import { FileTelemetrySink, InMemoryTelemetrySink, recordRunTelemetry } from '../workflow/telemetry.js';
+
+describe('recordRunTelemetry', () => {
+  it('reports an incomplete run status', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'nunchi-telemetry-incomplete-'));
+    try {
+      const store = FileRunStateStore.create({
+        engagementDir: root, runId: 'run-incomplete', contractId: 'nunchi.test', contractVersion: '1.0.0', domain: 'soc', mission: 'report',
+      });
+      const snapshot = store.append({ type: 'run.incomplete', eventId: 'run-incomplete:incomplete', reason: 'coverage remains incomplete' });
+      const sink = new InMemoryTelemetrySink();
+      expect((await recordRunTelemetry(sink, snapshot, { kind: 'resume' })).status).toBe('incomplete');
+      expect(sink.list()).toHaveLength(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('FileTelemetrySink', () => {
   it('persists validated JSONL telemetry for operator inspection', async () => {

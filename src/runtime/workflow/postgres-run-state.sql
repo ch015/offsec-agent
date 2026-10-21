@@ -8,7 +8,7 @@ create table if not exists nunchi_runs (
   contract_version text not null,
   domain text not null,
   mission text not null,
-  status text not null check (status in ('running', 'awaiting-input', 'completed', 'blocked')),
+  status text not null check (status in ('running', 'awaiting-input', 'completed', 'blocked', 'incomplete')),
   max_budget_usd numeric,
   total_cost_usd numeric not null default 0,
   last_seq bigint not null default 0,
@@ -16,6 +16,30 @@ create table if not exists nunchi_runs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- A partial publication ends the run as 'incomplete' (run.incomplete). Tables created before
+-- that status existed keep an older status check. Replace only such checks, whatever their name,
+-- so a migrated table is left untouched. The replacement holds an exclusive lock on nunchi_runs
+-- until the migration transaction commits.
+do $$
+declare
+  legacy record;
+  replaced boolean := false;
+begin
+  for legacy in
+    select conname from pg_constraint
+    where conrelid = 'nunchi_runs'::regclass and contype = 'c'
+      and pg_get_constraintdef(oid) like '%status%'
+      and pg_get_constraintdef(oid) not like '%incomplete%'
+  loop
+    execute format('alter table nunchi_runs drop constraint if exists %I', legacy.conname);
+    replaced := true;
+  end loop;
+  if replaced then
+    alter table nunchi_runs add constraint nunchi_runs_status_check
+      check (status in ('running', 'awaiting-input', 'completed', 'blocked', 'incomplete'));
+  end if;
+end $$;
 
 create table if not exists nunchi_run_events (
   run_id text not null references nunchi_runs(run_id),
