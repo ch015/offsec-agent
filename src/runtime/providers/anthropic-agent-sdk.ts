@@ -15,13 +15,11 @@ export type AnthropicPhaseOptions = {
   effort?: SessionSpec['effort'];
   maxTurns?: number;
   abortController?: AbortController;
-  verifyRound?: string;
   phaseRound?: string;
   requirePocBinding?: boolean;
   networkAllowedDomains?: readonly string[];
   liveTestTarget?: string;
   liveTestPlan?: SessionSpec['liveTestPlan'];
-  liveDastContext?: SessionSpec['liveDastContext'];
   readScope?: SessionSpec['readScope'];
   disabledTools?: readonly string[];
   workUnit?: SessionSpec['workUnit'];
@@ -65,7 +63,6 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         agentRole: request.role,
         phase: request.phase,
         phaseRound: request.options?.phaseRound,
-        verifyRound: request.options?.verifyRound,
         target: request.target,
         prompt: request.prompt,
         taskData: request.taskData,
@@ -82,7 +79,6 @@ export class AnthropicAgentRuntime implements ProviderRuntime<AnthropicPhaseOpti
         networkAllowedDomains: request.options?.networkAllowedDomains,
         liveTestTarget: request.options?.liveTestTarget,
         liveTestPlan: request.options?.liveTestPlan,
-        liveDastContext: request.options?.liveDastContext,
         readScope: request.options?.readScope,
         disabledTools: request.options?.disabledTools,
         workUnit: request.options?.workUnit,

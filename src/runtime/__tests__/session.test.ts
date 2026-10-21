@@ -58,6 +58,12 @@ describe('buildOptions — 격리', () => {
     expect(buildOptions(spec()).strictMcpConfig).toBe(true);
   });
 
+  it('폐기된 live 테스트 옵션은 타입에서 빠졌어도 거부한다', () => {
+    for (const retired of [{ liveDastContext: {} }, { liveTestTarget: 'https://example.invalid' }, { networkAllowedDomains: ['example.invalid'] }]) {
+      expect(() => buildOptions({ ...spec(), ...retired } as never)).toThrow(/Live testing and network options are unsupported/);
+    }
+  });
+
   it('요청한 도메인 플러그인 하나만 로드한다', () => {
     const options = buildOptions(spec({ domain: 'offsec' }));
     expect(options.plugins).toHaveLength(1);

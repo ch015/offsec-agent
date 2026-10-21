@@ -1,6 +1,5 @@
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 
-import type { LiveDastContext } from './live-test/live-dast-tools.js';
 
 export const DOMAINS = ['offsec'] as const;
 export type Domain = (typeof DOMAINS)[number];
@@ -25,8 +24,6 @@ export type SessionSpec = {
   agentRole?: string;
   phase?: string;
   phaseRound?: string;
-  verifyRound?: string;
-  verifyGroup?: string;
   requirePocBinding?: boolean;
   target: string;
   prompt: string;
@@ -44,7 +41,6 @@ export type SessionSpec = {
   networkAllowedDomains?: readonly string[];
   liveTestTarget?: string;
   liveTestPlan?: { path: string; sha256: string };
-  liveDastContext?: LiveDastContext;
   allowedReadFiles?: readonly string[];
   readScope?: 'default' | 'exact';
   disabledTools?: readonly string[];

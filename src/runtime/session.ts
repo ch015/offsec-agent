@@ -239,7 +239,8 @@ export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow
     throw new Error(`${spec.domain}/${workflowPhase.id} exact read scope에는 file allow-list가 필요하다`);
   }
   const networkAllowedDomains = [...new Set(spec.networkAllowedDomains ?? [])];
-  if (networkAllowedDomains.length || spec.liveTestTarget || spec.liveTestPlan || spec.liveDastContext) {
+  // liveDastContext is no longer part of SessionSpec; untyped callers that still pass it are rejected too.
+  if (networkAllowedDomains.length || spec.liveTestTarget || spec.liveTestPlan || 'liveDastContext' in spec) {
     throw new Error('Live testing and network options are unsupported by source assessment');
   }
   const disabledTools = new Set(spec.disabledTools ?? []);
@@ -406,8 +407,6 @@ export function buildOptions(spec: SessionSpec, sourceLedger: readonly LedgerRow
       ...(spec.phase ? { AGENT_PHASE: spec.phase } : {}),
       AGENT_MISSION: adapter.mission,
       ...(spec.phaseRound ? { AGENT_PHASE_ROUND: spec.phaseRound } : {}),
-      ...(spec.verifyRound ? { AGENT_VERIFY_ROUND: spec.verifyRound } : {}),
-      ...(spec.verifyGroup ? { AGENT_VERIFY_GROUP: spec.verifyGroup } : {}),
       ...(spec.requirePocBinding !== undefined
         ? { CH015_REQUIRE_POC_BINDING: spec.requirePocBinding ? 'on' : 'off' }
         : {}),
